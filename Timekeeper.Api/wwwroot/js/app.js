@@ -4,6 +4,8 @@ const API_BASE = '/api';
 // Global state
 let currentTimer = null;
 let timerInterval = null;
+let continuingEntryId = null; // Track which entry is being continued
+let elapsedTimeOffset = 0; // Offset for continuing entries
 let customers = [];
 let projects = [];
 let tasks = [];
@@ -26,6 +28,11 @@ function setupEventListeners() {
     // Timer controls
     document.getElementById('timer-task-select').addEventListener('change', (e) => {
         document.getElementById('start-timer-btn').disabled = !e.target.value;
+    });
+    document.getElementById('timer-task-search').addEventListener('input', filterTaskOptions);
+    document.getElementById('timer-task-search').addEventListener('focus', () => {
+        document.getElementById('timer-task-dropdown').style.display = 'block';
+        filterTaskOptions();
     });
     document.getElementById('start-timer-btn').addEventListener('click', startTimer);
     document.getElementById('stop-timer-btn').addEventListener('click', stopTimer);
@@ -51,6 +58,15 @@ function setupEventListeners() {
     document.querySelector('.close').addEventListener('click', closeModal);
     window.addEventListener('click', (e) => {
         if (e.target.id === 'modal') closeModal();
+        
+        // Close task dropdown when clicking outside
+        const dropdown = document.getElementById('timer-task-dropdown');
+        const searchInput = document.getElementById('timer-task-search');
+        if (dropdown && searchInput && 
+            !dropdown.contains(e.target) && 
+            e.target !== searchInput) {
+            dropdown.style.display = 'none';
+        }
     });
 }
 
@@ -124,12 +140,20 @@ function startTimerDisplay(startTime) {
     
     timerInterval = setInterval(() => {
         const now = new Date();
-        const elapsed = Math.floor((now - startTime) / 1000);
+        const elapsed = Math.floor((now - startTime) / 1000) + elapsedTimeOffset;
         const hours = Math.floor(elapsed / 3600).toString().padStart(2, '0');
         const minutes = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
         const seconds = (elapsed % 60).toString().padStart(2, '0');
         document.getElementById('timer-time').textContent = `${hours}:${minutes}:${seconds}`;
+        
+        // Update summary every 60 seconds
+        if (elapsed % 60 === 0) {
+            updateTimeSummary();
+        }
     }, 1000);
+    
+    // Initial summary update
+    updateTimeSummary();
 }
 
 function stopTimerDisplay() {
@@ -175,6 +199,15 @@ async function stopTimer() {
         });
 
         if (response.ok) {
+            // Clear continuing entry tracking
+            continuingEntryId = null;
+            elapsedTimeOffset = 0;
+            
+            // Remove highlights
+            document.querySelectorAll('tr.continuing-entry').forEach(row => {
+                row.classList.remove('continuing-entry');
+            });
+            
             showStartTimerForm();
             loadEntries();
             showSuccess('Timer stopped successfully!');
@@ -185,6 +218,87 @@ async function stopTimer() {
     } catch (error) {
         showError('Failed to stop timer');
         console.error(error);
+    }
+}
+
+async function resumeTracking(entryId, taskId, notes = '', existingDuration = 0) {
+    // If timer is running, check if it's the same entry
+    if (currentTimer) {
+        if (continuingEntryId === entryId) {
+            // Deselect - stop and don't continue
+            await stopTimer();
+            continuingEntryId = null;
+            elapsedTimeOffset = 0;
+            return;
+        }
+        if (!confirm('A timer is already running. Stop it and continue tracking this entry?')) {
+            return;
+        }
+        await stopTimer();
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Set continuing entry info
+    continuingEntryId = entryId;
+    elapsedTimeOffset = existingDuration || 0;
+    
+    // Set the task and notes
+    document.getElementById('timer-task-select').value = taskId;
+    const task = tasks.find(t => t.id == taskId);
+    if (task) {
+        document.getElementById('timer-task-search').value = `${task.name} - ${task.projectName} (${task.customerName})`;
+    }
+    document.getElementById('timer-notes').value = notes;
+    
+    // Start the timer (will update existing entry)
+    await startTimerContinue(entryId);
+    
+    // Highlight the row being continued
+    highlightContinuingEntry(entryId);
+    
+    // Scroll to timer section
+    document.querySelector('.timer-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function startTimerContinue(entryId) {
+    try {
+        // Restart the entry by updating its end time to null
+        const response = await fetch(`${API_BASE}/timeentries/${entryId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                startTime: null,
+                endTime: null,
+                notes: '__RESTART__'
+            })
+        });
+
+        if (response.ok) {
+            const timer = await response.json();
+            currentTimer = timer;
+            showRunningTimer(timer);
+            showSuccess('Continuing time tracking!');
+            loadEntries();
+        } else {
+            const error = await response.text();
+            showError(error);
+        }
+    } catch (error) {
+        showError('Failed to continue timer');
+        console.error(error);
+    }
+}
+
+function highlightContinuingEntry(entryId) {
+    // Remove previous highlights
+    document.querySelectorAll('tr.continuing-entry').forEach(row => {
+        row.classList.remove('continuing-entry');
+    });
+    
+    // Add highlight to current entry
+    const row = document.querySelector(`tr[data-entry-id="${entryId}"]`);
+    if (row) {
+        row.classList.add('continuing-entry');
     }
 }
 
@@ -305,8 +419,15 @@ function renderTasks() {
 
 function renderEntries() {
     const tbody = document.getElementById('entries-tbody');
-    tbody.innerHTML = entries.map(e => `
-        <tr>
+    tbody.innerHTML = entries.map(e => {
+        const durationSeconds = e.durationMinutes ? Math.floor(e.durationMinutes * 60) : 0;
+        const isRunning = !e.endTime;
+        const isContinuing = continuingEntryId === e.id;
+        return `
+        <tr data-entry-id="${e.id}" data-task-id="${e.taskId}" data-notes="${e.notes || ''}" 
+            class="${isContinuing ? 'continuing-entry' : ''}"
+            ondblclick="resumeTracking(${e.id}, ${e.taskId}, '${(e.notes || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${durationSeconds})"
+            title="${isRunning ? 'Currently running' : 'Double-click to continue tracking this entry'}">
             <td>${e.customerName}</td>
             <td>${e.projectName}</td>
             <td>${e.taskName}</td>
@@ -314,12 +435,16 @@ function renderEntries() {
             <td>${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
             <td>${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
             <td>${e.notes || ''}</td>
-            <td>
+            <td onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="editEntry(${e.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteEntry(${e.id})">Delete</button>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
+    
+    // Update summary after rendering
+    updateTimeSummary();
 }
 
 // Populate dropdowns
@@ -365,6 +490,49 @@ function populateTaskSelects() {
 
     timerSelect.innerHTML = '<option value="">-- Select a task --</option>' + taskOptions;
     filterSelect.innerHTML = '<option value="">All Tasks</option>' + taskOptions;
+    
+    // Populate searchable dropdown
+    const dropdown = document.getElementById('timer-task-dropdown');
+    dropdown.innerHTML = tasks.filter(t => t.isActive).map(t => 
+        `<div class="task-option" data-task-id="${t.id}" data-search="${t.customerName.toLowerCase()} ${t.projectName.toLowerCase()} ${t.name.toLowerCase()}">
+            <div class="task-option-main">${t.name}</div>
+            <div class="task-option-path">${t.customerName} › ${t.projectName}</div>
+        </div>`
+    ).join('');
+    
+    // Add click handlers to task options
+    dropdown.querySelectorAll('.task-option').forEach(option => {
+        option.addEventListener('click', () => selectTask(option.dataset.taskId));
+    });
+}
+
+function filterTaskOptions() {
+    const searchText = document.getElementById('timer-task-search').value.toLowerCase();
+    const dropdown = document.getElementById('timer-task-dropdown');
+    const options = dropdown.querySelectorAll('.task-option');
+    
+    let visibleCount = 0;
+    options.forEach(option => {
+        const searchData = option.dataset.search;
+        if (searchData.includes(searchText)) {
+            option.style.display = 'block';
+            visibleCount++;
+        } else {
+            option.style.display = 'none';
+        }
+    });
+    
+    dropdown.style.display = visibleCount > 0 ? 'block' : 'none';
+}
+
+function selectTask(taskId) {
+    const task = tasks.find(t => t.id == taskId);
+    if (task) {
+        document.getElementById('timer-task-select').value = taskId;
+        document.getElementById('timer-task-search').value = `${task.name} - ${task.projectName} (${task.customerName})`;
+        document.getElementById('timer-task-dropdown').style.display = 'none';
+        document.getElementById('start-timer-btn').disabled = false;
+    }
 }
 
 function populateFilters() {
@@ -849,13 +1017,81 @@ function closeModal() {
 }
 
 function showSuccess(message) {
-    // You could implement a toast notification here
-    console.log('Success:', message);
-    alert(message);
+    showToast(message, 'success');
 }
 
 function showError(message) {
-    // You could implement a toast notification here
-    console.error('Error:', message);
-    alert('Error: ' + message);
+    showToast('Error: ' + message, 'error');
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function updateTimeSummary() {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    let todayMinutes = 0;
+    let weekMinutes = 0;
+    let monthMinutes = 0;
+    
+    entries.forEach(entry => {
+        const entryDate = new Date(entry.startTime);
+        const minutes = entry.durationMinutes || 0;
+        
+        if (entryDate >= today) todayMinutes += minutes;
+        if (entryDate >= startOfWeek) weekMinutes += minutes;
+        if (entryDate >= startOfMonth) monthMinutes += minutes;
+    });
+    
+    // Add running timer to today's total
+    if (currentTimer) {
+        const runningStart = new Date(currentTimer.startTime);
+        const runningMinutes = Math.floor((now - runningStart) / 60000) + Math.floor(elapsedTimeOffset / 60);
+        todayMinutes += runningMinutes;
+        weekMinutes += runningMinutes;
+        monthMinutes += runningMinutes;
+    }
+    
+    // Target hours (8 hours/day, 40 hours/week, ~160 hours/month)
+    const workdaysThisWeek = Math.max(1, now.getDay() || 7); // Mon=1, Sun=7
+    const workdaysThisMonth = Math.floor((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 20); // ~20 workdays/month
+    
+    const targetToday = 8 * 60;
+    const targetWeek = workdaysThisWeek * 8 * 60;
+    const targetMonth = Math.max(workdaysThisMonth, 1) * 8 * 60;
+    
+    document.getElementById('today-hours').textContent = formatHoursMinutes(todayMinutes);
+    document.getElementById('today-target').textContent = formatHoursMinutes(targetToday);
+    document.getElementById('today-progress').style.width = `${Math.min((todayMinutes / targetToday) * 100, 100)}%`;
+    
+    document.getElementById('week-hours').textContent = formatHoursMinutes(weekMinutes);
+    document.getElementById('week-target').textContent = formatHoursMinutes(targetWeek);
+    document.getElementById('week-progress').style.width = `${Math.min((weekMinutes / targetWeek) * 100, 100)}%`;
+    
+    document.getElementById('month-hours').textContent = formatHoursMinutes(monthMinutes);
+    document.getElementById('month-target').textContent = formatHoursMinutes(targetMonth);
+    document.getElementById('month-progress').style.width = `${Math.min((monthMinutes / targetMonth) * 100, 100)}%`;
+}
+
+function formatHoursMinutes(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.floor(minutes % 60);
+    return `${hours}h ${mins}m`;
 }

@@ -280,7 +280,11 @@ public class TimeEntriesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateTimeEntry(int id, UpdateTimeEntryDto dto)
     {
-        var entry = await _context.TimeEntries.FindAsync(id);
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == id);
 
         if (entry == null)
         {
@@ -288,8 +292,21 @@ public class TimeEntriesController : ControllerBase
         }
 
         if (dto.StartTime.HasValue) entry.StartTime = dto.StartTime.Value;
-        if (dto.EndTime.HasValue) entry.EndTime = dto.EndTime.Value;
-        if (dto.Notes != null) entry.Notes = dto.Notes;
+        
+        // Allow explicitly setting EndTime to null to restart entry
+        if (dto.EndTime == null && dto.Notes == "__RESTART__")
+        {
+            entry.EndTime = null;
+        }
+        else if (dto.EndTime.HasValue)
+        {
+            entry.EndTime = dto.EndTime.Value;
+        }
+        
+        if (dto.Notes != null && dto.Notes != "__RESTART__") 
+        {
+            entry.Notes = dto.Notes;
+        }
 
         if (entry.EndTime.HasValue && entry.EndTime.Value < entry.StartTime)
         {
@@ -299,7 +316,24 @@ public class TimeEntriesController : ControllerBase
         entry.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        return NoContent();
+        // Return the updated entry
+        var result = new TimeEntryDto
+        {
+            Id = entry.Id,
+            TaskId = entry.TaskId,
+            TaskName = entry.Task.Name,
+            ProjectName = entry.Task.Project.Name,
+            CustomerName = entry.Task.Project.Customer.Name,
+            StartTime = entry.StartTime,
+            EndTime = entry.EndTime,
+            Notes = entry.Notes,
+            DurationMinutes = entry.Duration?.TotalMinutes,
+            IsRunning = entry.IsRunning,
+            CreatedAt = entry.CreatedAt,
+            UpdatedAt = entry.UpdatedAt
+        };
+
+        return Ok(result);
     }
 
     [HttpDelete("{id}")]

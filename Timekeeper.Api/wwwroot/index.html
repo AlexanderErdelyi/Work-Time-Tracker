@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
+    <div id="toast-container"></div>
     <div class="container">
         <header>
             <h1>⏱️ Timekeeper</h1>
@@ -26,8 +27,12 @@
             </div>
             <div class="timer-controls">
                 <div id="start-timer-form">
-                    <label for="timer-task-select">Select Task:</label>
-                    <select id="timer-task-select" class="form-control">
+                    <label for="timer-task-search">Select Task:</label>
+                    <div class="task-search-wrapper">
+                        <input type="text" id="timer-task-search" class="form-control" placeholder="Search tasks, projects, or customers..." autocomplete="off">
+                        <div id="timer-task-dropdown" class="task-dropdown"></div>
+                    </div>
+                    <select id="timer-task-select" style="display: none;">
                         <option value="">-- Select a task --</option>
                     </select>
                     <textarea id="timer-notes" class="form-control" placeholder="Notes (optional)" rows="2"></textarea>
@@ -224,6 +229,41 @@
         <div class="modal-content">
             <span class="close">&times;</span>
             <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Time Summary Widget -->
+    <div class="time-summary">
+        <h3>⏱️ Time Summary</h3>
+        <div class="summary-item">
+            <div class="summary-label">Today</div>
+            <div class="summary-value">
+                <span class="summary-hours" id="today-hours">0h 0m</span>
+                <span class="summary-target">/ <span id="today-target">8h 0m</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="today-progress" style="width: 0%"></div>
+            </div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">This Week</div>
+            <div class="summary-value">
+                <span class="summary-hours" id="week-hours">0h 0m</span>
+                <span class="summary-target">/ <span id="week-target">40h 0m</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="week-progress" style="width: 0%"></div>
+            </div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">This Month</div>
+            <div class="summary-value">
+                <span class="summary-hours" id="month-hours">0h 0m</span>
+                <span class="summary-target">/ <span id="month-target">160h 0m</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="month-progress" style="width: 0%"></div>
+            </div>
         </div>
     </div>
 
