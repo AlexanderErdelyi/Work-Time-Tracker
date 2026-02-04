@@ -70,11 +70,12 @@ public class TimeEntriesController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(search))
         {
+            var searchLower = search.ToLower();
             query = query.Where(e => 
-                e.Task.Name.Contains(search) || 
-                e.Task.Project.Name.Contains(search) ||
-                e.Task.Project.Customer.Name.Contains(search) ||
-                (e.Notes != null && e.Notes.Contains(search)));
+                e.Task.Name.ToLower().Contains(searchLower) || 
+                e.Task.Project.Name.ToLower().Contains(searchLower) ||
+                e.Task.Project.Customer.Name.ToLower().Contains(searchLower) ||
+                (e.Notes != null && e.Notes.ToLower().Contains(searchLower)));
         }
 
         var entries = await query

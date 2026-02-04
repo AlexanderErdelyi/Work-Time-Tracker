@@ -12,8 +12,18 @@ let projects = [];
 let tasks = [];
 let entries = [];
 
+// Settings state (loaded from localStorage)
+let settings = {
+    darkMode: false,
+    roundingEnabled: false,
+    roundingThreshold: 3, // minutes
+    billingIncrement: 15 // minutes
+};
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+    applySettings();
     setupEventListeners();
     loadInitialData();
     checkRunningTimer();
@@ -43,10 +53,18 @@ function setupEventListeners() {
     document.getElementById('add-project-btn').addEventListener('click', () => showProjectForm());
     document.getElementById('add-task-btn').addEventListener('click', () => showTaskForm());
     document.getElementById('add-entry-btn').addEventListener('click', () => showEntryForm());
+    document.getElementById('settings-btn').addEventListener('click', showSettingsForm);
 
     // Filter buttons
     document.getElementById('filter-entries-btn').addEventListener('click', loadEntries);
     document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
+    
+    // Search on Enter key
+    document.getElementById('entry-search').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            loadEntries();
+        }
+    });
 
     // Export buttons
     document.getElementById('export-csv-btn').addEventListener('click', () => exportData('csv'));
@@ -429,6 +447,7 @@ function renderEntries() {
         const durationSeconds = e.durationMinutes ? Math.floor(e.durationMinutes * 60) : 0;
         const isRunning = !e.endTime;
         const isContinuing = continuingEntryId === e.id;
+        const billedDuration = e.durationMinutes ? calculateBilledDuration(e.durationMinutes) : null;
         return `
         <tr data-entry-id="${e.id}" data-task-id="${e.taskId}" data-notes="${e.notes || ''}" 
             class="${isContinuing ? 'continuing-entry' : ''}"
@@ -440,6 +459,7 @@ function renderEntries() {
             <td>${formatDateTime(e.startTime)}</td>
             <td>${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
             <td>${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
+            <td>${billedDuration !== null ? formatDuration(billedDuration) : '-'}</td>
             <td>${e.notes || ''}</td>
             <td onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="editEntry(${e.id})">Edit</button>
@@ -1121,4 +1141,117 @@ function toggleTimeSummary() {
         toggle.textContent = '📈';
         toggle.title = 'Show Time Summary';
     }
+}
+
+// Settings functions
+function loadSettings() {
+    const savedSettings = localStorage.getItem('timekeeper-settings');
+    if (savedSettings) {
+        settings = JSON.parse(savedSettings);
+    }
+}
+
+function saveSettings() {
+    localStorage.setItem('timekeeper-settings', JSON.stringify(settings));
+}
+
+function applySettings() {
+    // Apply dark mode
+    if (settings.darkMode) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+}
+
+function calculateBilledDuration(durationMinutes) {
+    if (!settings.roundingEnabled) {
+        return durationMinutes;
+    }
+    
+    const threshold = settings.roundingThreshold;
+    const increment = settings.billingIncrement;
+    
+    // Calculate how many full increments
+    const fullIncrements = Math.floor(durationMinutes / increment);
+    const remainder = durationMinutes % increment;
+    
+    // If remainder is more than threshold, round up
+    if (remainder > threshold) {
+        return (fullIncrements + 1) * increment;
+    } else {
+        return fullIncrements * increment;
+    }
+}
+
+function showSettingsForm() {
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = `
+        <h2>⚙️ Settings</h2>
+        <form id="settings-form">
+            <h3>Appearance</h3>
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="dark-mode-toggle" ${settings.darkMode ? 'checked' : ''} 
+                           style="width: 20px; height: 20px; cursor: pointer;">
+                    <span style="font-size: 1.1em;">🌙 Dark Mode</span>
+                </label>
+            </div>
+            
+            <h3>Billing</h3>
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="rounding-enabled" ${settings.roundingEnabled ? 'checked' : ''} 
+                           style="width: 20px; height: 20px; cursor: pointer;">
+                    <span style="font-size: 1.1em;">Enable Duration Rounding</span>
+                </label>
+            </div>
+            
+            <div id="rounding-options" style="${settings.roundingEnabled ? '' : 'display: none;'}">
+                <label for="billing-increment">Billing Increment (minutes):</label>
+                <input type="number" id="billing-increment" class="form-control" 
+                       value="${settings.billingIncrement}" min="1" max="60" step="1">
+                
+                <label for="rounding-threshold">Rounding Threshold (minutes):</label>
+                <input type="number" id="rounding-threshold" class="form-control" 
+                       value="${settings.roundingThreshold}" min="0" max="30" step="1">
+                
+                <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #667eea;">
+                    <strong>Example:</strong><br>
+                    With billing increment of <strong>${settings.billingIncrement} min</strong> and threshold of <strong>${settings.roundingThreshold} min</strong>:<br>
+                    • ${settings.billingIncrement - 1} min → rounds to ${settings.billingIncrement} min<br>
+                    • ${settings.billingIncrement + settings.roundingThreshold} min → rounds to ${settings.billingIncrement} min<br>
+                    • ${settings.billingIncrement + settings.roundingThreshold + 1} min → rounds to ${settings.billingIncrement * 2} min
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px; display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    `;
+    
+    // Show/hide rounding options based on checkbox
+    document.getElementById('rounding-enabled').addEventListener('change', (e) => {
+        document.getElementById('rounding-options').style.display = e.target.checked ? 'block' : 'none';
+    });
+    
+    // Handle form submission
+    document.getElementById('settings-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        settings.darkMode = document.getElementById('dark-mode-toggle').checked;
+        settings.roundingEnabled = document.getElementById('rounding-enabled').checked;
+        settings.billingIncrement = parseInt(document.getElementById('billing-increment').value);
+        settings.roundingThreshold = parseInt(document.getElementById('rounding-threshold').value);
+        
+        saveSettings();
+        applySettings();
+        renderEntries(); // Re-render to update billed durations
+        closeModal();
+        showSuccess('Settings saved successfully!');
+    });
+    
+    openModal();
 }
