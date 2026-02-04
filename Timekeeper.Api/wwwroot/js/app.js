@@ -6,6 +6,7 @@ let currentTimer = null;
 let timerInterval = null;
 let continuingEntryId = null; // Track which entry is being continued
 let elapsedTimeOffset = 0; // Offset for continuing entries
+let summaryVisible = true; // Track summary visibility
 let customers = [];
 let projects = [];
 let tasks = [];
@@ -262,12 +263,17 @@ async function resumeTracking(entryId, taskId, notes = '', existingDuration = 0)
 
 async function startTimerContinue(entryId) {
     try {
-        // Restart the entry by updating its end time to null
+        // Calculate adjusted start time to preserve existing duration
+        // New start time = now - existing duration offset
+        const now = new Date();
+        const adjustedStartTime = new Date(now.getTime() - (elapsedTimeOffset * 1000));
+        
+        // Restart the entry by updating its start time and clearing end time
         const response = await fetch(`${API_BASE}/timeentries/${entryId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                startTime: null,
+                startTime: adjustedStartTime.toISOString(),
                 endTime: null,
                 notes: '__RESTART__'
             })
@@ -1094,4 +1100,25 @@ function formatHoursMinutes(minutes) {
     const hours = Math.floor(minutes / 60);
     const mins = Math.floor(minutes % 60);
     return `${hours}h ${mins}m`;
+}
+
+function toggleTimeSummary() {
+    summaryVisible = !summaryVisible;
+    const summary = document.getElementById('time-summary');
+    const toggle = document.getElementById('summary-toggle');
+    const container = document.querySelector('.container');
+    
+    if (summaryVisible) {
+        summary.classList.remove('collapsed');
+        toggle.classList.add('active');
+        container.classList.remove('summary-collapsed');
+        toggle.textContent = '📊';
+        toggle.title = 'Hide Time Summary';
+    } else {
+        summary.classList.add('collapsed');
+        toggle.classList.remove('active');
+        container.classList.add('summary-collapsed');
+        toggle.textContent = '📈';
+        toggle.title = 'Show Time Summary';
+    }
 }
