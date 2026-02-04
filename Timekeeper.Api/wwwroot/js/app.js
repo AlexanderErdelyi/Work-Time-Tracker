@@ -6,6 +6,7 @@ let currentTimer = null;
 let timerInterval = null;
 let continuingEntryId = null; // Track which entry is being continued
 let elapsedTimeOffset = 0; // Offset for continuing entries
+let summaryVisible = true; // Track summary visibility
 let customers = [];
 let projects = [];
 let tasks = [];
@@ -1099,4 +1100,25 @@ function formatHoursMinutes(minutes) {
     const hours = Math.floor(minutes / 60);
     const mins = Math.floor(minutes % 60);
     return `${hours}h ${mins}m`;
+}
+
+function toggleTimeSummary() {
+    summaryVisible = !summaryVisible;
+    const summary = document.getElementById('time-summary');
+    const toggle = document.getElementById('summary-toggle');
+    const container = document.querySelector('.container');
+    
+    if (summaryVisible) {
+        summary.classList.remove('collapsed');
+        toggle.classList.add('active');
+        container.classList.remove('summary-collapsed');
+        toggle.textContent = '📊';
+        toggle.title = 'Hide Time Summary';
+    } else {
+        summary.classList.add('collapsed');
+        toggle.classList.remove('active');
+        container.classList.add('summary-collapsed');
+        toggle.textContent = '📈';
+        toggle.title = 'Show Time Summary';
+    }
 }
