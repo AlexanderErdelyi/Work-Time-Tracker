@@ -262,12 +262,17 @@ async function resumeTracking(entryId, taskId, notes = '', existingDuration = 0)
 
 async function startTimerContinue(entryId) {
     try {
-        // Restart the entry by updating its end time to null
+        // Calculate adjusted start time to preserve existing duration
+        // New start time = now - existing duration offset
+        const now = new Date();
+        const adjustedStartTime = new Date(now.getTime() - (elapsedTimeOffset * 1000));
+        
+        // Restart the entry by updating its start time and clearing end time
         const response = await fetch(`${API_BASE}/timeentries/${entryId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                startTime: null,
+                startTime: adjustedStartTime.toISOString(),
                 endTime: null,
                 notes: '__RESTART__'
             })
