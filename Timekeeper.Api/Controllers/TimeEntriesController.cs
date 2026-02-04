@@ -357,7 +357,9 @@ public class TimeEntriesController : ControllerBase
             query = query.Where(e => e.TaskId == taskId.Value);
         }
 
-        var totals = await query
+        var entries = await query.ToListAsync();
+
+        var totals = entries
             .GroupBy(e => e.StartTime.Date)
             .Select(g => new TimeEntrySummary
             {
@@ -367,7 +369,7 @@ public class TimeEntriesController : ControllerBase
                 EntryCount = g.Count()
             })
             .OrderByDescending(s => s.Date)
-            .ToListAsync();
+            .ToList();
 
         return Ok(totals);
     }
