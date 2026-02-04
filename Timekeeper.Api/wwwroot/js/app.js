@@ -1176,8 +1176,14 @@ function calculateBilledDuration(durationMinutes) {
     const fullIncrements = Math.floor(durationMinutes / increment);
     const remainder = durationMinutes % increment;
     
+    // If there's no remainder, return exact increments
+    if (remainder === 0) {
+        return fullIncrements * increment;
+    }
+    
     // If remainder is more than threshold, round up
-    if (remainder > threshold) {
+    // Special case: if we have 0 full increments and any remainder, always round up to first increment
+    if (remainder > threshold || fullIncrements === 0) {
         return (fullIncrements + 1) * increment;
     } else {
         return fullIncrements * increment;
@@ -1219,9 +1225,9 @@ function showSettingsForm() {
                 <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #667eea;">
                     <strong>Example:</strong><br>
                     With billing increment of <strong>${settings.billingIncrement} min</strong> and threshold of <strong>${settings.roundingThreshold} min</strong>:<br>
-                    • ${settings.billingIncrement - 1} min → rounds to ${settings.billingIncrement} min<br>
-                    • ${settings.billingIncrement + settings.roundingThreshold} min → rounds to ${settings.billingIncrement} min<br>
-                    • ${settings.billingIncrement + settings.roundingThreshold + 1} min → rounds to ${settings.billingIncrement * 2} min
+                    • ${settings.roundingThreshold} min → rounds to ${settings.billingIncrement} min (below threshold)<br>
+                    • ${settings.billingIncrement + settings.roundingThreshold} min → rounds to ${settings.billingIncrement} min (at threshold)<br>
+                    • ${settings.billingIncrement + settings.roundingThreshold + 1} min → rounds to ${settings.billingIncrement * 2} min (above threshold)
                 </div>
             </div>
             
@@ -1243,8 +1249,31 @@ function showSettingsForm() {
         
         settings.darkMode = document.getElementById('dark-mode-toggle').checked;
         settings.roundingEnabled = document.getElementById('rounding-enabled').checked;
-        settings.billingIncrement = parseInt(document.getElementById('billing-increment').value);
-        settings.roundingThreshold = parseInt(document.getElementById('rounding-threshold').value);
+        
+        // Validate and parse numeric inputs
+        const billingIncrement = parseInt(document.getElementById('billing-increment').value);
+        const roundingThreshold = parseInt(document.getElementById('rounding-threshold').value);
+        
+        // Validate billing increment
+        if (isNaN(billingIncrement) || billingIncrement < 1 || billingIncrement > 60) {
+            showError('Billing increment must be between 1 and 60 minutes');
+            return;
+        }
+        
+        // Validate rounding threshold
+        if (isNaN(roundingThreshold) || roundingThreshold < 0 || roundingThreshold > 30) {
+            showError('Rounding threshold must be between 0 and 30 minutes');
+            return;
+        }
+        
+        // Validate threshold is less than increment
+        if (roundingThreshold >= billingIncrement) {
+            showError('Rounding threshold must be less than billing increment');
+            return;
+        }
+        
+        settings.billingIncrement = billingIncrement;
+        settings.roundingThreshold = roundingThreshold;
         
         saveSettings();
         applySettings();
