@@ -92,7 +92,12 @@ dotnet run
 
 5. Open your browser and navigate to:
 ```
-http://localhost:5000
+http://localhost:5199
+```
+
+Or to view the API documentation:
+```
+http://localhost:5199/swagger
 ```
 
 ### Initial Seed Data

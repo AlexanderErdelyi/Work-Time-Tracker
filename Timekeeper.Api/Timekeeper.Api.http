@@ -1,6 +1,37 @@
 @Timekeeper.Api_HostAddress = http://localhost:5199
 
-GET {{Timekeeper.Api_HostAddress}}/weatherforecast/
+### Get all customers
+GET {{Timekeeper.Api_HostAddress}}/api/customers
 Accept: application/json
 
 ###
+
+### Get all time entries
+GET {{Timekeeper.Api_HostAddress}}/api/timeentries
+Accept: application/json
+
+###
+
+### Get running timer
+GET {{Timekeeper.Api_HostAddress}}/api/timeentries/running
+Accept: application/json
+
+###
+
+### Start timer
+POST {{Timekeeper.Api_HostAddress}}/api/timeentries/start
+Content-Type: application/json
+
+{
+  "taskId": 1,
+  "notes": "Testing API"
+}
+
+###
+
+### Get daily totals
+GET {{Timekeeper.Api_HostAddress}}/api/timeentries/daily-totals
+Accept: application/json
+
+###
+
