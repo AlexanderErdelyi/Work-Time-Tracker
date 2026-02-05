@@ -1,5 +1,7 @@
 # 🚀 Quick Release Reference Card
 
+> **📢 Quick Fix for v1.0.0:** Missing ZIP file? See [FIX_v1.0.0_RELEASE.md](FIX_v1.0.0_RELEASE.md)!
+
 ## Create a New Release (2 Commands)
 
 ```bash
