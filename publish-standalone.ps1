@@ -257,21 +257,31 @@ if ($BuildInstaller -and $Runtime -like "win-*") {
     if ($isccPath) {
         Write-Host "   Found Inno Setup at: $isccPath" -ForegroundColor Gray
         
-        # Set environment variable for version
-        $env:APP_VERSION = $Version
-        
-        # Run Inno Setup compiler
-        & $isccPath "installer.iss"
-        
-        if ($LASTEXITCODE -eq 0) {
-            $installerPath = ".\Release\Timekeeper-v$Version-$Runtime-installer.exe"
-            if (Test-Path $installerPath) {
-                $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
-                Write-Host "   Installer created successfully!" -ForegroundColor Green
-                Write-Host "   Size: $installerSize MB" -ForegroundColor White
-            }
+        # Verify distribution folder exists
+        if (-not (Test-Path $distFolder)) {
+            Write-Host "   ERROR: Distribution folder not found: $distFolder" -ForegroundColor Red
+            Write-Host "   Installer build skipped." -ForegroundColor Yellow
         } else {
-            Write-Host "   Installer build failed!" -ForegroundColor Red
+            Write-Host "   Distribution folder verified: $distFolder" -ForegroundColor Gray
+            
+            # Set environment variable for version
+            $env:APP_VERSION = $Version
+            
+            # Run Inno Setup compiler
+            & $isccPath "installer.iss"
+            
+            if ($LASTEXITCODE -eq 0) {
+                $installerPath = ".\Release\Timekeeper-v$Version-$Runtime-installer.exe"
+                if (Test-Path $installerPath) {
+                    $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
+                    Write-Host "   Installer created successfully!" -ForegroundColor Green
+                    Write-Host "   Size: $installerSize MB" -ForegroundColor White
+                } else {
+                    Write-Host "   WARNING: Installer build reported success but file not found!" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "   Installer build failed!" -ForegroundColor Red
+            }
         }
     } else {
         Write-Host "   Inno Setup not found. Skipping installer creation." -ForegroundColor Yellow

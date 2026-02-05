@@ -52,10 +52,9 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Fil
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-Type: files; Name: "{app}\timekeeper.db"
-Type: files; Name: "{app}\timekeeper.db-shm"
-Type: files; Name: "{app}\timekeeper.db-wal"
+; Note: We do NOT use [UninstallDelete] to automatically delete the database files
+; because we want to give the user a choice during uninstall.
+; The database deletion is handled in code below.
 
 [Code]
 function InitializeSetup(): Boolean;
@@ -72,7 +71,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DbPath: String;
 begin
-  if CurUninstallStep = usPostUninstall then
+  if CurUninstallStep = usUninstall then
   begin
     DbPath := ExpandConstant('{app}\timekeeper.db');
     if FileExists(DbPath) then

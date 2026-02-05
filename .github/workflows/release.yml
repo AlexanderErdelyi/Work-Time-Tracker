@@ -268,8 +268,24 @@ jobs:
           # Set environment variable for version
           $env:APP_VERSION = $version
           
+          # Verify source directory exists
+          $distFolder = ".\Release\Timekeeper-v$version-win-x64"
+          if (-not (Test-Path $distFolder)) {
+            Write-Host "ERROR: Distribution folder not found: $distFolder" -ForegroundColor Red
+            exit 1
+          }
+          
+          Write-Host "Distribution folder verified: $distFolder"
+          
+          # Use full path to ISCC.exe
+          $isccPath = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $isccPath)) {
+            Write-Host "ERROR: ISCC.exe not found at: $isccPath" -ForegroundColor Red
+            exit 1
+          }
+          
           # Build installer
-          & "ISCC.exe" "installer.iss"
+          & $isccPath "installer.iss"
           
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Installer created successfully!"
@@ -277,6 +293,9 @@ jobs:
             if (Test-Path $installerPath) {
               $size = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
               Write-Host "Installer size: $size MB"
+            } else {
+              Write-Host "ERROR: Installer file not found at expected location!" -ForegroundColor Red
+              exit 1
             }
           } else {
             Write-Host "Installer build failed!" -ForegroundColor Red
