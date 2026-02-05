@@ -65,33 +65,33 @@ jobs:
           
           # Create START_HERE.txt
           $startHere = @"
-          # Timekeeper v$version
-          
-          ## Quick Start
-          
-          ### Windows Users:
-          1. Double-click START_TIMEKEEPER.bat to start
-          2. Your browser will open automatically
-          3. Start tracking time!
-          
-          ### To Stop:
-          - Close the console window or press Ctrl+C
-          
-          ## Your Data
-          All your data is saved in 'timekeeper.db' in this folder.
-          **IMPORTANT**: Backup this file regularly!
-          
-          ## Need Help?
-          See SIMPLE_USER_GUIDE.md for detailed instructions.
-          
-          ## Features
-          - No installation required - everything is included!
-          - No .NET Runtime needed
-          - Your data stays on your computer
-          - Offline application - works without internet
-          
-          Enjoy!
-          "@
+# Timekeeper v$version
+
+## Quick Start
+
+### Windows Users:
+1. Double-click START_TIMEKEEPER.bat to start
+2. Your browser will open automatically
+3. Start tracking time!
+
+### To Stop:
+- Close the console window or press Ctrl+C
+
+## Your Data
+All your data is saved in 'timekeeper.db' in this folder.
+**IMPORTANT**: Backup this file regularly!
+
+## Need Help?
+See SIMPLE_USER_GUIDE.md for detailed instructions.
+
+## Features
+- No installation required - everything is included!
+- No .NET Runtime needed
+- Your data stays on your computer
+- Offline application - works without internet
+
+Enjoy!
+"@
           
           Set-Content -Path "$distFolder\START_HERE.txt" -Value $startHere -Encoding UTF8
           
