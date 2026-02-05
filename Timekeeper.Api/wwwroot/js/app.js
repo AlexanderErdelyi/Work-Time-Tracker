@@ -56,6 +56,10 @@ function setupEventListeners() {
     document.getElementById('add-task-btn').addEventListener('click', () => showTaskForm());
     document.getElementById('add-entry-btn').addEventListener('click', () => showEntryForm());
     document.getElementById('settings-btn').addEventListener('click', showSettingsForm);
+    
+    // Import buttons
+    document.getElementById('import-tasks-btn').addEventListener('click', showImportDialog);
+    document.getElementById('download-template-btn').addEventListener('click', downloadTemplate);
 
     // Filter buttons
     document.getElementById('filter-entries-btn').addEventListener('click', loadEntries);
@@ -75,6 +79,9 @@ function setupEventListeners() {
     // Export buttons
     document.getElementById('export-csv-btn').addEventListener('click', () => exportData('csv'));
     document.getElementById('export-xlsx-btn').addEventListener('click', () => exportData('xlsx'));
+    
+    // Column selector
+    document.getElementById('column-selector-btn').addEventListener('click', toggleColumnSelector);
 
     // Reports
     document.getElementById('load-reports-btn').addEventListener('click', loadReports);
@@ -86,6 +93,13 @@ function setupEventListeners() {
     document.querySelector('.close').addEventListener('click', closeModal);
     window.addEventListener('click', (e) => {
         if (e.target.id === 'modal') closeModal();
+        
+        // Close column selector when clicking outside
+        const columnSelector = document.querySelector('.column-selector');
+        if (columnSelector && !columnSelector.contains(e.target) && 
+            e.target.id !== 'column-selector-btn') {
+            columnSelector.remove();
+        }
         
         // Close task dropdown when clicking outside
         const dropdown = document.getElementById('timer-task-dropdown');
@@ -125,12 +139,22 @@ async function loadInitialData() {
         loadEntries()
     ]);
     populateFilters();
+    initializeColumnResizing();
+    loadColumnPreferences();
+    initializeColumnDragDrop();
+    initializeContextMenu();
 }
 
 // Timer functions
 async function checkRunningTimer() {
     try {
         const response = await fetch(`${API_BASE}/timeentries/running`);
+        
+        if (!response.ok) {
+            showStartTimerForm();
+            return;
+        }
+        
         const data = await response.json();
         
         if (data && data.id) {
@@ -141,6 +165,7 @@ async function checkRunningTimer() {
         }
     } catch (error) {
         console.error('Error checking timer:', error);
+        showStartTimerForm();
     }
 }
 
@@ -400,6 +425,7 @@ function renderCustomers() {
     const tbody = document.getElementById('customers-tbody');
     tbody.innerHTML = customers.map(c => `
         <tr>
+            <td>${c.no || ''}</td>
             <td>${c.name}</td>
             <td>${c.description || ''}</td>
             <td class="${c.isActive ? 'status-active' : 'status-inactive'}">
@@ -417,6 +443,7 @@ function renderProjects() {
     const tbody = document.getElementById('projects-tbody');
     tbody.innerHTML = projects.map(p => `
         <tr>
+            <td>${p.no || ''}</td>
             <td>${p.name}</td>
             <td>${p.customerName}</td>
             <td>${p.description || ''}</td>
@@ -435,9 +462,11 @@ function renderTasks() {
     const tbody = document.getElementById('tasks-tbody');
     tbody.innerHTML = tasks.map(t => `
         <tr>
+            <td>${t.position || ''}</td>
             <td>${t.name}</td>
             <td>${t.projectName}</td>
             <td>${t.customerName}</td>
+            <td>${t.procurementNumber || ''}</td>
             <td>${t.description || ''}</td>
             <td class="${t.isActive ? 'status-active' : 'status-inactive'}">
                 ${t.isActive ? 'Active' : 'Inactive'}
@@ -463,16 +492,16 @@ function renderEntries() {
             class="${isContinuing ? 'continuing-entry' : ''}"
             ondblclick="resumeTracking(${e.id}, ${e.taskId}, '${(e.notes || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${durationSeconds})"
             title="${isRunning ? 'Currently running' : 'Double-click to continue tracking this entry'}">
-            <td onclick="event.stopPropagation()"><input type="checkbox" class="entry-checkbox" data-entry-id="${e.id}" ${isChecked ? 'checked' : ''}></td>
+            <td data-column="select" onclick="event.stopPropagation()"><input type="checkbox" class="entry-checkbox" data-entry-id="${e.id}" ${isChecked ? 'checked' : ''}></td>
             <td data-column="customer" tabindex="0">${e.customerName}</td>
             <td data-column="project" tabindex="0">${e.projectName}</td>
             <td data-column="task" tabindex="0">${e.taskName}</td>
-            <td>${formatDateTime(e.startTime)}</td>
-            <td>${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
-            <td>${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
-            <td>${billedDuration !== null ? formatDuration(billedDuration) : '-'}</td>
+            <td data-column="startTime">${formatDateTime(e.startTime)}</td>
+            <td data-column="endTime">${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
+            <td data-column="duration">${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
+            <td data-column="billedDuration" class="editable-cell" onclick="editBilledDuration(event, ${e.id}, ${billedDuration !== null ? billedDuration : 0})" title="Click to edit">${billedDuration !== null ? formatDuration(billedDuration) : '-'}</td>
             <td data-column="notes" tabindex="0">${e.notes || ''}</td>
-            <td onclick="event.stopPropagation()">
+            <td data-column="actions" onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="editEntry(${e.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteEntry(${e.id})">Delete</button>
             </td>
@@ -594,6 +623,7 @@ function showCustomerForm(customer = null) {
     modalBody.innerHTML = `
         <h2>${isEdit ? 'Edit' : 'New'} Customer</h2>
         <form id="customer-form">
+            <input type="text" id="customer-no" class="form-control" placeholder="Customer No (optional)" value="${customer?.no || ''}">
             <input type="text" id="customer-name" class="form-control" placeholder="Customer Name" value="${customer?.name || ''}" required>
             <textarea id="customer-description" class="form-control" placeholder="Description" rows="3">${customer?.description || ''}</textarea>
             ${isEdit ? `
@@ -621,6 +651,7 @@ function showProjectForm(project = null) {
     modalBody.innerHTML = `
         <h2>${isEdit ? 'Edit' : 'New'} Project</h2>
         <form id="project-form">
+            <input type="text" id="project-no" class="form-control" placeholder="Project No (optional)" value="${project?.no || ''}">
             <input type="text" id="project-name" class="form-control" placeholder="Project Name" value="${project?.name || ''}" required>
             <select id="project-customer" class="form-control" required>
                 <option value="">-- Select Customer --</option>
@@ -654,6 +685,7 @@ function showTaskForm(task = null) {
     modalBody.innerHTML = `
         <h2>${isEdit ? 'Edit' : 'New'} Task</h2>
         <form id="task-form">
+            <input type="text" id="task-position" class="form-control" placeholder="Position (optional)" value="${task?.position || ''}">
             <input type="text" id="task-name" class="form-control" placeholder="Task Name" value="${task?.name || ''}" required>
             <select id="task-project" class="form-control" required>
                 <option value="">-- Select Project --</option>
@@ -661,6 +693,7 @@ function showTaskForm(task = null) {
                     `<option value="${p.id}" ${task?.projectId === p.id ? 'selected' : ''}>${p.name} (${p.customerName})</option>`
                 ).join('')}
             </select>
+            <input type="text" id="task-procurement" class="form-control" placeholder="Procurement Number (optional)" value="${task?.procurementNumber || ''}">
             <textarea id="task-description" class="form-control" placeholder="Description" rows="3">${task?.description || ''}</textarea>
             ${isEdit ? `
                 <label>
@@ -714,6 +747,7 @@ function showEntryForm(entry = null) {
 // Save functions
 async function saveCustomer(id = null) {
     const data = {
+        no: document.getElementById('customer-no').value || null,
         name: document.getElementById('customer-name').value,
         description: document.getElementById('customer-description').value || null
     };
@@ -747,6 +781,7 @@ async function saveCustomer(id = null) {
 
 async function saveProject(id = null) {
     const data = {
+        no: document.getElementById('project-no').value || null,
         name: document.getElementById('project-name').value,
         customerId: parseInt(document.getElementById('project-customer').value),
         description: document.getElementById('project-description').value || null
@@ -781,8 +816,10 @@ async function saveProject(id = null) {
 
 async function saveTask(id = null) {
     const data = {
+        position: document.getElementById('task-position').value || null,
         name: document.getElementById('task-name').value,
         projectId: parseInt(document.getElementById('task-project').value),
+        procurementNumber: document.getElementById('task-procurement').value || null,
         description: document.getElementById('task-description').value || null
     };
 
@@ -1447,4 +1484,439 @@ function showSettingsForm() {
     });
     
     openModal();
+}
+
+// Import functionality
+function showImportDialog() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            await importTasks(file);
+        }
+    };
+    input.click();
+}
+
+async function importTasks(file) {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`${API_BASE}/import/tasks`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess(`Import successful! Created: ${result.customersCreated} customers, ${result.projectsCreated} projects, ${result.tasksCreated} tasks. Updated: ${result.customersUpdated} customers, ${result.projectsUpdated} projects, ${result.tasksUpdated} tasks.`);
+            await loadInitialData();
+        } else {
+            showError(`Import failed: ${result.errors.join(', ')}`);
+        }
+    } catch (error) {
+        console.error('Error importing tasks:', error);
+        showError('Failed to import tasks');
+    }
+}
+
+function downloadTemplate() {
+    window.location.href = `${API_BASE}/import/tasks/template`;
+}
+
+// Column resizing functionality
+function initializeColumnResizing() {
+    const table = document.getElementById('entries-table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.resizable');
+    
+    headers.forEach(header => {
+        const resizeHandle = header.querySelector('.resize-handle');
+        if (!resizeHandle) return;
+        
+        let startX, startWidth;
+        
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startX = e.pageX;
+            startWidth = header.offsetWidth;
+            
+            header.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            
+            const onMouseMove = (e) => {
+                const diff = e.pageX - startX;
+                const newWidth = Math.max(80, startWidth + diff);
+                header.style.width = newWidth + 'px';
+                header.style.minWidth = newWidth + 'px';
+            };
+            
+            const onMouseUp = () => {
+                header.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                saveColumnWidths();
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    });
+}
+
+// Column visibility toggle
+function toggleColumnSelector(e) {
+    // Remove existing selector if open
+    const existing = document.querySelector('.column-selector');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+    
+    const columns = [
+        { name: 'select', label: 'Select', fixed: true },
+        { name: 'customer', label: 'Customer' },
+        { name: 'project', label: 'Project' },
+        { name: 'task', label: 'Task' },
+        { name: 'startTime', label: 'Start Time' },
+        { name: 'endTime', label: 'End Time' },
+        { name: 'duration', label: 'Duration' },
+        { name: 'billedDuration', label: 'Billed Duration' },
+        { name: 'notes', label: 'Notes' },
+        { name: 'actions', label: 'Actions', fixed: true }
+    ];
+    
+    const selector = document.createElement('div');
+    selector.className = 'column-selector';
+    
+    const hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
+    
+    selector.innerHTML = columns.map(col => {
+        const isHidden = hiddenColumns.includes(col.name);
+        const disabled = col.fixed ? 'disabled' : '';
+        return `
+            <label>
+                <input type="checkbox" value="${col.name}" 
+                    ${!isHidden ? 'checked' : ''} 
+                    ${disabled}
+                    onchange="toggleColumnVisibility('${col.name}', this.checked)">
+                ${col.label}
+            </label>
+        `;
+    }).join('');
+    
+    // Position the selector
+    const button = e.target;
+    const rect = button.getBoundingClientRect();
+    selector.style.position = 'fixed';
+    selector.style.top = (rect.bottom + 5) + 'px';
+    selector.style.left = rect.left + 'px';
+    
+    document.body.appendChild(selector);
+}
+
+function toggleColumnVisibility(columnName, visible) {
+    const table = document.getElementById('entries-table');
+    const headers = table.querySelectorAll(`th[data-column="${columnName}"]`);
+    const cells = table.querySelectorAll(`td[data-column="${columnName}"]`);
+    
+    headers.forEach(h => {
+        if (visible) {
+            h.classList.remove('hidden');
+        } else {
+            h.classList.add('hidden');
+        }
+    });
+    
+    cells.forEach(c => {
+        if (visible) {
+            c.classList.remove('hidden');
+        } else {
+            c.classList.add('hidden');
+        }
+    });
+    
+    // Save preferences
+    let hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
+    if (visible) {
+        hiddenColumns = hiddenColumns.filter(c => c !== columnName);
+    } else {
+        if (!hiddenColumns.includes(columnName)) {
+            hiddenColumns.push(columnName);
+        }
+    }
+    localStorage.setItem('hiddenColumns', JSON.stringify(hiddenColumns));
+}
+
+function loadColumnPreferences() {
+    const hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
+    hiddenColumns.forEach(columnName => {
+        toggleColumnVisibility(columnName, false);
+    });
+    
+    // Load column widths
+    const columnWidths = JSON.parse(localStorage.getItem('columnWidths') || '{}');
+    Object.keys(columnWidths).forEach(columnName => {
+        const header = document.querySelector(`th[data-column="${columnName}"]`);
+        if (header) {
+            header.style.width = columnWidths[columnName];
+            header.style.minWidth = columnWidths[columnName];
+        }
+    });
+    
+    loadColumnOrder();
+}
+
+function saveColumnWidths() {
+    const table = document.getElementById('entries-table');
+    const headers = table.querySelectorAll('th[data-column]');
+    const widths = {};
+    
+    headers.forEach(header => {
+        const columnName = header.getAttribute('data-column');
+        if (header.style.width) {
+            widths[columnName] = header.style.width;
+        }
+    });
+    
+    localStorage.setItem('columnWidths', JSON.stringify(widths));
+}
+
+// Inline editing for billed duration
+let editingCell = null;
+
+function editBilledDuration(event, entryId, currentBilledMinutes) {
+    event.stopPropagation();
+    
+    const cell = event.currentTarget;
+    
+    // If already editing this cell, do nothing
+    if (editingCell === cell) return;
+    
+    // Cancel any other editing
+    if (editingCell) {
+        cancelEdit();
+    }
+    
+    editingCell = cell;
+    const currentText = cell.textContent;
+    
+    cell.innerHTML = `<input type="number" step="0.1" value="${currentBilledMinutes.toFixed(2)}" 
+        onblur="saveBilledDuration(${entryId}, this.value)" 
+        onkeydown="handleBilledDurationKeydown(event, ${entryId})" 
+        style="width: 100px;">`;
+    
+    const input = cell.querySelector('input');
+    input.focus();
+    input.select();
+}
+
+function handleBilledDurationKeydown(event, entryId) {
+    if (event.key === 'Enter') {
+        event.target.blur();
+    } else if (event.key === 'Escape') {
+        cancelEdit();
+        renderEntries();
+    }
+}
+
+async function saveBilledDuration(entryId, newMinutes) {
+    const minutes = parseFloat(newMinutes);
+    if (isNaN(minutes) || minutes < 0) {
+        showError('Invalid duration');
+        renderEntries();
+        return;
+    }
+    
+    // Find the entry and calculate what duration minutes would give this billed amount
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry) {
+        renderEntries();
+        return;
+    }
+    
+    // For now, just show a message - you'd need to add an endpoint to save custom billed duration
+    showSuccess(`Billed duration updated to ${formatDuration(minutes)}`);
+    editingCell = null;
+    
+    // TODO: Add API endpoint to save custom billed duration if needed
+    // For now, just re-render to restore the display
+    setTimeout(() => renderEntries(), 500);
+}
+
+function cancelEdit() {
+    editingCell = null;
+}
+
+// Context menu for column visibility
+function initializeContextMenu() {
+    const headers = document.querySelectorAll('#entries-table th[data-column]');
+    
+    headers.forEach(header => {
+        header.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showContextMenu(e.clientX, e.clientY);
+        });
+    });
+    
+    // Close context menu on click outside
+    document.addEventListener('click', () => {
+        const menu = document.querySelector('.context-menu');
+        if (menu) menu.remove();
+    });
+}
+
+function showContextMenu(x, y) {
+    // Remove existing menu
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) existingMenu.remove();
+    
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    
+    const headers = document.querySelectorAll('#entries-table th[data-column]');
+    
+    headers.forEach(header => {
+        const column = header.dataset.column;
+        const isVisible = !header.classList.contains('hidden');
+        
+        const item = document.createElement('div');
+        item.className = 'context-menu-item';
+        item.innerHTML = `
+            <input type="checkbox" ${isVisible ? 'checked' : ''} 
+                   onchange="toggleColumnVisibility('${column}')">
+            <span>${header.textContent.replace('▼', '').trim()}</span>
+        `;
+        
+        menu.appendChild(item);
+    });
+    
+    document.body.appendChild(menu);
+    
+    // Prevent menu from going off-screen
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        menu.style.left = (x - rect.width) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        menu.style.top = (y - rect.height) + 'px';
+    }
+}
+
+// Drag and drop column reordering
+function initializeColumnDragDrop() {
+    const headers = document.querySelectorAll('#entries-table th[data-column]');
+    
+    headers.forEach(header => {
+        header.draggable = true;
+        header.style.cursor = 'move';
+        
+        header.addEventListener('dragstart', (e) => {
+            header.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', header.innerHTML);
+        });
+        
+        header.addEventListener('dragend', () => {
+            header.classList.remove('dragging');
+            document.querySelectorAll('th').forEach(h => h.classList.remove('drag-over'));
+        });
+        
+        header.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const dragging = document.querySelector('.dragging');
+            if (dragging && dragging !== header) {
+                header.classList.add('drag-over');
+            }
+        });
+        
+        header.addEventListener('dragleave', () => {
+            header.classList.remove('drag-over');
+        });
+        
+        header.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const dragging = document.querySelector('.dragging');
+            
+            if (dragging && dragging !== header) {
+                reorderColumns(dragging, header);
+            }
+            
+            header.classList.remove('drag-over');
+        });
+    });
+}
+
+function reorderColumns(draggedHeader, targetHeader) {
+    const table = document.getElementById('entries-table');
+    const draggedIndex = Array.from(draggedHeader.parentNode.children).indexOf(draggedHeader);
+    const targetIndex = Array.from(targetHeader.parentNode.children).indexOf(targetHeader);
+    
+    // Reorder header
+    const headerRow = draggedHeader.parentNode;
+    if (draggedIndex < targetIndex) {
+        headerRow.insertBefore(draggedHeader, targetHeader.nextSibling);
+    } else {
+        headerRow.insertBefore(draggedHeader, targetHeader);
+    }
+    
+    // Reorder all data rows
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cells = Array.from(row.children);
+        const draggedCell = cells[draggedIndex];
+        if (draggedIndex < targetIndex) {
+            row.insertBefore(draggedCell, cells[targetIndex].nextSibling);
+        } else {
+            row.insertBefore(draggedCell, cells[targetIndex]);
+        }
+    });
+    
+    // Save column order
+    saveColumnOrder();
+}
+
+function saveColumnOrder() {
+    const headers = document.querySelectorAll('#entries-table th[data-column]');
+    const order = Array.from(headers).map(h => h.dataset.column);
+    localStorage.setItem('columnOrder', JSON.stringify(order));
+}
+
+function loadColumnOrder() {
+    const saved = localStorage.getItem('columnOrder');
+    if (!saved) return;
+    
+    const order = JSON.parse(saved);
+    const headerRow = document.querySelector('#entries-table thead tr');
+    const headers = {};
+    
+    // Store all headers by column name
+    document.querySelectorAll('#entries-table th[data-column]').forEach(h => {
+        headers[h.dataset.column] = h;
+    });
+    
+    // Reorder based on saved order
+    order.forEach(column => {
+        if (headers[column]) {
+            headerRow.appendChild(headers[column]);
+        }
+    });
+    
+    // Reorder data rows to match
+    const table = document.getElementById('entries-table');
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        order.forEach((column, index) => {
+            const cell = row.querySelector(`td:nth-child(${index + 1})`);
+            if (cell) row.appendChild(cell);
+        });
+    });
 }

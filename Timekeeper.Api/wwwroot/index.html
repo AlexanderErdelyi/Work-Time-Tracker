@@ -84,29 +84,32 @@
 
                 <div class="export-buttons">
                     <button id="delete-selected-btn" class="btn btn-danger" style="display: none;">Delete Selected</button>
+                    <button id="column-selector-btn" class="btn btn-secondary">📋 Columns</button>
                     <button id="export-csv-btn" class="btn btn-secondary">Export CSV</button>
                     <button id="export-xlsx-btn" class="btn btn-secondary">Export XLSX</button>
                 </div>
 
-                <table id="entries-table" class="data-table">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="select-all-entries"></th>
-                            <th>Customer</th>
-                            <th>Project</th>
-                            <th>Task</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                            <th>Duration</th>
-                            <th>Billed Duration</th>
-                            <th>Notes</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="entries-tbody">
-                        <!-- Entries will be loaded here -->
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table id="entries-table" class="data-table resizable-table">
+                        <thead>
+                            <tr>
+                                <th data-column="select" class="resizable"><input type="checkbox" id="select-all-entries"><div class="resize-handle"></div></th>
+                                <th data-column="customer" class="resizable">Customer<div class="resize-handle"></div></th>
+                                <th data-column="project" class="resizable">Project<div class="resize-handle"></div></th>
+                                <th data-column="task" class="resizable">Task<div class="resize-handle"></div></th>
+                                <th data-column="startTime" class="resizable">Start Time<div class="resize-handle"></div></th>
+                                <th data-column="endTime" class="resizable">End Time<div class="resize-handle"></div></th>
+                                <th data-column="duration" class="resizable">Duration<div class="resize-handle"></div></th>
+                                <th data-column="billedDuration" class="resizable">Billed Duration<div class="resize-handle"></div></th>
+                                <th data-column="notes" class="resizable">Notes<div class="resize-handle"></div></th>
+                                <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
+                            </tr>
+                        </thead>
+                        <tbody id="entries-tbody">
+                            <!-- Entries will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -120,6 +123,7 @@
                 <table id="customers-table" class="data-table">
                     <thead>
                         <tr>
+                            <th>No</th>
                             <th>Name</th>
                             <th>Description</th>
                             <th>Status</th>
@@ -143,6 +147,7 @@
                 <table id="projects-table" class="data-table">
                     <thead>
                         <tr>
+                            <th>No</th>
                             <th>Name</th>
                             <th>Customer</th>
                             <th>Description</th>
@@ -162,14 +167,20 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Tasks</h2>
-                    <button id="add-task-btn" class="btn btn-primary">+ New Task</button>
+                    <div class="btn-group">
+                        <button id="add-task-btn" class="btn btn-primary">+ New Task</button>
+                        <button id="import-tasks-btn" class="btn btn-secondary">📥 Import Tasks</button>
+                        <button id="download-template-btn" class="btn btn-secondary">📄 Download Template</button>
+                    </div>
                 </div>
                 <table id="tasks-table" class="data-table">
                     <thead>
                         <tr>
+                            <th>Position</th>
                             <th>Name</th>
                             <th>Project</th>
                             <th>Customer</th>
+                            <th>Procurement No</th>
                             <th>Description</th>
                             <th>Status</th>
                             <th>Actions</th>

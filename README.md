@@ -4,6 +4,12 @@ A comprehensive C# .NET 8 time tracking application with a clean web interface f
 
 ## Features
 
+### Easy Distribution 🎁
+- **Self-Contained Build**: No .NET installation required - just extract and run!
+- **One-Click Start**: Simple `START_TIMEKEEPER.bat` for non-technical users
+- **Portable**: Copy to USB drive or any folder - works anywhere
+- **Offline**: No internet connection needed
+
 ### Timer Management
 - **Start/Stop Timer**: Track time with a single-click timer (no parallel timers allowed)
 - **Running Timer Display**: Live timer display with elapsed time
@@ -45,6 +51,12 @@ A comprehensive C# .NET 8 time tracking application with a clean web interface f
 - **Export**: ClosedXML for Excel generation
 - **Testing**: xUnit with In-Memory database
 
+## 📚 Documentation
+
+- **[Setup Guide for End Users](SETUP_GUIDE.md)** - Simple instructions for non-technical users
+- **[Distribution Guide](DISTRIBUTION_GUIDE.md)** - How to share and update the application
+- **[GitHub Setup](GITHUB_SETUP_SUMMARY.md)** - GitHub configuration details
+
 ## Project Structure
 
 ```
@@ -63,10 +75,47 @@ Timekeeper/
 
 ## Getting Started
 
-### Prerequisites
-- .NET 8.0 SDK or later
+### For End Users (No Technical Knowledge Required) 🌟
 
-### Installation
+**Easiest Way - Self-Contained Version:**
+
+Ask your administrator to create a standalone build using:
+```powershell
+.\publish-standalone.ps1 -Version "1.0.0"
+```
+
+Then you just:
+1. Download and extract the ZIP file
+2. Double-click **`START_TIMEKEEPER.bat`**
+3. Start tracking time! 🎉
+
+**No installation, no setup, no command line!**
+
+See [SIMPLE_USER_GUIDE.md](SIMPLE_USER_GUIDE.md) for detailed instructions.
+
+---
+
+### Prerequisites
+- .NET 8.0 SDK or later ([Download here](https://dotnet.microsoft.com/download))
+
+### Quick Start (For End Users)
+
+#### Option 1: Run with Helper Scripts (Recommended)
+1. Clone or download the repository
+2. Run the application:
+   - **Windows**: Double-click `run-api.ps1` or run in PowerShell
+   - **Alternative**: Use `.\build.ps1` to build first, then `.\run-api.ps1`
+3. Open your browser to `http://localhost:5000`
+
+#### Option 2: Manual Start
+1. Open a terminal in the project folder
+2. Run:
+```bash
+dotnet run --project Timekeeper.Api/Timekeeper.Api.csproj
+```
+3. Open your browser to `http://localhost:5000`
+
+### For Developers
 
 1. Clone the repository:
 ```bash
@@ -77,6 +126,7 @@ cd Work-Time-Tracker
 2. Build the solution:
 ```bash
 dotnet build
+# Or use the build script: .\build.ps1
 ```
 
 3. Run the tests:
@@ -88,17 +138,39 @@ dotnet test
 ```bash
 cd Timekeeper.Api
 dotnet run
+# Or use the run script from root: .\run-api.ps1
 ```
 
 5. Open your browser and navigate to:
 ```
-http://localhost:5199
+http://localhost:5000
 ```
 
 Or to view the API documentation:
 ```
-http://localhost:5199/swagger
+http://localhost:5000/swagger
 ```
+
+### Updating to a New Version
+
+When a new version is released:
+
+1. **Pull latest changes** (if using Git):
+```bash
+git pull origin main
+```
+
+2. **Rebuild the application**:
+```bash
+.\build.ps1
+```
+
+3. **Restart the application**:
+```bash
+.\run-api.ps1
+```
+
+Your database and settings are preserved automatically.
 
 ### Initial Seed Data
 
