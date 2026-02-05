@@ -145,7 +145,7 @@ jobs:
           $changelog = $versionFile.changelog.$version
           
           $releaseNotes = "# Timekeeper v$version`n`n"
-          $releaseNotes += "Released: $(Get-Date -Format `"yyyy-MM-dd`")`n`n"
+          $releaseNotes += "Released: $(Get-Date -Format 'yyyy-MM-dd')`n`n"
           $releaseNotes += "## ✨ What's New`n`n"
           
           if ($changelog -and $changelog.changes) {
