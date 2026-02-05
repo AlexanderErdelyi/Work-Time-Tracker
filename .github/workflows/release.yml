@@ -1,0 +1,237 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: windows-latest
+    permissions:
+      contents: write  # Required to create releases and upload assets
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      
+      - name: Extract version from tag
+        id: get_version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Building version: $version"
+      
+      - name: Update version.json
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          $versionFile = Get-Content "version.json" | ConvertFrom-Json
+          $versionFile.version = $version
+          $versionFile.releaseDate = (Get-Date -Format "yyyy-MM-dd")
+          $versionFile | ConvertTo-Json -Depth 10 | Set-Content "version.json"
+      
+      - name: Build self-contained application
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          
+          # Create Release directory
+          New-Item -ItemType Directory -Path ".\Release" -Force | Out-Null
+          
+          # Publish self-contained for Windows x64
+          dotnet publish Timekeeper.Api/Timekeeper.Api.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output ".\Release\Timekeeper-v$version-win-x64" `
+            /p:PublishSingleFile=true `
+            /p:PublishTrimmed=true `
+            /p:EnableCompressionInSingleFile=true
+          
+          $distFolder = ".\Release\Timekeeper-v$version-win-x64"
+          
+          # Copy documentation
+          Copy-Item ".\README.md" -Destination $distFolder
+          Copy-Item ".\SETUP_GUIDE.md" -Destination $distFolder
+          Copy-Item ".\SIMPLE_USER_GUIDE.md" -Destination $distFolder
+          Copy-Item ".\DISTRIBUTION_GUIDE.md" -Destination $distFolder
+          Copy-Item ".\version.json" -Destination $distFolder
+          
+          # Create START_HERE.txt
+          $startHere = @"
+# Timekeeper v$version
+
+## Quick Start
+
+### Windows Users:
+1. Double-click START_TIMEKEEPER.bat to start
+2. Your browser will open automatically
+3. Start tracking time!
+
+### To Stop:
+- Close the console window or press Ctrl+C
+
+## Your Data
+All your data is saved in 'timekeeper.db' in this folder.
+**IMPORTANT**: Backup this file regularly!
+
+## Need Help?
+See SIMPLE_USER_GUIDE.md for detailed instructions.
+
+## Features
+- No installation required - everything is included!
+- No .NET Runtime needed
+- Your data stays on your computer
+- Offline application - works without internet
+
+Enjoy!
+"@
+          
+          Set-Content -Path "$distFolder\START_HERE.txt" -Value $startHere -Encoding UTF8
+          
+          # Create START_TIMEKEEPER.bat
+          $batchContent = @'
+          @echo off
+          title Timekeeper - Time Tracking Application
+          echo.
+          echo ================================================
+          echo   Timekeeper is starting...
+          echo ================================================
+          echo.
+          echo The application will open in your default browser.
+          echo If it doesn't open automatically, go to:
+          echo.
+          echo    http://localhost:5000
+          echo.
+          echo To STOP the application, close this window or press Ctrl+C
+          echo.
+          echo ================================================
+          echo.
+          
+          start http://localhost:5000
+          
+          Timekeeper.Api.exe
+          
+          pause
+          '@
+          
+          Set-Content -Path "$distFolder\START_TIMEKEEPER.bat" -Value $batchContent -Encoding ASCII
+          
+          # Create ZIP
+          $zipPath = ".\Release\Timekeeper-v$version-win-x64.zip"
+          Compress-Archive -Path $distFolder -DestinationPath $zipPath -Force
+          
+          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_OUTPUT
+      
+      - name: Generate release notes
+        id: release_notes
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          
+          # Read changelog from version.json
+          $versionFile = Get-Content "version.json" | ConvertFrom-Json
+          $changelog = $versionFile.changelog.$version
+          
+          $releaseNotes = @"
+          # Timekeeper v$version
+          
+          Released: $(Get-Date -Format "yyyy-MM-dd")
+          
+          ## ✨ What's New
+          
+          "@ 
+          
+          if ($changelog -and $changelog.changes) {
+            foreach ($change in $changelog.changes) {
+              $releaseNotes += "- $change`n"
+            }
+          } else {
+            $releaseNotes += "- See version.json for details`n"
+          }
+          
+          $releaseNotes += @"
+          
+          
+          ## 📥 Download & Installation
+          
+          ### For Non-Technical Users (Recommended) 🌟
+          
+          1. Download **Timekeeper-v$version-win-x64.zip** below
+          2. Extract the ZIP file to any folder
+          3. Double-click **START_TIMEKEEPER.bat**
+          4. Your browser opens automatically - start tracking time!
+          
+          **No installation required! No .NET needed!**
+          
+          📖 See **SIMPLE_USER_GUIDE.md** (included in ZIP) for detailed instructions.
+          
+          ### Features
+          
+          "@ 
+          
+          if ($versionFile.features) {
+            foreach ($feature in $versionFile.features) {
+              $releaseNotes += "- $feature`n"
+            }
+          }
+          
+          $releaseNotes += @"
+          
+          
+          ### ⚙️ Requirements
+          
+          - Windows 10 or 11 (64-bit)
+          - No other software needed!
+          
+          ### 📝 Important Notes
+          
+          - **Your data**: Stored in `timekeeper.db` file - backup regularly!
+          - **Offline**: Works without internet connection
+          - **Privacy**: All data stays on your computer
+          - **Portable**: Copy folder to USB or anywhere
+          
+          ### 🆘 Need Help?
+          
+          - Read **SIMPLE_USER_GUIDE.md** for step-by-step instructions
+          - Check **SETUP_GUIDE.md** for troubleshooting
+          - Open an issue on GitHub
+          
+          ---
+          
+          ## 🔄 Updating from Previous Version
+          
+          1. Backup your **timekeeper.db** file
+          2. Download and extract new version
+          3. Copy your **timekeeper.db** into new folder
+          4. Run START_TIMEKEEPER.bat
+          
+          Your data will be preserved! ✅
+          "@
+          
+          # Save to file for GitHub release
+          $releaseNotes | Out-File -FilePath "release_notes.md" -Encoding UTF8
+          
+          # Set output (escape for GitHub Actions)
+          $releaseNotes = $releaseNotes -replace '%','%25' -replace '\n','%0A' -replace '\r','%0D'
+          echo "NOTES=$releaseNotes" >> $env:GITHUB_OUTPUT
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Timekeeper v${{ steps.get_version.outputs.VERSION }}
+          body_path: release_notes.md
+          files: |
+            Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

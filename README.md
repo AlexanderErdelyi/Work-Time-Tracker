@@ -2,6 +2,21 @@
 
 A comprehensive C# .NET 8 time tracking application with a clean web interface for managing time entries, customers, projects, and tasks.
 
+## 🚀 Ready to Share with Your Team?
+
+**Create your first release in 2 commands:**
+
+```bash
+git tag -a v1.0.0 -m "First release - v1.0.0"
+git push origin v1.0.0
+```
+
+GitHub will automatically build a ready-to-use ZIP file that your colleagues can download and run with just a double-click!
+
+👉 **[See Complete Release Guide](HOW_TO_RELEASE.md)** for step-by-step instructions.
+
+---
+
 ## Features
 
 ### Easy Distribution 🎁
@@ -53,9 +68,15 @@ A comprehensive C# .NET 8 time tracking application with a clean web interface f
 
 ## 📚 Documentation
 
-- **[Setup Guide for End Users](SETUP_GUIDE.md)** - Simple instructions for non-technical users
-- **[Distribution Guide](DISTRIBUTION_GUIDE.md)** - How to share and update the application
+### For Repository Owners 👨‍💼
+- **[🚀 HOW TO RELEASE](HOW_TO_RELEASE.md)** - **START HERE** - Create your first release in minutes!
+- **[⚡ Quick Release Guide](QUICK_RELEASE_GUIDE.md)** - Quick reference card for releasing
+- **[Distribution Guide](DISTRIBUTION_GUIDE.md)** - Advanced distribution strategies
 - **[GitHub Setup](GITHUB_SETUP_SUMMARY.md)** - GitHub configuration details
+
+### For End Users 👥
+- **[Simple User Guide](SIMPLE_USER_GUIDE.md)** - Non-technical instructions (double-click to run!)
+- **[Setup Guide](SETUP_GUIDE.md)** - Detailed setup and troubleshooting
 
 ## Project Structure
 
