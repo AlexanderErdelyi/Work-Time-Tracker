@@ -125,7 +125,10 @@ jobs:
             Write-Host "No commercial certificate found. Creating self-signed certificate..."
             
             # Generate a cryptographically secure random password for the self-signed certificate
-            $randomPassword = [System.Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Minimum 0 -Maximum 256) }))
+            $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+            $randomBytes = New-Object byte[] 32
+            $rng.GetBytes($randomBytes)
+            $randomPassword = [System.Convert]::ToBase64String($randomBytes)
             
             # Create a self-signed certificate for code signing
             $cert = New-SelfSignedCertificate `
@@ -148,7 +151,8 @@ jobs:
             echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PASSWORD=$randomPassword" >> $env:GITHUB_ENV
-            # Note: DigiCert timestamp server requires HTTP (RFC 3161 timestamping protocol)
+            # Note: RFC 3161 timestamping protocol requires HTTP. The timestamp itself is cryptographically
+            # signed by DigiCert's certificate, so MITM attacks cannot forge timestamps.
             echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
             
             Write-Host "✓ Self-signed certificate created and configured"
