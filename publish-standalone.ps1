@@ -12,7 +12,6 @@ Write-Host "Creating Self-Contained Release v$Version for $Runtime" -ForegroundC
 Write-Host ""
 
 # Set location to script directory
-# Set location to script directory
 Set-Location -Path $PSScriptRoot
 
 # Import code signing module
