@@ -75,6 +75,13 @@ ClientBin/
 *.publishsettings
 orleans.codegen.cs
 
+# Code signing certificates and configuration
+*.p12
+*.cer
+signing-config.ps1
+test-certificate.pfx
+cert-base64.txt
+
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/

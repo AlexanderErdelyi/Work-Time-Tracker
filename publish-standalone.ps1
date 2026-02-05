@@ -14,6 +14,9 @@ Write-Host ""
 # Set location to script directory
 Set-Location -Path $PSScriptRoot
 
+# Import code signing module
+Import-Module "$PSScriptRoot\CodeSigning.psm1" -Force
+
 # Update version in version.json
 Write-Host "Updating version.json..." -ForegroundColor Yellow
 $versionFile = Get-Content "version.json" | ConvertFrom-Json
@@ -66,6 +69,35 @@ if ($Runtime -like "win-*") {
 }
 
 $distFolder = ".\Release\Timekeeper-v$Version-$Runtime"
+
+# Sign executables for Windows builds
+if ($Runtime -like "win-*" -and $env:SIGN_ENABLED -eq "true") {
+    Write-Host ""
+    Write-Host "Code Signing Executables..." -ForegroundColor Yellow
+    
+    $apiExe = Join-Path $distFolder "Timekeeper.Api.exe"
+    $trayExe = Join-Path $distFolder "Timekeeper.TrayApp.exe"
+    
+    $signedCount = 0
+    if (Test-Path $apiExe) {
+        if (Sign-File -FilePath $apiExe) {
+            $signedCount++
+        }
+    }
+    
+    if (Test-Path $trayExe) {
+        if (Sign-File -FilePath $trayExe) {
+            $signedCount++
+        }
+    }
+    
+    if ($signedCount -gt 0) {
+        Write-Host "   Successfully signed $signedCount file(s)" -ForegroundColor Green
+    } else {
+        Write-Host "   No files were signed" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
 
 # Copy documentation
 Write-Host "Adding documentation..." -ForegroundColor Yellow
@@ -278,6 +310,17 @@ if ($BuildInstaller -and $Runtime -like "win-*") {
                     $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
                     Write-Host "   Installer created successfully!" -ForegroundColor Green
                     Write-Host "   Size: $installerSize MB" -ForegroundColor White
+                    
+                    # Sign the installer
+                    if ($env:SIGN_ENABLED -eq "true") {
+                        Write-Host ""
+                        Write-Host "   Signing installer..." -ForegroundColor Yellow
+                        if (Sign-File -FilePath $installerPath) {
+                            Write-Host "   ✓ Installer signed successfully" -ForegroundColor Green
+                        } else {
+                            Write-Host "   ⚠ Installer signing failed" -ForegroundColor Yellow
+                        }
+                    }
                     
                     # Create ZIP file containing the installer for office environments that block .exe downloads
                     Write-Host "   Creating ZIP package for installer..." -ForegroundColor Yellow

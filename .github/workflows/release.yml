@@ -98,10 +98,32 @@ jobs:
           $versionFile.releaseDate = (Get-Date -Format "yyyy-MM-dd")
           $versionFile | ConvertTo-Json -Depth 10 | Set-Content "version.json"
       
+      - name: Setup code signing (if certificate available)
+        if: ${{ secrets.CERTIFICATE_BASE64 }}
+        shell: pwsh
+        run: |
+          Write-Host "Setting up code signing..."
+          
+          # Decode certificate from base64
+          $certBytes = [System.Convert]::FromBase64String("${{ secrets.CERTIFICATE_BASE64 }}")
+          $certPath = Join-Path $env:RUNNER_TEMP "certificate.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+          
+          # Set environment variables for signing
+          echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
+          echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
+          echo "CERTIFICATE_PASSWORD=${{ secrets.CERTIFICATE_PASSWORD }}" >> $env:GITHUB_ENV
+          echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
+          
+          Write-Host "✓ Code signing configured"
+      
       - name: Build self-contained application
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
+          
+          # Import code signing module
+          Import-Module "${{ github.workspace }}\CodeSigning.psm1" -Force
           
           # Create Release directory
           New-Item -ItemType Directory -Path ".\Release" -Force | Out-Null
@@ -127,6 +149,29 @@ jobs:
             /p:EnableCompressionInSingleFile=true
           
           $distFolder = ".\Release\Timekeeper-v$version-win-x64"
+          
+          # Sign executables if signing is enabled
+          if ($env:SIGN_ENABLED -eq "true") {
+              Write-Host ""
+              Write-Host "Code Signing Executables..." -ForegroundColor Yellow
+              $signedCount = 0
+              
+              $apiExe = Join-Path $distFolder "Timekeeper.Api.exe"
+              $trayExe = Join-Path $distFolder "Timekeeper.TrayApp.exe"
+              
+              if (Test-Path $apiExe) {
+                  if (Sign-File -FilePath $apiExe) { $signedCount++ }
+              }
+              
+              if (Test-Path $trayExe) {
+                  if (Sign-File -FilePath $trayExe) { $signedCount++ }
+              }
+              
+              if ($signedCount -gt 0) {
+                  Write-Host "   Successfully signed $signedCount file(s)" -ForegroundColor Green
+              }
+              Write-Host ""
+          }
           
           # Copy documentation
           Copy-Item ".\README.md" -Destination $distFolder
@@ -263,6 +308,9 @@ jobs:
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
           
+          # Import code signing module
+          Import-Module "${{ github.workspace }}\CodeSigning.psm1" -Force
+          
           Write-Host "Building Windows Installer with Inno Setup..."
           
           # Set environment variable for version
@@ -293,6 +341,18 @@ jobs:
             if (Test-Path $installerPath) {
               $size = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
               Write-Host "Installer size: $size MB"
+              
+              # Sign the installer
+              if ($env:SIGN_ENABLED -eq "true") {
+                  Write-Host ""
+                  Write-Host "Signing installer..." -ForegroundColor Yellow
+                  if (Sign-File -FilePath $installerPath) {
+                      Write-Host "✓ Installer signed successfully" -ForegroundColor Green
+                  } else {
+                      Write-Host "⚠ Installer signing failed" -ForegroundColor Yellow
+                  }
+                  Write-Host ""
+              }
               
               # Create ZIP file containing the installer for office environments that block .exe downloads
               Write-Host "Creating ZIP package for installer..."

@@ -104,8 +104,9 @@ Both distribution formats are included in every release starting from the next v
 
 **"Windows protected your PC" warning:**
 - Click "More info" then "Run anyway"
-- This is normal for unsigned executables
-- Code signing certificate would eliminate this warning (requires purchase)
+- This warning appears for unsigned executables
+- **To eliminate this warning:** See [CODE_SIGNING_GUIDE.md](CODE_SIGNING_GUIDE.md) for instructions on signing your releases
+- Code signing requires a certificate (starting at $199/year for commercial distribution)
 
 **Installation fails:**
 - Ensure you have enough disk space (approximately 150-200 MB)
