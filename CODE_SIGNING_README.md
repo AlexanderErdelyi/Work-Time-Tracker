@@ -6,7 +6,11 @@ Great news! Your Timekeeper releases can now be signed to eliminate Windows secu
 
 **No certificate needed to get started!** The release workflow now automatically creates and uses a self-signed certificate if you don't have a commercial certificate configured. Just push a tag and your releases will be signed!
 
-⚠️ **Important**: Self-signed certificates will still show security warnings to end users. For production releases without warnings, you'll need a commercial certificate (see Option 2 below).
+⚠️ **Important Notes**:
+- Self-signed certificates will still show security warnings to end users
+- Each release is signed with a **different** self-signed certificate (generated fresh for each build)
+- For production releases without warnings, you'll need a **commercial certificate** (see Option 2 below)
+- Commercial certificates sign all releases with the **same trusted certificate**, building trust over time
 
 ## What Changed?
 
