@@ -19,7 +19,7 @@ Download the ZIP file:
 4. Click "Extract"
 
 ### Step 3: Run
-You have two options:
+You have three options:
 
 #### Option A: System Tray (Recommended) ⭐
 1. Open the extracted folder
@@ -39,6 +39,20 @@ You have two options:
 3. A black window will appear (don't close it!)
 4. Your browser will open automatically
 5. Start using Timekeeper! 🎉
+
+#### Option C: For Security-Restricted Systems (Company Laptops) 🔒
+If Option A or B gives you "Access Denied" errors:
+1. Open the extracted folder
+2. **Double-click** on **`RUN_WITH_DOTNET.bat`**
+   - OR **Right-click** on **`RUN_WITH_DOTNET.ps1`** and select **"Run with PowerShell"**
+3. A window will appear (don't close it!)
+4. Your browser will open automatically
+5. Start using Timekeeper! 🎉
+
+**Why this works:**
+- Company laptops often block .exe files for security
+- These launchers use the 'dotnet' command instead
+- This bypasses most security restrictions
 
 ---
 
@@ -80,7 +94,7 @@ Once it's open in your browser:
 - Right-click the tray icon (bottom-right, near clock)
 - Click **"Exit"**
 
-**If using Console Window (START_TIMEKEEPER.bat):**
+**If using Console Window (START_TIMEKEEPER.bat or RUN_WITH_DOTNET):**
 - Close the black window (console) that appeared when you started
 - OR press Ctrl+C in that window
 
@@ -105,8 +119,30 @@ Once it's open in your browser:
 http://localhost:5000
 ```
 
+### "Access Denied" or "Windows blocked this file"
+**Fix 1 (Recommended)**: Use the dotnet launcher instead
+1. Try **`RUN_WITH_DOTNET.bat`**
+2. OR try **`RUN_WITH_DOTNET.ps1`** (right-click → Run with PowerShell)
+3. These bypass most security restrictions on company laptops
+
+**Fix 2**: Unblock the files
+1. Right-click the file (e.g., `START_TIMEKEEPER.bat`)
+2. Choose "Properties"
+3. Check "Unblock" at the bottom
+4. Click "OK"
+5. Try again
+
+**Fix 3**: Run as administrator
+1. Right-click `START_TIMEKEEPER.bat`
+2. Choose "Run as administrator"
+
 ### "Nothing happens when I double-click"
-**Fix**: Try right-clicking `START_TIMEKEEPER.bat` and choose "Run as administrator"
+**Fix**: Try the PowerShell launcher:
+1. Right-click **`RUN_WITH_DOTNET.ps1`**
+2. Select **"Run with PowerShell"**
+3. If prompted, allow execution
+
+**Why this works**: PowerShell execution may bypass certain security policies that block double-clicking files, and the dotnet launcher bypasses executable restrictions.
 
 ### "Windows says it's blocked or dangerous"
 **Fix**: 

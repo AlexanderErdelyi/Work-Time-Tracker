@@ -90,6 +90,12 @@ $startHere = @"
 - Your browser will open automatically
 - A console window will remain open
 
+### Option 3: For Security-Restricted Systems (Company Laptops)
+If Option 1 or 2 gives "Access Denied" errors:
+- Double-click RUN_WITH_DOTNET.bat
+- OR right-click RUN_WITH_DOTNET.ps1 and select "Run with PowerShell"
+- These use 'dotnet' command which may bypass security restrictions
+
 ### To Stop:
 - System Tray: Right-click tray icon > Exit
 - Command Window: Close the console window or press Ctrl+C
@@ -99,7 +105,7 @@ All your data is saved in 'timekeeper.db' in this folder.
 **IMPORTANT**: Backup this file regularly!
 
 ## Need Help?
-See SETUP_GUIDE.md for detailed instructions.
+See SIMPLE_USER_GUIDE.md for detailed instructions.
 
 ## Features
 - No installation required - everything is included!
@@ -144,6 +150,77 @@ pause
 
     Set-Content -Path "$distFolder\START_TIMEKEEPER.bat" -Value $batchContent -Encoding ASCII
     Write-Host "Created START_TIMEKEEPER.bat" -ForegroundColor Green
+    
+    # Create RUN_WITH_DOTNET.bat for security-restricted environments
+    Write-Host "Creating RUN_WITH_DOTNET.bat..." -ForegroundColor Yellow
+    
+$dotnetBatchContent = @'
+@echo off
+title Timekeeper - Time Tracking Application (dotnet launcher)
+echo.
+echo ================================================
+echo   Timekeeper is starting with dotnet...
+echo ================================================
+echo.
+echo This launcher runs the app using 'dotnet' command
+echo which may work better on security-restricted systems.
+echo.
+echo The application will open in your default browser.
+echo If it doesn't open automatically, go to:
+echo.
+echo    http://localhost:5000
+echo.
+echo To STOP the application, close this window or press Ctrl+C
+echo.
+echo ================================================
+echo.
+
+start http://localhost:5000
+
+dotnet "%~dp0Timekeeper.Api.dll"
+
+pause
+'@
+
+    Set-Content -Path "$distFolder\RUN_WITH_DOTNET.bat" -Value $dotnetBatchContent -Encoding ASCII
+    Write-Host "Created RUN_WITH_DOTNET.bat" -ForegroundColor Green
+    
+    # Create RUN_WITH_DOTNET.ps1 as PowerShell alternative
+    Write-Host "Creating RUN_WITH_DOTNET.ps1..." -ForegroundColor Yellow
+    
+$dotnetPsContent = @'
+# Timekeeper Launcher - PowerShell Version
+# This launcher runs the app using 'dotnet' command
+# which may work better on security-restricted systems.
+
+Write-Host ""
+Write-Host "================================================" -ForegroundColor Cyan
+Write-Host "  Timekeeper is starting with dotnet..." -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "This launcher runs the app using 'dotnet' command" -ForegroundColor Yellow
+Write-Host "which may work better on security-restricted systems." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "The application will open in your default browser." -ForegroundColor Green
+Write-Host "If it doesn't open automatically, go to:" -ForegroundColor Green
+Write-Host ""
+Write-Host "   http://localhost:5000" -ForegroundColor White
+Write-Host ""
+Write-Host "To STOP the application, press Ctrl+C" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Open browser
+Start-Process "http://localhost:5000"
+
+# Run the application with dotnet
+$dllPath = Join-Path $PSScriptRoot "Timekeeper.Api.dll"
+& dotnet $dllPath
+'@
+
+    Set-Content -Path "$distFolder\RUN_WITH_DOTNET.ps1" -Value $dotnetPsContent -Encoding UTF8
+    Write-Host "Created RUN_WITH_DOTNET.ps1" -ForegroundColor Green
 }
 
 # Create ZIP
