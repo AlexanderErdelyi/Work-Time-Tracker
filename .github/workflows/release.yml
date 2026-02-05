@@ -22,7 +22,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          # For workflow_dispatch, checkout main and create tag; for push, checkout the tag
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
       
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -44,6 +45,27 @@ jobs:
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
           echo "TAG_NAME=$tagName" >> $env:GITHUB_OUTPUT
           echo "Building version: $version"
+      
+      - name: Create and push tag (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $tagName = "${{ steps.get_version.outputs.TAG_NAME }}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if tag already exists remotely
+          git fetch --tags
+          if (git rev-parse "$tagName" 2>$null) {
+            Write-Host "Tag $tagName already exists, skipping creation"
+          } else {
+            # Create and push the tag
+            git tag -a "$tagName" -m "Release $tagName"
+            git push origin "$tagName"
+            Write-Host "Created and pushed tag $tagName"
+          }
       
       - name: Update version.json
         shell: pwsh
@@ -72,6 +94,16 @@ jobs:
             /p:PublishTrimmed=true `
             /p:EnableCompressionInSingleFile=true
           
+          # Publish Tray App (system tray launcher)
+          dotnet publish Timekeeper.TrayApp/Timekeeper.TrayApp.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output ".\Release\Timekeeper-v$version-win-x64" `
+            /p:PublishSingleFile=true `
+            /p:PublishTrimmed=true `
+            /p:EnableCompressionInSingleFile=true
+          
           $distFolder = ".\Release\Timekeeper-v$version-win-x64"
           
           # Copy documentation
@@ -84,12 +116,18 @@ jobs:
           # Create START_HERE.txt
           $startHere = "# Timekeeper v$version`n`n"
           $startHere += "## Quick Start`n`n"
-          $startHere += "### Windows Users:`n"
-          $startHere += "- Double-click START_TIMEKEEPER.bat to start`n"
+          $startHere += "### Option 1: System Tray (Recommended)`n"
+          $startHere += "- Double-click Timekeeper.TrayApp.exe`n"
+          $startHere += "- The app will run in the system tray (bottom-right icons)`n"
+          $startHere += "- Right-click the tray icon to start/stop or open the app`n"
+          $startHere += "- No console window will appear!`n`n"
+          $startHere += "### Option 2: Command Window`n"
+          $startHere += "- Double-click START_TIMEKEEPER.bat`n"
           $startHere += "- Your browser will open automatically`n"
-          $startHere += "- Start tracking time!`n`n"
+          $startHere += "- A console window will remain open`n`n"
           $startHere += "### To Stop:`n"
-          $startHere += "- Close the console window or press Ctrl+C`n`n"
+          $startHere += "- System Tray: Right-click tray icon > Exit`n"
+          $startHere += "- Command Window: Close the console window or press Ctrl+C`n`n"
           $startHere += "## Your Data`n"
           $startHere += "All your data is saved in 'timekeeper.db' in this folder.`n"
           $startHere += "**IMPORTANT**: Backup this file regularly!`n`n"
@@ -99,12 +137,13 @@ jobs:
           $startHere += "- No installation required - everything is included!`n"
           $startHere += "- No .NET Runtime needed`n"
           $startHere += "- Your data stays on your computer`n"
-          $startHere += "- Offline application - works without internet`n`n"
+          $startHere += "- Offline application - works without internet`n"
+          $startHere += "- Runs in system tray - no disturbing windows!`n`n"
           $startHere += "Enjoy!`n"
           
           Set-Content -Path "$distFolder\START_HERE.txt" -Value $startHere -Encoding UTF8
           
-          # Create START_TIMEKEEPER.bat
+          # Create START_TIMEKEEPER.bat (legacy option)
           $batchContent = "@echo off`r`n"
           $batchContent += "title Timekeeper - Time Tracking Application`r`n"
           $batchContent += "echo.`r`n"

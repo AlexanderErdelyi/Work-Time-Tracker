@@ -41,8 +41,27 @@ dotnet publish Timekeeper.Api/Timekeeper.Api.csproj `
     /p:EnableCompressionInSingleFile=true
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Publish failed!" -ForegroundColor Red
+    Write-Host "API publish failed!" -ForegroundColor Red
     exit 1
+}
+
+# Publish Tray App (system tray launcher) for Windows only
+if ($Runtime -like "win-*") {
+    Write-Host "Publishing Tray App for $Runtime..." -ForegroundColor Yellow
+    
+    dotnet publish Timekeeper.TrayApp/Timekeeper.TrayApp.csproj `
+        --configuration Release `
+        --runtime $Runtime `
+        --self-contained true `
+        --output ".\Release\Timekeeper-v$Version-$Runtime" `
+        /p:PublishSingleFile=true `
+        /p:PublishTrimmed=true `
+        /p:EnableCompressionInSingleFile=true
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Tray App publish failed!" -ForegroundColor Red
+        exit 1
+    }
 }
 
 $distFolder = ".\Release\Timekeeper-v$Version-$Runtime"
@@ -61,13 +80,20 @@ $startHere = @"
 
 ## Quick Start
 
-### Windows Users:
-1. Double-click START_TIMEKEEPER.bat to start
-2. Your browser will open automatically
-3. Start tracking time!
+### Option 1: System Tray (Recommended)
+- Double-click Timekeeper.TrayApp.exe
+- The app will run in the system tray (bottom-right icons)
+- Right-click the tray icon to start/stop or open the app
+- No console window will appear!
+
+### Option 2: Command Window
+- Double-click START_TIMEKEEPER.bat
+- Your browser will open automatically
+- A console window will remain open
 
 ### To Stop:
-- Close the console window or press Ctrl+C
+- System Tray: Right-click tray icon > Exit
+- Command Window: Close the console window or press Ctrl+C
 
 ## Your Data
 All your data is saved in 'timekeeper.db' in this folder.
@@ -81,6 +107,7 @@ See SETUP_GUIDE.md for detailed instructions.
 - No .NET Runtime needed
 - Your data stays on your computer
 - Offline application - works without internet
+- Runs in system tray - no disturbing windows!
 
 Enjoy!
 "@
