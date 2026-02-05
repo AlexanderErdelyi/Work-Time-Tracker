@@ -118,6 +118,8 @@ jobs:
             echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PASSWORD=${{ secrets.CERTIFICATE_PASSWORD }}" >> $env:GITHUB_ENV
+            # Note: RFC 3161 timestamping protocol uses HTTP. The timestamp response is cryptographically
+            # signed by DigiCert's certificate, so MITM attacks cannot forge timestamps.
             echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
             
             Write-Host "✓ Commercial certificate configured"
@@ -125,10 +127,14 @@ jobs:
             Write-Host "No commercial certificate found. Creating self-signed certificate..."
             
             # Generate a cryptographically secure random password for the self-signed certificate
-            $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-            $randomBytes = New-Object byte[] 32
-            $rng.GetBytes($randomBytes)
-            $randomPassword = [System.Convert]::ToBase64String($randomBytes)
+            try {
+              $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+              $randomBytes = New-Object byte[] 32
+              $rng.GetBytes($randomBytes)
+              $randomPassword = [System.Convert]::ToBase64String($randomBytes)
+            } finally {
+              if ($rng) { $rng.Dispose() }
+            }
             
             # Create a self-signed certificate for code signing
             $cert = New-SelfSignedCertificate `
@@ -151,8 +157,6 @@ jobs:
             echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PASSWORD=$randomPassword" >> $env:GITHUB_ENV
-            # Note: RFC 3161 timestamping protocol requires HTTP. The timestamp itself is cryptographically
-            # signed by DigiCert's certificate, so MITM attacks cannot forge timestamps.
             echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
             
             Write-Host "✓ Self-signed certificate created and configured"
