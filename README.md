@@ -70,6 +70,7 @@ GitHub will automatically build a ready-to-use ZIP file that your colleagues can
 
 ### For Repository Owners 👨‍💼
 - **[🚀 HOW TO RELEASE](HOW_TO_RELEASE.md)** - **START HERE** - Create your first release in minutes!
+- **[⚡ Quick Release Guide](QUICK_RELEASE_GUIDE.md)** - Quick reference card for releasing
 - **[Distribution Guide](DISTRIBUTION_GUIDE.md)** - Advanced distribution strategies
 - **[GitHub Setup](GITHUB_SETUP_SUMMARY.md)** - GitHub configuration details
 
