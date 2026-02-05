@@ -58,10 +58,13 @@ jobs:
           
           # Check if tag already exists remotely
           git fetch --tags
-          if (git rev-parse "$tagName" 2>$null) {
+          
+          try {
+            $null = git rev-parse "$tagName" -ErrorAction Stop
             Write-Host "Tag $tagName already exists, skipping creation"
-          } else {
-            # Create and push the tag
+          }
+          catch {
+            # Tag doesn't exist, create and push it
             git tag -a "$tagName" -m "Release $tagName"
             git push origin "$tagName"
             Write-Host "Created and pushed tag $tagName"

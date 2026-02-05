@@ -103,9 +103,10 @@ public class TrayApplicationContext : ApplicationContext
             _trayIcon.Text = "Timekeeper - Running";
             _trayIcon.ShowBalloonTip(2000, "Timekeeper", "Service started successfully", ToolTipIcon.Info);
 
-            // Wait a moment then open browser
-            Task.Delay(1500).ContinueWith(_ =>
+            // Wait a moment then open browser (run on background thread)
+            _ = Task.Run(async () =>
             {
+                await Task.Delay(1500);
                 try
                 {
                     Process.Start(new ProcessStartInfo
@@ -135,12 +136,20 @@ public class TrayApplicationContext : ApplicationContext
         {
             try
             {
+                // Try to kill the process tree gracefully
                 _apiProcess.Kill(true); // Kill entire process tree
                 _apiProcess.WaitForExit(5000);
                 _apiProcess.Dispose();
                 _apiProcess = null;
                 _trayIcon.Text = "Timekeeper - Stopped";
                 _trayIcon.ShowBalloonTip(2000, "Timekeeper", "Service stopped", ToolTipIcon.Info);
+            }
+            catch (InvalidOperationException)
+            {
+                // Process already exited
+                _apiProcess?.Dispose();
+                _apiProcess = null;
+                _trayIcon.Text = "Timekeeper - Stopped";
             }
             catch (Exception ex)
             {
