@@ -55,7 +55,6 @@ if ($Runtime -like "win-*") {
         --self-contained true `
         --output ".\Release\Timekeeper-v$Version-$Runtime" `
         /p:PublishSingleFile=true `
-        /p:PublishTrimmed=true `
         /p:EnableCompressionInSingleFile=true
     
     if ($LASTEXITCODE -ne 0) {
