@@ -1,0 +1,35 @@
+# Code Signing Configuration Template
+# 
+# IMPORTANT: This is a template file. To use code signing:
+# 1. Copy this file to "signing-config.ps1" (remove the .example extension)
+# 2. Update the values below with your actual certificate information
+# 3. Make sure "signing-config.ps1" is in .gitignore (it already is!)
+# 4. Load this configuration before building:
+#    . .\signing-config.ps1
+#    .\publish-standalone.ps1 -Version "1.0.0" -BuildInstaller
+#
+# See CODE_SIGNING_GUIDE.md for detailed instructions
+
+# Enable code signing
+$env:SIGN_ENABLED = "true"
+
+# Path to your code signing certificate (.pfx or .p12 file)
+# Example: "C:\Certificates\timekeeper-codesign.pfx"
+$env:CERTIFICATE_PATH = "path\to\your\certificate.pfx"
+
+# Certificate password (if your certificate is password-protected)
+# Leave as empty string if no password
+$env:CERTIFICATE_PASSWORD = "your-certificate-password"
+
+# Timestamp server URL (optional - uses DigiCert by default)
+# Other options:
+#   - http://timestamp.sectigo.com
+#   - http://timestamp.comodoca.com
+$env:TIMESTAMP_SERVER = "http://timestamp.digicert.com"
+
+Write-Host "Code signing configuration loaded!" -ForegroundColor Green
+Write-Host "Certificate: $env:CERTIFICATE_PATH" -ForegroundColor Cyan
+Write-Host "Timestamp server: $env:TIMESTAMP_SERVER" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "To build with signing:" -ForegroundColor Yellow
+Write-Host "  .\publish-standalone.ps1 -Version `"1.0.0`" -BuildInstaller" -ForegroundColor White

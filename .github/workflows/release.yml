@@ -99,7 +99,7 @@ jobs:
           $versionFile | ConvertTo-Json -Depth 10 | Set-Content "version.json"
       
       - name: Setup code signing (if certificate available)
-        if: secrets.CERTIFICATE_BASE64 != ''
+        if: ${{ secrets.CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         run: |
           Write-Host "Setting up code signing..."

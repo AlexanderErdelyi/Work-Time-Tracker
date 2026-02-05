@@ -16,6 +16,9 @@ GitHub will automatically build:
 - ✅ **Windows Installer ZIP** (`.zip` containing installer) - For office/corporate networks that block .exe downloads
 - ✅ **Portable ZIP** - No installation required, just extract and run!
 
+**🔐 Want to eliminate Windows security warnings?**
+- See **[CODE_SIGNING_README.md](CODE_SIGNING_README.md)** to sign your releases (optional but recommended)
+
 👉 **[See Complete Release Guide](HOW_TO_RELEASE.md)** for step-by-step instructions.
 👉 **[See Installer Documentation](INSTALLER_README.md)** for installer details.
 👉 **[Security-Restricted Environments](SECURITY_RESTRICTED_ENVIRONMENTS.md)** for office/corporate download workarounds.
