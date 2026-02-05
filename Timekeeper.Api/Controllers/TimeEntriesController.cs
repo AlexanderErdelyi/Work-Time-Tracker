@@ -355,7 +355,7 @@ public class TimeEntriesController : ControllerBase
     [HttpPost("bulk-delete")]
     public async Task<IActionResult> BulkDeleteTimeEntries(BulkDeleteDto dto)
     {
-        if (dto.Ids == null || dto.Ids.Count == 0)
+        if (dto.Ids.Count == 0)
         {
             return BadRequest("No IDs provided");
         }

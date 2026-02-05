@@ -448,9 +448,9 @@ function renderEntries() {
             <td data-column="customer" tabindex="0">${e.customerName}</td>
             <td data-column="project" tabindex="0">${e.projectName}</td>
             <td data-column="task" tabindex="0">${e.taskName}</td>
-            <td data-column="startTime" tabindex="0">${formatDateTime(e.startTime)}</td>
-            <td data-column="endTime" tabindex="0">${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
-            <td data-column="duration" tabindex="0">${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
+            <td>${formatDateTime(e.startTime)}</td>
+            <td>${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
+            <td>${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
             <td data-column="notes" tabindex="0">${e.notes || ''}</td>
             <td onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="editEntry(${e.id})">Edit</button>
@@ -1232,8 +1232,16 @@ function handleKeyboardShortcuts(e) {
 }
 
 function applyColumnFilter(column, value) {
+    // Skip filtering for columns that can't be filtered
+    if (['startTime', 'endTime', 'duration'].includes(column)) {
+        showError(`Cannot filter by ${column} column`);
+        return;
+    }
+    
     // Clear existing filters first
     clearFilters();
+    
+    let applied = false;
     
     // Map column to filter field and apply
     switch(column) {
@@ -1242,6 +1250,7 @@ function applyColumnFilter(column, value) {
             const customer = customers.find(c => c.name === value);
             if (customer) {
                 document.getElementById('entry-customer-filter').value = customer.id;
+                applied = true;
             }
             break;
         case 'project':
@@ -1249,6 +1258,7 @@ function applyColumnFilter(column, value) {
             const project = projects.find(p => p.name === value);
             if (project) {
                 document.getElementById('entry-project-filter').value = project.id;
+                applied = true;
             }
             break;
         case 'task':
@@ -1256,16 +1266,24 @@ function applyColumnFilter(column, value) {
             const task = tasks.find(t => t.name === value);
             if (task) {
                 document.getElementById('entry-task-filter').value = task.id;
+                applied = true;
             }
             break;
         case 'notes':
-            // Use search field for notes
-            document.getElementById('entry-search').value = value;
+            // Use search field for notes (only if not empty)
+            if (value) {
+                document.getElementById('entry-search').value = value;
+                applied = true;
+            }
             break;
-        // For startTime, endTime, duration - we could add date filters in the future
     }
     
-    // Apply the filters
-    loadEntries();
-    showSuccess(`Filtered by ${column}: ${value}`);
+    if (applied) {
+        // Apply the filters
+        loadEntries();
+        showSuccess(`Filtered by ${column}: ${value}`);
+    } else {
+        showError(`Could not find ${column}: ${value}`);
+    }
+}
 }
