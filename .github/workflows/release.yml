@@ -99,37 +99,35 @@ Enjoy!
           
           # Create START_TIMEKEEPER.bat
           $batchContent = @'
-          @echo off
-          title Timekeeper - Time Tracking Application
-          echo.
-          echo ================================================
-          echo   Timekeeper is starting...
-          echo ================================================
-          echo.
-          echo The application will open in your default browser.
-          echo If it doesn't open automatically, go to:
-          echo.
-          echo    http://localhost:5000
-          echo.
-          echo To STOP the application, close this window or press Ctrl+C
-          echo.
-          echo ================================================
-          echo.
-          
-          start http://localhost:5000
-          
-          Timekeeper.Api.exe
-          
-          pause
-          '@
+@echo off
+title Timekeeper - Time Tracking Application
+echo.
+echo ================================================
+echo   Timekeeper is starting...
+echo ================================================
+echo.
+echo The application will open in your default browser.
+echo If it doesn't open automatically, go to:
+echo.
+echo    http://localhost:5000
+echo.
+echo To STOP the application, close this window or press Ctrl+C
+echo.
+echo ================================================
+echo.
+
+start http://localhost:5000
+
+Timekeeper.Api.exe
+
+pause
+'@
           
           Set-Content -Path "$distFolder\START_TIMEKEEPER.bat" -Value $batchContent -Encoding ASCII
           
           # Create ZIP
           $zipPath = ".\Release\Timekeeper-v$version-win-x64.zip"
           Compress-Archive -Path $distFolder -DestinationPath $zipPath -Force
-          
-          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_OUTPUT
       
       - name: Generate release notes
         id: release_notes
