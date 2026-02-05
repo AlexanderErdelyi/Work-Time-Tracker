@@ -22,14 +22,15 @@ This creates a standalone executable with everything included:
 
 This creates:
 - Complete application with bundled .NET runtime
-- `START_TIMEKEEPER.bat` - Double-click to run
+- `Timekeeper.TrayApp.exe` - System tray application (recommended)
+- `START_TIMEKEEPER.bat` - Console window option
 - `START_HERE.txt` - Simple instructions
 - All documentation
 
 **Share with users:**
 1. Upload the ZIP to cloud storage or GitHub Releases
 2. Send users the `SIMPLE_USER_GUIDE.md`
-3. They just: Download → Extract → Double-click `START_TIMEKEEPER.bat`
+3. They just: Download → Extract → Double-click `Timekeeper.TrayApp.exe` (or `START_TIMEKEEPER.bat`)
 
 ---
 
@@ -69,9 +70,11 @@ The ZIP will be created at: `Release\Timekeeper-v1.0.0-win-x64.zip`
 
 ### Step 2: Test It
 1. Go to `Release\Timekeeper-v1.0.0-win-x64\`
-2. Double-click `START_TIMEKEEPER.bat`
-3. Verify everything works
-4. Close the console window to stop
+2. **Option A**: Double-click `Timekeeper.TrayApp.exe` - runs in system tray
+3. **Option B**: Double-click `START_TIMEKEEPER.bat` - runs with console window
+4. Verify everything works
+5. **System Tray**: Right-click tray icon > Exit
+6. **Console**: Close the console window to stop
 
 ### Step 3: Share the ZIP
 
