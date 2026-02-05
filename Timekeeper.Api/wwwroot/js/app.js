@@ -1286,4 +1286,3 @@ function applyColumnFilter(column, value) {
         showError(`Could not find ${column}: ${value}`);
     }
 }
-}
