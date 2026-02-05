@@ -1,9 +1,28 @@
 # Running Timekeeper on Security-Restricted Systems
 
 ## Problem
-On company laptops with strict security policies, you may encounter "Access Denied" errors when trying to run executable files (.exe) or batch files (.bat). This is a common security restriction in corporate environments.
+On company laptops with strict security policies, you may encounter:
+1. **"Access Denied" errors** when trying to run executable files (.exe) or batch files (.bat)
+2. **Blocked downloads** when trying to download .exe files directly from the internet
 
-## Solution
+This is a common security restriction in corporate environments.
+
+## Solutions
+
+### Solution 1: Download Installer as ZIP (New!)
+If your company firewall or browser blocks downloading .exe files directly:
+
+1. Go to the [Releases page](https://github.com/AlexanderErdelyi/Work-Time-Tracker/releases)
+2. Download **`Timekeeper-vX.X.X-win-x64-installer.zip`** instead of the .exe installer
+3. Extract the ZIP file
+4. Run the `Timekeeper-vX.X.X-win-x64-installer.exe` from inside the extracted folder
+
+This works because:
+- ZIP files are typically allowed through corporate firewalls
+- Once inside the network, you can extract and run the installer
+- The installer itself is unchanged, just packaged differently
+
+### Solution 2: Use DLL Launchers
 We've added alternative launcher scripts that use the `dotnet` command to run the application's DLL file directly, which bypasses most security restrictions.
 
 ## How to Use

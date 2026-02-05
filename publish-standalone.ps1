@@ -234,6 +234,7 @@ $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 
 # Build installer if requested (Windows only)
 $installerPath = $null
+$installerZipPath = $null
 if ($BuildInstaller -and $Runtime -like "win-*") {
     Write-Host ""
     Write-Host "Building Windows Installer..." -ForegroundColor Yellow
@@ -272,10 +273,18 @@ if ($BuildInstaller -and $Runtime -like "win-*") {
             
             if ($LASTEXITCODE -eq 0) {
                 $installerPath = ".\Release\Timekeeper-v$Version-$Runtime-installer.exe"
+                $installerZipPath = ".\Release\Timekeeper-v$Version-$Runtime-installer.zip"
                 if (Test-Path $installerPath) {
                     $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
                     Write-Host "   Installer created successfully!" -ForegroundColor Green
                     Write-Host "   Size: $installerSize MB" -ForegroundColor White
+                    
+                    # Create ZIP file containing the installer for office environments that block .exe downloads
+                    Write-Host "   Creating ZIP package for installer..." -ForegroundColor Yellow
+                    Compress-Archive -Path $installerPath -DestinationPath $installerZipPath -Force
+                    $installerZipSize = [math]::Round((Get-Item $installerZipPath).Length / 1MB, 2)
+                    Write-Host "   Installer ZIP created successfully!" -ForegroundColor Green
+                    Write-Host "   Size: $installerZipSize MB" -ForegroundColor White
                 } else {
                     Write-Host "   WARNING: Installer build reported success but file not found!" -ForegroundColor Yellow
                 }
@@ -299,6 +308,11 @@ if ($installerPath -and (Test-Path $installerPath)) {
     Write-Host "   Installer: $installerPath" -ForegroundColor White
     $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
     Write-Host "   Installer Size: $installerSize MB" -ForegroundColor White
+    if ($installerZipPath -and (Test-Path $installerZipPath)) {
+        Write-Host "   Installer ZIP: $installerZipPath" -ForegroundColor White
+        $installerZipSize = [math]::Round((Get-Item $installerZipPath).Length / 1MB, 2)
+        Write-Host "   Installer ZIP Size: $installerZipSize MB" -ForegroundColor White
+    }
 }
 Write-Host "   Runtime: $Runtime" -ForegroundColor White
 Write-Host ""
@@ -306,6 +320,9 @@ Write-Host "Full Path:" -ForegroundColor Cyan
 Write-Host "   $(Resolve-Path $zipPath)" -ForegroundColor Yellow
 if ($installerPath -and (Test-Path $installerPath)) {
     Write-Host "   $(Resolve-Path $installerPath)" -ForegroundColor Yellow
+    if ($installerZipPath -and (Test-Path $installerZipPath)) {
+        Write-Host "   $(Resolve-Path $installerZipPath)" -ForegroundColor Yellow
+    }
 }
 Write-Host ""
 Write-Host "What's Included:" -ForegroundColor Cyan
@@ -316,6 +333,9 @@ Write-Host "   - Documentation" -ForegroundColor White
 Write-Host "   - Easy-start batch file (Windows)" -ForegroundColor White
 if ($installerPath -and (Test-Path $installerPath)) {
     Write-Host "   - Windows Installer (for easy install/uninstall)" -ForegroundColor White
+    if ($installerZipPath -and (Test-Path $installerZipPath)) {
+        Write-Host "   - Windows Installer ZIP (for office/corporate networks)" -ForegroundColor White
+    }
 }
 Write-Host ""
 Write-Host "For Users:" -ForegroundColor Cyan
@@ -324,6 +344,9 @@ if ($installerPath -and (Test-Path $installerPath)) {
     Write-Host "      - Double-click the installer .exe" -ForegroundColor Gray
     Write-Host "      - Follow the installation wizard" -ForegroundColor Gray
     Write-Host "      - Uninstall anytime from Windows Settings" -ForegroundColor Gray
+    if ($installerZipPath -and (Test-Path $installerZipPath)) {
+        Write-Host "      - For office networks: Download installer ZIP, extract, then run" -ForegroundColor Gray
+    }
     Write-Host "   Option 2: Portable ZIP" -ForegroundColor White
     Write-Host "      - Extract the ZIP" -ForegroundColor Gray
     Write-Host "      - Double-click START_TIMEKEEPER.bat" -ForegroundColor Gray

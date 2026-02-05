@@ -293,6 +293,13 @@ jobs:
             if (Test-Path $installerPath) {
               $size = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
               Write-Host "Installer size: $size MB"
+              
+              # Create ZIP file containing the installer for office environments that block .exe downloads
+              Write-Host "Creating ZIP package for installer..."
+              $installerZipPath = ".\Release\Timekeeper-v$version-win-x64-installer.zip"
+              Compress-Archive -Path $installerPath -DestinationPath $installerZipPath -Force
+              $zipSize = [math]::Round((Get-Item $installerZipPath).Length / 1MB, 2)
+              Write-Host "Installer ZIP created: $zipSize MB"
             } else {
               Write-Host "ERROR: Installer file not found at expected location!" -ForegroundColor Red
               exit 1
@@ -331,6 +338,7 @@ jobs:
           $releaseNotes += "3. Follow the installation wizard`n"
           $releaseNotes += "4. Launch from Start Menu or Desktop shortcut`n"
           $releaseNotes += "5. Uninstall anytime from Windows Settings > Apps`n`n"
+          $releaseNotes += "**🏢 Office/Corporate Network?** If your firewall blocks .exe downloads, download **Timekeeper-v$version-win-x64-installer.zip** instead, extract it, then run the installer inside.`n`n"
           $releaseNotes += "### Option 2: Portable ZIP (No Installation) 🌟`n`n"
           $releaseNotes += "1. Download **Timekeeper-v$version-win-x64.zip** below`n"
           $releaseNotes += "2. Extract the ZIP file to any folder`n"
@@ -382,6 +390,7 @@ jobs:
           files: |
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64.zip
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.exe
+            Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.zip
           draft: false
           prerelease: false
         env:
