@@ -124,6 +124,9 @@ jobs:
           } else {
             Write-Host "No commercial certificate found. Creating self-signed certificate..."
             
+            # Generate a random password for the self-signed certificate
+            $randomPassword = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+            
             # Create a self-signed certificate for code signing
             $cert = New-SelfSignedCertificate `
               -Type CodeSigningCert `
@@ -137,14 +140,14 @@ jobs:
               -NotAfter (Get-Date).AddYears(5)
             
             # Export to PFX file
-            $password = ConvertTo-SecureString -String "temp-self-signed-password" -Force -AsPlainText
+            $password = ConvertTo-SecureString -String $randomPassword -Force -AsPlainText
             $certPath = Join-Path $env:RUNNER_TEMP "self-signed-certificate.pfx"
             Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $password | Out-Null
             
             # Set environment variables for signing with self-signed cert
             echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
             echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
-            echo "CERTIFICATE_PASSWORD=temp-self-signed-password" >> $env:GITHUB_ENV
+            echo "CERTIFICATE_PASSWORD=$randomPassword" >> $env:GITHUB_ENV
             echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
             
             Write-Host "✓ Self-signed certificate created and configured"
