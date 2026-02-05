@@ -2,6 +2,8 @@
 
 This guide will walk you through creating the first release of Timekeeper that your colleagues can easily download and use.
 
+> **📢 Quick Fix for v1.0.0:** If you already created v1.0.0 but it's missing the ZIP file, see [FIX_v1.0.0_RELEASE.md](FIX_v1.0.0_RELEASE.md) for a quick solution!
+
 ## 📋 Prerequisites
 
 ✅ You have the latest code committed to your repository  
@@ -253,6 +255,18 @@ Go to: `https://github.com/YourUsername/Work-Time-Tracker/releases`
 - Make sure you pushed the tag: `git push origin v1.0.0`
 - Check that the workflow file exists: `.github/workflows/release.yml`
 - Go to Settings → Actions → General, ensure workflows are enabled
+
+**Alternative:** You can now manually trigger the workflow!
+1. Go to GitHub → Actions → "Create Release"
+2. Click "Run workflow"
+3. Enter the tag name (e.g., `v1.0.0`)
+4. Click "Run workflow"
+
+### "Workflow ran but no ZIP file was created"
+The workflow now supports manual triggering for existing tags:
+1. GitHub → Actions → "Create Release" → "Run workflow"
+2. Enter your existing tag name (e.g., `v1.0.0`)
+3. The workflow will build and attach the ZIP to your release
 
 ### "Build failed in GitHub Actions"
 - Click on the failed workflow in the Actions tab
