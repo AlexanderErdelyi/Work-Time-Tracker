@@ -30,6 +30,24 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       
+      - name: Setup Inno Setup
+        shell: pwsh
+        run: |
+          Write-Host "Installing Inno Setup..."
+          # Download Inno Setup
+          $installerUrl = "https://jrsoftware.org/download.php/is.exe"
+          $installerPath = "$env:TEMP\innosetup.exe"
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          
+          # Install silently
+          Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -Wait
+          
+          # Add to PATH
+          $innoPath = "${env:ProgramFiles(x86)}\Inno Setup 6"
+          echo "$innoPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          Write-Host "Inno Setup installed successfully"
+      
       - name: Extract version from tag
         id: get_version
         shell: pwsh
@@ -89,14 +107,15 @@ jobs:
           New-Item -ItemType Directory -Path ".\Release" -Force | Out-Null
           
           # Publish self-contained for Windows x64
+          # Note: We do NOT use PublishSingleFile for the API so that Timekeeper.Api.dll
+          # remains as a separate file, which allows the "dotnet Timekeeper.Api.dll" command
+          # to work in security-restricted environments.
+          # We also do NOT use PublishTrimmed to avoid runtime issues with EF Core and MVC.
           dotnet publish Timekeeper.Api/Timekeeper.Api.csproj `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
-            --output ".\Release\Timekeeper-v$version-win-x64" `
-            /p:PublishSingleFile=true `
-            /p:PublishTrimmed=true `
-            /p:EnableCompressionInSingleFile=true
+            --output ".\Release\Timekeeper-v$version-win-x64"
           
           # Publish Tray App (system tray launcher)
           dotnet publish Timekeeper.TrayApp/Timekeeper.TrayApp.csproj `
@@ -239,6 +258,31 @@ jobs:
           $zipPath = ".\Release\Timekeeper-v$version-win-x64.zip"
           Compress-Archive -Path $distFolder -DestinationPath $zipPath -Force
       
+      - name: Build Windows Installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          
+          Write-Host "Building Windows Installer with Inno Setup..."
+          
+          # Set environment variable for version
+          $env:APP_VERSION = $version
+          
+          # Build installer
+          & "ISCC.exe" "installer.iss"
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Installer created successfully!"
+            $installerPath = ".\Release\Timekeeper-v$version-win-x64-installer.exe"
+            if (Test-Path $installerPath) {
+              $size = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
+              Write-Host "Installer size: $size MB"
+            }
+          } else {
+            Write-Host "Installer build failed!" -ForegroundColor Red
+            exit 1
+          }
+      
       - name: Generate release notes
         id: release_notes
         shell: pwsh
@@ -262,7 +306,13 @@ jobs:
           }
           
           $releaseNotes += "`n`n## 📥 Download & Installation`n`n"
-          $releaseNotes += "### For Non-Technical Users (Recommended) 🌟`n`n"
+          $releaseNotes += "### Option 1: Windows Installer (Easiest) ⭐`n`n"
+          $releaseNotes += "1. Download **Timekeeper-v$version-win-x64-installer.exe** below`n"
+          $releaseNotes += "2. Run the installer`n"
+          $releaseNotes += "3. Follow the installation wizard`n"
+          $releaseNotes += "4. Launch from Start Menu or Desktop shortcut`n"
+          $releaseNotes += "5. Uninstall anytime from Windows Settings > Apps`n`n"
+          $releaseNotes += "### Option 2: Portable ZIP (No Installation) 🌟`n`n"
           $releaseNotes += "1. Download **Timekeeper-v$version-win-x64.zip** below`n"
           $releaseNotes += "2. Extract the ZIP file to any folder`n"
           $releaseNotes += "3. Double-click **START_TIMEKEEPER.bat**`n"
@@ -312,6 +362,7 @@ jobs:
           body_path: release_notes.md
           files: |
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64.zip
+            Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.exe
           draft: false
           prerelease: false
         env:

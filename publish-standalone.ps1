@@ -4,7 +4,8 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
-    [string]$Runtime = "win-x64"  # win-x64, win-x86, linux-x64, osx-x64
+    [string]$Runtime = "win-x64",  # win-x64, win-x86, linux-x64, osx-x64
+    [switch]$BuildInstaller = $false  # Set to $true to also build Windows installer
 )
 
 Write-Host "Creating Self-Contained Release v$Version for $Runtime" -ForegroundColor Cyan
@@ -31,14 +32,15 @@ New-Item -ItemType Directory -Path ".\Release" | Out-Null
 Write-Host "Publishing self-contained application for $Runtime..." -ForegroundColor Yellow
 Write-Host "   This may take a few minutes..." -ForegroundColor Gray
 
+# Note: We do NOT use PublishSingleFile for the API so that Timekeeper.Api.dll
+# remains as a separate file, which allows the "dotnet Timekeeper.Api.dll" command
+# to work in security-restricted environments.
+# We also do NOT use PublishTrimmed to avoid runtime issues with EF Core and MVC.
 dotnet publish Timekeeper.Api/Timekeeper.Api.csproj `
     --configuration Release `
     --runtime $Runtime `
     --self-contained true `
-    --output ".\Release\Timekeeper-v$Version-$Runtime" `
-    /p:PublishSingleFile=true `
-    /p:PublishTrimmed=true `
-    /p:EnableCompressionInSingleFile=true
+    --output ".\Release\Timekeeper-v$Version-$Runtime"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "API publish failed!" -ForegroundColor Red
@@ -230,16 +232,71 @@ Compress-Archive -Path $distFolder -DestinationPath $zipPath -Force
 
 $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
 
+# Build installer if requested (Windows only)
+$installerPath = $null
+if ($BuildInstaller -and $Runtime -like "win-*") {
+    Write-Host ""
+    Write-Host "Building Windows Installer..." -ForegroundColor Yellow
+    
+    # Check if Inno Setup is installed
+    $isccPath = $null
+    $possiblePaths = @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
+        "${env:ProgramFiles}\Inno Setup 5\ISCC.exe"
+    )
+    
+    foreach ($path in $possiblePaths) {
+        if (Test-Path $path) {
+            $isccPath = $path
+            break
+        }
+    }
+    
+    if ($isccPath) {
+        Write-Host "   Found Inno Setup at: $isccPath" -ForegroundColor Gray
+        
+        # Set environment variable for version
+        $env:APP_VERSION = $Version
+        
+        # Run Inno Setup compiler
+        & $isccPath "installer.iss"
+        
+        if ($LASTEXITCODE -eq 0) {
+            $installerPath = ".\Release\Timekeeper-v$Version-$Runtime-installer.exe"
+            if (Test-Path $installerPath) {
+                $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
+                Write-Host "   Installer created successfully!" -ForegroundColor Green
+                Write-Host "   Size: $installerSize MB" -ForegroundColor White
+            }
+        } else {
+            Write-Host "   Installer build failed!" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "   Inno Setup not found. Skipping installer creation." -ForegroundColor Yellow
+        Write-Host "   Download from: https://jrsoftware.org/isdl.php" -ForegroundColor Gray
+    }
+}
+
 Write-Host ""
 Write-Host "Self-Contained Release Created!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Package Details:" -ForegroundColor Cyan
-Write-Host "   Location: $zipPath" -ForegroundColor White
-Write-Host "   Size: $zipSize MB" -ForegroundColor White
+Write-Host "   ZIP Location: $zipPath" -ForegroundColor White
+Write-Host "   ZIP Size: $zipSize MB" -ForegroundColor White
+if ($installerPath -and (Test-Path $installerPath)) {
+    Write-Host "   Installer: $installerPath" -ForegroundColor White
+    $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
+    Write-Host "   Installer Size: $installerSize MB" -ForegroundColor White
+}
 Write-Host "   Runtime: $Runtime" -ForegroundColor White
 Write-Host ""
 Write-Host "Full Path:" -ForegroundColor Cyan
 Write-Host "   $(Resolve-Path $zipPath)" -ForegroundColor Yellow
+if ($installerPath -and (Test-Path $installerPath)) {
+    Write-Host "   $(Resolve-Path $installerPath)" -ForegroundColor Yellow
+}
 Write-Host ""
 Write-Host "What's Included:" -ForegroundColor Cyan
 Write-Host "   - Complete application" -ForegroundColor White
@@ -247,15 +304,28 @@ Write-Host "   - .NET Runtime (no installation needed)" -ForegroundColor White
 Write-Host "   - All dependencies" -ForegroundColor White
 Write-Host "   - Documentation" -ForegroundColor White
 Write-Host "   - Easy-start batch file (Windows)" -ForegroundColor White
+if ($installerPath -and (Test-Path $installerPath)) {
+    Write-Host "   - Windows Installer (for easy install/uninstall)" -ForegroundColor White
+}
 Write-Host ""
 Write-Host "For Users:" -ForegroundColor Cyan
-Write-Host "   1. Extract the ZIP" -ForegroundColor White
-Write-Host "   2. Double-click START_TIMEKEEPER.bat" -ForegroundColor White
-Write-Host "   3. That's it!" -ForegroundColor White
+if ($installerPath -and (Test-Path $installerPath)) {
+    Write-Host "   Option 1 (Recommended): Run the installer" -ForegroundColor White
+    Write-Host "      - Double-click the installer .exe" -ForegroundColor Gray
+    Write-Host "      - Follow the installation wizard" -ForegroundColor Gray
+    Write-Host "      - Uninstall anytime from Windows Settings" -ForegroundColor Gray
+    Write-Host "   Option 2: Portable ZIP" -ForegroundColor White
+    Write-Host "      - Extract the ZIP" -ForegroundColor Gray
+    Write-Host "      - Double-click START_TIMEKEEPER.bat" -ForegroundColor Gray
+} else {
+    Write-Host "   1. Extract the ZIP" -ForegroundColor White
+    Write-Host "   2. Double-click START_TIMEKEEPER.bat" -ForegroundColor White
+    Write-Host "   3. That's it!" -ForegroundColor White
+}
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "   1. Test the application from the Release folder" -ForegroundColor White
-Write-Host "   2. Share the ZIP file with users" -ForegroundColor White
+Write-Host "   2. Share the files with users" -ForegroundColor White
 Write-Host "   3. Or upload to GitHub Releases" -ForegroundColor White
 Write-Host ""
 
