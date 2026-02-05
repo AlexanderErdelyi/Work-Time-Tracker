@@ -39,6 +39,29 @@ header p {
     opacity: 0.9;
 }
 
+.settings-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 45px;
+    height: 45px;
+    font-size: 1.5em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg) scale(1.1);
+}
+
 .card {
     background: white;
     border-radius: 10px;
@@ -670,4 +693,95 @@ header p {
     border-radius: 10px;
     transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+}
+
+/* Dark Mode Styles */
+body.dark-mode {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+body.dark-mode .card {
+    background: #2d2d3f;
+    color: #e0e0e0;
+}
+
+body.dark-mode .card-header h2 {
+    color: #e0e0e0;
+}
+
+body.dark-mode .form-control {
+    background: #3a3a4f;
+    color: #e0e0e0;
+    border-color: #4a4a5f;
+}
+
+body.dark-mode .form-control:focus {
+    border-color: #667eea;
+    background: #3a3a4f;
+}
+
+body.dark-mode .tab-btn {
+    background: #3a3a4f;
+    color: #e0e0e0;
+}
+
+body.dark-mode .tab-btn:hover {
+    background: #4a4a5f;
+}
+
+body.dark-mode .tab-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+body.dark-mode .data-table th {
+    background: #4a4a5f;
+}
+
+body.dark-mode .data-table td {
+    border-bottom-color: #4a4a5f;
+}
+
+body.dark-mode .data-table tbody tr:hover {
+    background-color: #3a3a4f;
+}
+
+body.dark-mode .data-table tbody tr.continuing-entry {
+    background-color: #2a2a3f;
+    border-left-color: #667eea;
+}
+
+body.dark-mode .data-table tbody tr.continuing-entry:hover {
+    background-color: #3a3a4f;
+}
+
+body.dark-mode .modal-content {
+    background: #2d2d3f;
+    color: #e0e0e0;
+}
+
+body.dark-mode .timer-info {
+    background: linear-gradient(135deg, #2a2a3f 0%, #3a3a4f 100%);
+    border-color: #4a4a5f;
+}
+
+body.dark-mode .task-dropdown {
+    background: #2d2d3f;
+    border-color: #4a4a5f;
+}
+
+body.dark-mode .task-option {
+    border-bottom-color: #3a3a4f;
+}
+
+body.dark-mode .task-option:hover {
+    background: #3a3a4f;
+}
+
+body.dark-mode .task-option-main {
+    color: #e0e0e0;
+}
+
+body.dark-mode .task-option-path {
+    color: #a0a0a0;
 }
