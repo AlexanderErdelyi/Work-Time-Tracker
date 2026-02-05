@@ -1,32 +1,32 @@
 {
-    "version":  "1.0.0",
-    "releaseDate":  "2026-02-05",
-    "features":  [
-                     "Time tracking with start/stop timer",
-                     "Customer, Project, and Task management",
-                     "Time entry filtering and search",
-                     "Excel and CSV export",
-                     "Dark mode support",
-                     "Billing duration rounding",
-                     "Daily and weekly reports",
-                     "Resizable table columns",
-                     "Column visibility toggle",
-                     "Drag-and-drop column reordering",
-                     "Sticky table headers",
-                     "Inline duration editing",
-                     "Excel task import",
-                     "Right-click context menu for columns"
-                 ],
-    "changelog":  {
-                      "1.0.0":  {
-                                    "date":  "2026-02-05",
-                                    "changes":  [
-                                                    "Initial release",
-                                                    "Core time tracking functionality",
-                                                    "Advanced table features (resize, reorder, sticky headers)",
-                                                    "Import/Export capabilities",
-                                                    "Settings and customization options"
-                                                ]
-                                }
-                  }
+  "version": "1.0.1-test",
+  "releaseDate": "2026-02-05",
+  "features": [
+    "Time tracking with start/stop timer",
+    "Customer, Project, and Task management",
+    "Time entry filtering and search",
+    "Excel and CSV export",
+    "Dark mode support",
+    "Billing duration rounding",
+    "Daily and weekly reports",
+    "Resizable table columns",
+    "Column visibility toggle",
+    "Drag-and-drop column reordering",
+    "Sticky table headers",
+    "Inline duration editing",
+    "Excel task import",
+    "Right-click context menu for columns"
+  ],
+  "changelog": {
+    "1.0.0": {
+      "date": "2026-02-05",
+      "changes": [
+        "Initial release",
+        "Core time tracking functionality",
+        "Advanced table features (resize, reorder, sticky headers)",
+        "Import/Export capabilities",
+        "Settings and customization options"
+      ]
+    }
+  }
 }
