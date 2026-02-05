@@ -6,19 +6,53 @@
 
 ---
 
-## ⚡ Quick Start (3 Steps)
+## ⚡ Quick Start - Choose Your Method
 
-### Step 1: Download
+### Method 1: Windows Installer (Easiest) ⭐
+
+#### Step 1: Download the Installer
+Download the installer file:
+- **Timekeeper-v1.0.0-win-x64-installer.exe** (from the link provided to you)
+
+#### Step 2: Run the Installer
+1. Find the downloaded installer file (usually in your Downloads folder)
+2. **Double-click** on it
+3. If you see a "Windows protected your PC" warning:
+   - Click **"More info"**
+   - Click **"Run anyway"**
+4. Follow the installation wizard:
+   - Choose installation location (or use default)
+   - Select if you want a desktop shortcut
+   - Click "Install"
+
+#### Step 3: Launch Timekeeper
+After installation, you can start Timekeeper from:
+- **Start Menu**: Click Start → Timekeeper
+- **Desktop**: Double-click the Timekeeper shortcut (if you created one)
+- **System Tray**: The app will run in the background (look for the icon near the clock)
+
+#### To Uninstall:
+1. Open Windows Settings
+2. Go to Apps > Installed apps
+3. Find "Timekeeper"
+4. Click the three dots → Uninstall
+5. You'll be asked if you want to keep your data (timekeeper.db)
+
+---
+
+### Method 2: Portable ZIP (No Installation)
+
+#### Step 1: Download
 Download the ZIP file:
 - **Timekeeper-v1.0.0-win-x64.zip** (from the link provided to you)
 
-### Step 2: Extract
+#### Step 2: Extract
 1. Find the downloaded ZIP file (usually in your Downloads folder)
 2. Right-click on it
 3. Choose "Extract All..."
 4. Click "Extract"
 
-### Step 3: Run
+#### Step 3: Run
 You have three options:
 
 #### Option A: System Tray (Recommended) ⭐

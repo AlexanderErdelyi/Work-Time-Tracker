@@ -11,20 +11,25 @@ git tag -a v1.0.0 -m "First release - v1.0.0"
 git push origin v1.0.0
 ```
 
-GitHub will automatically build a ready-to-use ZIP file that your colleagues can download and run with just a double-click!
+GitHub will automatically build:
+- ✅ **Windows Installer** (`.exe`) - Professional installation with Start Menu shortcuts and clean uninstall
+- ✅ **Portable ZIP** - No installation required, just extract and run!
 
 👉 **[See Complete Release Guide](HOW_TO_RELEASE.md)** for step-by-step instructions.
+👉 **[See Installer Documentation](INSTALLER_README.md)** for installer details.
 
 ---
 
 ## Features
 
 ### Easy Distribution 🎁
+- **Windows Installer**: Professional installation experience with Start Menu shortcuts and uninstall support
 - **Self-Contained Build**: No .NET installation required - just extract and run!
 - **System Tray Support**: Run in the background without a console window
 - **One-Click Start**: Simple `START_TIMEKEEPER.bat` for non-technical users
 - **Portable**: Copy to USB drive or any folder - works anywhere
 - **Offline**: No internet connection needed
+- **Security-Restricted Systems**: Alternative `dotnet` launcher for company laptops with strict policies
 
 ### Timer Management
 - **Start/Stop Timer**: Track time with a single-click timer (no parallel timers allowed)
