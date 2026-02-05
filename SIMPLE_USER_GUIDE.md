@@ -142,6 +142,8 @@ http://localhost:5000
 2. Select **"Run with PowerShell"**
 3. If prompted, allow execution
 
+**Why this works**: PowerShell execution may bypass certain security policies that block double-clicking files, and the dotnet launcher bypasses executable restrictions.
+
 ### "Windows says it's blocked or dangerous"
 **Fix**: 
 1. Right-click `START_TIMEKEEPER.bat`

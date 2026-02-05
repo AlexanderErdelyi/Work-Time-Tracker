@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1-test",
+  "version": "1.0.0",
   "releaseDate": "2026-02-05",
   "features": [
     "Time tracking with start/stop timer",
