@@ -14,6 +14,94 @@ Write-Host ""
 # Set location to script directory
 Set-Location -Path $PSScriptRoot
 
+# Function to sign a file
+function Sign-File {
+    param(
+        [string]$FilePath
+    )
+    
+    # Check if signing is enabled
+    if ($env:SIGN_ENABLED -ne "true") {
+        return $false
+    }
+    
+    if (-not $env:CERTIFICATE_PATH) {
+        Write-Host "   WARNING: SIGN_ENABLED is true but CERTIFICATE_PATH not set" -ForegroundColor Yellow
+        return $false
+    }
+    
+    if (-not (Test-Path $env:CERTIFICATE_PATH)) {
+        Write-Host "   WARNING: Certificate file not found: $env:CERTIFICATE_PATH" -ForegroundColor Yellow
+        return $false
+    }
+    
+    if (-not (Test-Path $FilePath)) {
+        Write-Host "   WARNING: File to sign not found: $FilePath" -ForegroundColor Yellow
+        return $false
+    }
+    
+    # Find signtool.exe
+    $signtool = $null
+    $possiblePaths = @(
+        "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe",
+        "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\signtool.exe",
+        "${env:ProgramFiles(x86)}\Windows Kits\10\App Certification Kit\signtool.exe",
+        "${env:ProgramFiles}\Windows Kits\10\App Certification Kit\signtool.exe"
+    )
+    
+    foreach ($pattern in $possiblePaths) {
+        $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | 
+                 Sort-Object -Property FullName -Descending | 
+                 Select-Object -First 1
+        if ($found) {
+            $signtool = $found.FullName
+            break
+        }
+    }
+    
+    if (-not $signtool) {
+        Write-Host "   WARNING: signtool.exe not found. Install Windows SDK." -ForegroundColor Yellow
+        return $false
+    }
+    
+    Write-Host "   Signing: $(Split-Path -Leaf $FilePath)..." -ForegroundColor Cyan
+    
+    # Prepare signtool arguments
+    $timestampServer = if ($env:TIMESTAMP_SERVER) { $env:TIMESTAMP_SERVER } else { "http://timestamp.digicert.com" }
+    
+    $signArgs = @(
+        "sign",
+        "/f", $env:CERTIFICATE_PATH,
+        "/tr", $timestampServer,
+        "/td", "SHA256",
+        "/fd", "SHA256"
+    )
+    
+    # Add password if provided
+    if ($env:CERTIFICATE_PASSWORD) {
+        $signArgs += "/p"
+        $signArgs += $env:CERTIFICATE_PASSWORD
+    }
+    
+    # Add file to sign
+    $signArgs += $FilePath
+    
+    # Execute signtool
+    try {
+        & $signtool $signArgs 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "   ✓ Signed successfully: $(Split-Path -Leaf $FilePath)" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "   ✗ Signing failed for: $(Split-Path -Leaf $FilePath)" -ForegroundColor Red
+            return $false
+        }
+    } catch {
+        Write-Host "   ✗ Signing error: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
 # Update version in version.json
 Write-Host "Updating version.json..." -ForegroundColor Yellow
 $versionFile = Get-Content "version.json" | ConvertFrom-Json
@@ -66,6 +154,35 @@ if ($Runtime -like "win-*") {
 }
 
 $distFolder = ".\Release\Timekeeper-v$Version-$Runtime"
+
+# Sign executables for Windows builds
+if ($Runtime -like "win-*" -and $env:SIGN_ENABLED -eq "true") {
+    Write-Host ""
+    Write-Host "Code Signing Executables..." -ForegroundColor Yellow
+    
+    $apiExe = Join-Path $distFolder "Timekeeper.Api.exe"
+    $trayExe = Join-Path $distFolder "Timekeeper.TrayApp.exe"
+    
+    $signedCount = 0
+    if (Test-Path $apiExe) {
+        if (Sign-File -FilePath $apiExe) {
+            $signedCount++
+        }
+    }
+    
+    if (Test-Path $trayExe) {
+        if (Sign-File -FilePath $trayExe) {
+            $signedCount++
+        }
+    }
+    
+    if ($signedCount -gt 0) {
+        Write-Host "   Successfully signed $signedCount file(s)" -ForegroundColor Green
+    } else {
+        Write-Host "   No files were signed" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
 
 # Copy documentation
 Write-Host "Adding documentation..." -ForegroundColor Yellow
@@ -278,6 +395,17 @@ if ($BuildInstaller -and $Runtime -like "win-*") {
                     $installerSize = [math]::Round((Get-Item $installerPath).Length / 1MB, 2)
                     Write-Host "   Installer created successfully!" -ForegroundColor Green
                     Write-Host "   Size: $installerSize MB" -ForegroundColor White
+                    
+                    # Sign the installer
+                    if ($env:SIGN_ENABLED -eq "true") {
+                        Write-Host ""
+                        Write-Host "   Signing installer..." -ForegroundColor Yellow
+                        if (Sign-File -FilePath $installerPath) {
+                            Write-Host "   ✓ Installer signed successfully" -ForegroundColor Green
+                        } else {
+                            Write-Host "   ⚠ Installer signing failed" -ForegroundColor Yellow
+                        }
+                    }
                     
                     # Create ZIP file containing the installer for office environments that block .exe downloads
                     Write-Host "   Creating ZIP package for installer..." -ForegroundColor Yellow

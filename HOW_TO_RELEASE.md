@@ -214,6 +214,25 @@ Examples:
 
 ---
 
+## 🔐 Code Signing (Optional but Recommended)
+
+To eliminate Windows security warnings, you can sign your releases with a code signing certificate.
+
+### Benefits of Code Signing:
+- ✅ No "Windows protected your PC" warnings
+- ✅ Professional appearance
+- ✅ Builds trust with users
+- ✅ Enterprise ready
+
+### Quick Setup:
+1. Purchase a code signing certificate ($199-600/year)
+2. Add to GitHub Secrets (see [CODE_SIGNING_GUIDE.md](CODE_SIGNING_GUIDE.md))
+3. Your releases will be automatically signed!
+
+**For detailed instructions:** See [CODE_SIGNING_GUIDE.md](CODE_SIGNING_GUIDE.md)
+
+---
+
 ## ✅ Pre-Release Checklist
 
 Before creating a release, make sure:
