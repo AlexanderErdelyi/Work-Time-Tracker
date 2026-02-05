@@ -105,7 +105,6 @@ jobs:
             --self-contained true `
             --output ".\Release\Timekeeper-v$version-win-x64" `
             /p:PublishSingleFile=true `
-            /p:PublishTrimmed=true `
             /p:EnableCompressionInSingleFile=true
           
           $distFolder = ".\Release\Timekeeper-v$version-win-x64"
