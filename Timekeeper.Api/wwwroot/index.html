@@ -80,6 +80,7 @@
                 </div>
 
                 <div class="export-buttons">
+                    <button id="delete-selected-btn" class="btn btn-danger" style="display: none;">Delete Selected</button>
                     <button id="export-csv-btn" class="btn btn-secondary">Export CSV</button>
                     <button id="export-xlsx-btn" class="btn btn-secondary">Export XLSX</button>
                 </div>
@@ -87,6 +88,7 @@
                 <table id="entries-table" class="data-table">
                     <thead>
                         <tr>
+                            <th><input type="checkbox" id="select-all-entries"></th>
                             <th>Customer</th>
                             <th>Project</th>
                             <th>Task</th>

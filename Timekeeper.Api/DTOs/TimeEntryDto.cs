@@ -44,3 +44,8 @@ public class TimeEntrySummary
     public double TotalHours { get; set; }
     public int EntryCount { get; set; }
 }
+
+public class BulkDeleteDto
+{
+    public List<int> Ids { get; set; } = new();
+}
