@@ -13,10 +13,12 @@ git push origin v1.0.0
 
 GitHub will automatically build:
 - ✅ **Windows Installer** (`.exe`) - Professional installation with Start Menu shortcuts and clean uninstall
+- ✅ **Windows Installer ZIP** (`.zip` containing installer) - For office/corporate networks that block .exe downloads
 - ✅ **Portable ZIP** - No installation required, just extract and run!
 
 👉 **[See Complete Release Guide](HOW_TO_RELEASE.md)** for step-by-step instructions.
 👉 **[See Installer Documentation](INSTALLER_README.md)** for installer details.
+👉 **[Security-Restricted Environments](SECURITY_RESTRICTED_ENVIRONMENTS.md)** for office/corporate download workarounds.
 
 ---
 
@@ -24,6 +26,7 @@ GitHub will automatically build:
 
 ### Easy Distribution 🎁
 - **Windows Installer**: Professional installation experience with Start Menu shortcuts and uninstall support
+- **Windows Installer ZIP**: ZIP-packaged installer for office/corporate networks that block .exe downloads
 - **Self-Contained Build**: No .NET installation required - just extract and run!
 - **System Tray Support**: Run in the background without a console window
 - **One-Click Start**: Simple `START_TIMEKEEPER.bat` for non-technical users
