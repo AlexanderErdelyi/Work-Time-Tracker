@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual triggering
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v1.0.0)'
+        required: true
+        type: string
 
 jobs:
   build-and-release:
@@ -15,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -25,8 +33,16 @@ jobs:
         id: get_version
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
+          # Get tag name from either push event or manual input
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tagName = "${{ inputs.tag }}"
+          } else {
+            $tagName = "${{ github.ref_name }}"
+          }
+          
+          $version = $tagName -replace '^v', ''
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "TAG_NAME=$tagName" >> $env:GITHUB_OUTPUT
           echo "Building version: $version"
       
       - name: Update version.json
@@ -225,6 +241,7 @@ pause
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
           name: Timekeeper v${{ steps.get_version.outputs.VERSION }}
           body_path: release_notes.md
           files: |
