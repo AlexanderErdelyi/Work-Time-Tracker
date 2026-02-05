@@ -2,6 +2,16 @@
 
 Great news! Your Timekeeper releases can now be signed to eliminate Windows security warnings.
 
+## 🆕 NEW: Automatic Self-Signing in GitHub Actions!
+
+**No certificate needed to get started!** The release workflow now automatically creates and uses a self-signed certificate if you don't have a commercial certificate configured. Just push a tag and your releases will be signed!
+
+⚠️ **Important Notes**:
+- Self-signed certificates will still show security warnings to end users
+- Each release is signed with a **different** self-signed certificate (generated fresh for each build)
+- For production releases without warnings, you'll need a **commercial certificate** (see Option 2 below)
+- Commercial certificates sign all releases with the **same trusted certificate**, building trust over time
+
 ## What Changed?
 
 ✅ **Automated Code Signing Support**: The build scripts and GitHub Actions workflow now support code signing  
@@ -69,6 +79,16 @@ For public releases without any warnings:
    ```
 
 3. **For GitHub Actions (Automated Releases)**:
+   
+   **Easy Mode (Automatic Self-Signed)**:
+   - Just push a tag - releases are automatically signed with a self-signed certificate!
+     ```bash
+     git tag -a v1.0.0 -m "Release v1.0.0"
+     git push origin v1.0.0
+     ```
+   - ⚠️ Note: Self-signed certificates still show warnings to end users
+   
+   **Production Mode (Commercial Certificate)**:
    - Convert certificate to Base64:
      ```powershell
      $cert = Get-Content "your-certificate.pfx" -Encoding Byte
@@ -78,7 +98,7 @@ For public releases without any warnings:
      - Go to: Repository → Settings → Secrets and variables → Actions
      - Add `CERTIFICATE_BASE64` (paste Base64 content)
      - Add `CERTIFICATE_PASSWORD` (your certificate password)
-   - Push a tag - automatic signing!
+   - Push a tag - automatic signing with your commercial certificate!
      ```bash
      git tag -a v1.0.0 -m "Signed release v1.0.0"
      git push origin v1.0.0

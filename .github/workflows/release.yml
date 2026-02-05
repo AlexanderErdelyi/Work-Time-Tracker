@@ -98,24 +98,73 @@ jobs:
           $versionFile.releaseDate = (Get-Date -Format "yyyy-MM-dd")
           $versionFile | ConvertTo-Json -Depth 10 | Set-Content "version.json"
       
-      - name: Setup code signing (if certificate available)
-        if: ${{ secrets.CERTIFICATE_BASE64 }}
+      - name: Setup code signing
         shell: pwsh
         run: |
           Write-Host "Setting up code signing..."
           
-          # Decode certificate from base64
-          $certBytes = [System.Convert]::FromBase64String("${{ secrets.CERTIFICATE_BASE64 }}")
-          $certPath = Join-Path $env:RUNNER_TEMP "certificate.pfx"
-          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+          # Check if commercial certificate is available
+          $certBase64 = "${{ secrets.CERTIFICATE_BASE64 }}"
           
-          # Set environment variables for signing
-          echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
-          echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
-          echo "CERTIFICATE_PASSWORD=${{ secrets.CERTIFICATE_PASSWORD }}" >> $env:GITHUB_ENV
-          echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
+          if ($certBase64 -and $certBase64 -ne "") {
+            Write-Host "Using commercial certificate from secrets..."
+            
+            # Decode certificate from base64
+            $certBytes = [System.Convert]::FromBase64String($certBase64)
+            $certPath = Join-Path $env:RUNNER_TEMP "certificate.pfx"
+            [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+            
+            # Set environment variables for signing with commercial cert
+            echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
+            echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
+            echo "CERTIFICATE_PASSWORD=${{ secrets.CERTIFICATE_PASSWORD }}" >> $env:GITHUB_ENV
+            # Note: RFC 3161 timestamping protocol uses HTTP. The timestamp response is cryptographically
+            # signed by DigiCert's certificate, so MITM attacks cannot forge timestamps.
+            echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
+            
+            Write-Host "✓ Commercial certificate configured"
+          } else {
+            Write-Host "No commercial certificate found. Creating self-signed certificate..."
+            
+            # Generate a cryptographically secure random password for the self-signed certificate
+            try {
+              $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+              $randomBytes = New-Object byte[] 32
+              $rng.GetBytes($randomBytes)
+              $randomPassword = [System.Convert]::ToBase64String($randomBytes)
+            } finally {
+              if ($rng) { $rng.Dispose() }
+            }
+            
+            # Create a self-signed certificate for code signing
+            $cert = New-SelfSignedCertificate `
+              -Type CodeSigningCert `
+              -Subject "CN=Timekeeper Self-Signed Certificate" `
+              -KeyUsage DigitalSignature `
+              -FriendlyName "Timekeeper Code Signing (Self-Signed)" `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") `
+              -KeyAlgorithm RSA `
+              -KeyLength 2048 `
+              -NotAfter (Get-Date).AddYears(5)
+            
+            # Export to PFX file
+            $password = ConvertTo-SecureString -String $randomPassword -Force -AsPlainText
+            $certPath = Join-Path $env:RUNNER_TEMP "self-signed-certificate.pfx"
+            Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $password | Out-Null
+            
+            # Set environment variables for signing with self-signed cert
+            echo "SIGN_ENABLED=true" >> $env:GITHUB_ENV
+            echo "CERTIFICATE_PATH=$certPath" >> $env:GITHUB_ENV
+            echo "CERTIFICATE_PASSWORD=$randomPassword" >> $env:GITHUB_ENV
+            echo "TIMESTAMP_SERVER=http://timestamp.digicert.com" >> $env:GITHUB_ENV
+            
+            Write-Host "✓ Self-signed certificate created and configured"
+            Write-Host "⚠ Note: Self-signed certificates will still show security warnings to end users"
+            Write-Host "   For production, use a commercial certificate from DigiCert, Sectigo, etc."
+          }
           
-          Write-Host "✓ Code signing configured"
+          Write-Host ""
       
       - name: Build self-contained application
         shell: pwsh
