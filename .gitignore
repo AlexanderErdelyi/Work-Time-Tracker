@@ -79,7 +79,6 @@ orleans.codegen.cs
 *.p12
 *.cer
 signing-config.ps1
-certificate*.pfx
 test-certificate.pfx
 cert-base64.txt
 
