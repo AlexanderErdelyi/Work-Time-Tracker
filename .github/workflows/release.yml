@@ -1,6 +1,6 @@
 name: Create Release
 
-on:
+'on':
   push:
     tags:
       - 'v*.*.*'  # Triggers on version tags like v1.0.0
@@ -82,62 +82,51 @@ jobs:
           Copy-Item ".\version.json" -Destination $distFolder
           
           # Create START_HERE.txt
-          $startHere = @"
-# Timekeeper v$version
-
-## Quick Start
-
-### Windows Users:
-1. Double-click START_TIMEKEEPER.bat to start
-2. Your browser will open automatically
-3. Start tracking time!
-
-### To Stop:
-- Close the console window or press Ctrl+C
-
-## Your Data
-All your data is saved in 'timekeeper.db' in this folder.
-**IMPORTANT**: Backup this file regularly!
-
-## Need Help?
-See SIMPLE_USER_GUIDE.md for detailed instructions.
-
-## Features
-- No installation required - everything is included!
-- No .NET Runtime needed
-- Your data stays on your computer
-- Offline application - works without internet
-
-Enjoy!
-"@
+          $startHere = "# Timekeeper v$version`n`n"
+          $startHere += "## Quick Start`n`n"
+          $startHere += "### Windows Users:`n"
+          $startHere += "- Double-click START_TIMEKEEPER.bat to start`n"
+          $startHere += "- Your browser will open automatically`n"
+          $startHere += "- Start tracking time!`n`n"
+          $startHere += "### To Stop:`n"
+          $startHere += "- Close the console window or press Ctrl+C`n`n"
+          $startHere += "## Your Data`n"
+          $startHere += "All your data is saved in 'timekeeper.db' in this folder.`n"
+          $startHere += "**IMPORTANT**: Backup this file regularly!`n`n"
+          $startHere += "## Need Help?`n"
+          $startHere += "See SIMPLE_USER_GUIDE.md for detailed instructions.`n`n"
+          $startHere += "## Features`n"
+          $startHere += "- No installation required - everything is included!`n"
+          $startHere += "- No .NET Runtime needed`n"
+          $startHere += "- Your data stays on your computer`n"
+          $startHere += "- Offline application - works without internet`n`n"
+          $startHere += "Enjoy!`n"
           
           Set-Content -Path "$distFolder\START_HERE.txt" -Value $startHere -Encoding UTF8
           
           # Create START_TIMEKEEPER.bat
-          $batchContent = @'
-@echo off
-title Timekeeper - Time Tracking Application
-echo.
-echo ================================================
-echo   Timekeeper is starting...
-echo ================================================
-echo.
-echo The application will open in your default browser.
-echo If it doesn't open automatically, go to:
-echo.
-echo    http://localhost:5000
-echo.
-echo To STOP the application, close this window or press Ctrl+C
-echo.
-echo ================================================
-echo.
-
-start http://localhost:5000
-
-Timekeeper.Api.exe
-
-pause
-'@
+          $batchContent = "@echo off`r`n"
+          $batchContent += "title Timekeeper - Time Tracking Application`r`n"
+          $batchContent += "echo.`r`n"
+          $batchContent += "echo ================================================`r`n"
+          $batchContent += "echo   Timekeeper is starting...`r`n"
+          $batchContent += "echo ================================================`r`n"
+          $batchContent += "echo.`r`n"
+          $batchContent += "echo The application will open in your default browser.`r`n"
+          $batchContent += "echo If it doesn't open automatically, go to:`r`n"
+          $batchContent += "echo.`r`n"
+          $batchContent += "echo    http://localhost:5000`r`n"
+          $batchContent += "echo.`r`n"
+          $batchContent += "echo To STOP the application, close this window or press Ctrl+C`r`n"
+          $batchContent += "echo.`r`n"
+          $batchContent += "echo ================================================`r`n"
+          $batchContent += "echo.`r`n"
+          $batchContent += "`r`n"
+          $batchContent += "start http://localhost:5000`r`n"
+          $batchContent += "`r`n"
+          $batchContent += "Timekeeper.Api.exe`r`n"
+          $batchContent += "`r`n"
+          $batchContent += "pause`r`n"
           
           Set-Content -Path "$distFolder\START_TIMEKEEPER.bat" -Value $batchContent -Encoding ASCII
           
@@ -155,14 +144,9 @@ pause
           $versionFile = Get-Content "version.json" | ConvertFrom-Json
           $changelog = $versionFile.changelog.$version
           
-          $releaseNotes = @"
-          # Timekeeper v$version
-          
-          Released: $(Get-Date -Format "yyyy-MM-dd")
-          
-          ## ✨ What's New
-          
-          "@ 
+          $releaseNotes = "# Timekeeper v$version`n`n"
+          $releaseNotes += "Released: $(Get-Date -Format `"yyyy-MM-dd`")`n`n"
+          $releaseNotes += "## ✨ What's New`n`n"
           
           if ($changelog -and $changelog.changes) {
             foreach ($change in $changelog.changes) {
@@ -172,25 +156,15 @@ pause
             $releaseNotes += "- See version.json for details`n"
           }
           
-          $releaseNotes += @"
-          
-          
-          ## 📥 Download & Installation
-          
-          ### For Non-Technical Users (Recommended) 🌟
-          
-          1. Download **Timekeeper-v$version-win-x64.zip** below
-          2. Extract the ZIP file to any folder
-          3. Double-click **START_TIMEKEEPER.bat**
-          4. Your browser opens automatically - start tracking time!
-          
-          **No installation required! No .NET needed!**
-          
-          📖 See **SIMPLE_USER_GUIDE.md** (included in ZIP) for detailed instructions.
-          
-          ### Features
-          
-          "@ 
+          $releaseNotes += "`n`n## 📥 Download & Installation`n`n"
+          $releaseNotes += "### For Non-Technical Users (Recommended) 🌟`n`n"
+          $releaseNotes += "1. Download **Timekeeper-v$version-win-x64.zip** below`n"
+          $releaseNotes += "2. Extract the ZIP file to any folder`n"
+          $releaseNotes += "3. Double-click **START_TIMEKEEPER.bat**`n"
+          $releaseNotes += "4. Your browser opens automatically - start tracking time!`n`n"
+          $releaseNotes += "**No installation required! No .NET needed!**`n`n"
+          $releaseNotes += "📖 See **SIMPLE_USER_GUIDE.md** (included in ZIP) for detailed instructions.`n`n"
+          $releaseNotes += "### Features`n`n"
           
           if ($versionFile.features) {
             foreach ($feature in $versionFile.features) {
@@ -198,38 +172,25 @@ pause
             }
           }
           
-          $releaseNotes += @"
-          
-          
-          ### ⚙️ Requirements
-          
-          - Windows 10 or 11 (64-bit)
-          - No other software needed!
-          
-          ### 📝 Important Notes
-          
-          - **Your data**: Stored in `timekeeper.db` file - backup regularly!
-          - **Offline**: Works without internet connection
-          - **Privacy**: All data stays on your computer
-          - **Portable**: Copy folder to USB or anywhere
-          
-          ### 🆘 Need Help?
-          
-          - Read **SIMPLE_USER_GUIDE.md** for step-by-step instructions
-          - Check **SETUP_GUIDE.md** for troubleshooting
-          - Open an issue on GitHub
-          
-          ---
-          
-          ## 🔄 Updating from Previous Version
-          
-          1. Backup your **timekeeper.db** file
-          2. Download and extract new version
-          3. Copy your **timekeeper.db** into new folder
-          4. Run START_TIMEKEEPER.bat
-          
-          Your data will be preserved! ✅
-          "@
+          $releaseNotes += "`n`n### ⚙️ Requirements`n`n"
+          $releaseNotes += "- Windows 10 or 11 (64-bit)`n"
+          $releaseNotes += "- No other software needed!`n`n"
+          $releaseNotes += "### 📝 Important Notes`n`n"
+          $releaseNotes += "- **Your data**: Stored in ``timekeeper.db`` file - backup regularly!`n"
+          $releaseNotes += "- **Offline**: Works without internet connection`n"
+          $releaseNotes += "- **Privacy**: All data stays on your computer`n"
+          $releaseNotes += "- **Portable**: Copy folder to USB or anywhere`n`n"
+          $releaseNotes += "### 🆘 Need Help?`n`n"
+          $releaseNotes += "- Read **SIMPLE_USER_GUIDE.md** for step-by-step instructions`n"
+          $releaseNotes += "- Check **SETUP_GUIDE.md** for troubleshooting`n"
+          $releaseNotes += "- Open an issue on GitHub`n`n"
+          $releaseNotes += "---`n`n"
+          $releaseNotes += "## 🔄 Updating from Previous Version`n`n"
+          $releaseNotes += "1. Backup your **timekeeper.db** file`n"
+          $releaseNotes += "2. Download and extract new version`n"
+          $releaseNotes += "3. Copy your **timekeeper.db** into new folder`n"
+          $releaseNotes += "4. Run START_TIMEKEEPER.bat`n`n"
+          $releaseNotes += "Your data will be preserved! ✅`n"
           
           # Save to file for GitHub release
           $releaseNotes | Out-File -FilePath "release_notes.md" -Encoding UTF8
