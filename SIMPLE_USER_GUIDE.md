@@ -19,10 +19,26 @@ Download the ZIP file:
 4. Click "Extract"
 
 ### Step 3: Run
+You have two options:
+
+#### Option A: System Tray (Recommended) ⭐
+1. Open the extracted folder
+2. **Double-click** on **`Timekeeper.TrayApp.exe`**
+3. Look for the Timekeeper icon in your system tray (bottom-right, near the clock)
+4. Your browser will open automatically
+5. Start using Timekeeper! 🎉
+
+**Benefits:**
+- No console window!
+- Runs in the background
+- Right-click the tray icon to stop/start or exit
+
+#### Option B: Console Window
 1. Open the extracted folder
 2. **Double-click** on **`START_TIMEKEEPER.bat`**
-3. Your browser will open automatically
-4. Start using Timekeeper! 🎉
+3. A black window will appear (don't close it!)
+4. Your browser will open automatically
+5. Start using Timekeeper! 🎉
 
 ---
 
@@ -59,6 +75,12 @@ Once it's open in your browser:
 ## ⚠️ Important
 
 ### To Stop the Application:
+
+**If using System Tray (Timekeeper.TrayApp.exe):**
+- Right-click the tray icon (bottom-right, near clock)
+- Click **"Exit"**
+
+**If using Console Window (START_TIMEKEEPER.bat):**
 - Close the black window (console) that appeared when you started
 - OR press Ctrl+C in that window
 

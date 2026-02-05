@@ -2,6 +2,8 @@
 
 This guide will help you get Timekeeper running on your machine in just a few minutes.
 
+> **💡 Looking for the easiest way?** If you received a standalone ZIP package (like `Timekeeper-v1.0.0-win-x64.zip`), see [SIMPLE_USER_GUIDE.md](SIMPLE_USER_GUIDE.md) instead. This guide is for running from source code.
+
 ## 📥 Initial Setup
 
 ### Step 1: Install .NET 8.0 Runtime (One-Time Setup)

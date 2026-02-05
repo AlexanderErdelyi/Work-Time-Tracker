@@ -1,0 +1,3 @@
+# Placeholder for icon file
+# In a Windows environment, replace this with an actual .ico file
+# For now, the application will use the default system icon

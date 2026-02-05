@@ -21,6 +21,7 @@ GitHub will automatically build a ready-to-use ZIP file that your colleagues can
 
 ### Easy Distribution 🎁
 - **Self-Contained Build**: No .NET installation required - just extract and run!
+- **System Tray Support**: Run in the background without a console window
 - **One-Click Start**: Simple `START_TIMEKEEPER.bat` for non-technical users
 - **Portable**: Copy to USB drive or any folder - works anywhere
 - **Offline**: No internet connection needed
@@ -107,8 +108,9 @@ Ask your administrator to create a standalone build using:
 
 Then you just:
 1. Download and extract the ZIP file
-2. Double-click **`START_TIMEKEEPER.bat`**
-3. Start tracking time! 🎉
+2. **Option A (Recommended)**: Double-click **`Timekeeper.TrayApp.exe`** - runs in system tray, no console window! 
+3. **Option B**: Double-click **`START_TIMEKEEPER.bat`** - runs with a console window
+4. Start tracking time! 🎉
 
 **No installation, no setup, no command line!**
 
