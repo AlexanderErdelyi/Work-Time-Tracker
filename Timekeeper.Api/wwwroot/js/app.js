@@ -11,6 +11,8 @@ let customers = [];
 let projects = [];
 let tasks = [];
 let entries = [];
+let selectedEntryIds = new Set(); // Track selected entry IDs for bulk operations
+let currentFilters = {}; // Track current column filters
 
 // Settings state (loaded from localStorage)
 let settings = {
@@ -58,6 +60,10 @@ function setupEventListeners() {
     // Filter buttons
     document.getElementById('filter-entries-btn').addEventListener('click', loadEntries);
     document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
+
+    // Bulk delete
+    document.getElementById('select-all-entries').addEventListener('change', toggleSelectAll);
+    document.getElementById('delete-selected-btn').addEventListener('click', bulkDeleteEntries);
     
     // Search on Enter key
     document.getElementById('entry-search').addEventListener('keypress', (e) => {
@@ -72,6 +78,9 @@ function setupEventListeners() {
 
     // Reports
     document.getElementById('load-reports-btn').addEventListener('click', loadReports);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 
     // Modal
     document.querySelector('.close').addEventListener('click', closeModal);
@@ -447,20 +456,22 @@ function renderEntries() {
         const durationSeconds = e.durationMinutes ? Math.floor(e.durationMinutes * 60) : 0;
         const isRunning = !e.endTime;
         const isContinuing = continuingEntryId === e.id;
+        const isChecked = selectedEntryIds.has(e.id);
         const billedDuration = e.durationMinutes ? calculateBilledDuration(e.durationMinutes) : null;
         return `
         <tr data-entry-id="${e.id}" data-task-id="${e.taskId}" data-notes="${e.notes || ''}" 
             class="${isContinuing ? 'continuing-entry' : ''}"
             ondblclick="resumeTracking(${e.id}, ${e.taskId}, '${(e.notes || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${durationSeconds})"
             title="${isRunning ? 'Currently running' : 'Double-click to continue tracking this entry'}">
-            <td>${e.customerName}</td>
-            <td>${e.projectName}</td>
-            <td>${e.taskName}</td>
+            <td onclick="event.stopPropagation()"><input type="checkbox" class="entry-checkbox" data-entry-id="${e.id}" ${isChecked ? 'checked' : ''}></td>
+            <td data-column="customer" tabindex="0">${e.customerName}</td>
+            <td data-column="project" tabindex="0">${e.projectName}</td>
+            <td data-column="task" tabindex="0">${e.taskName}</td>
             <td>${formatDateTime(e.startTime)}</td>
             <td>${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
             <td>${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
             <td>${billedDuration !== null ? formatDuration(billedDuration) : '-'}</td>
-            <td>${e.notes || ''}</td>
+            <td data-column="notes" tabindex="0">${e.notes || ''}</td>
             <td onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="editEntry(${e.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteEntry(${e.id})">Delete</button>
@@ -468,6 +479,14 @@ function renderEntries() {
         </tr>
     `;
     }).join('');
+    
+    // Attach checkbox event listeners
+    document.querySelectorAll('.entry-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', handleEntryCheckboxChange);
+    });
+    
+    // Update delete button visibility
+    updateDeleteButtonVisibility();
     
     // Update summary after rendering
     updateTimeSummary();
@@ -1140,6 +1159,151 @@ function toggleTimeSummary() {
         container.classList.add('summary-collapsed');
         toggle.textContent = '📈';
         toggle.title = 'Show Time Summary';
+    }
+}
+
+// Bulk delete and multi-select functions
+function toggleSelectAll(e) {
+    const checkboxes = document.querySelectorAll('.entry-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = e.target.checked;
+        const entryId = parseInt(checkbox.dataset.entryId);
+        if (e.target.checked) {
+            selectedEntryIds.add(entryId);
+        } else {
+            selectedEntryIds.delete(entryId);
+        }
+    });
+    updateDeleteButtonVisibility();
+}
+
+function handleEntryCheckboxChange(e) {
+    const entryId = parseInt(e.target.dataset.entryId);
+    if (e.target.checked) {
+        selectedEntryIds.add(entryId);
+    } else {
+        selectedEntryIds.delete(entryId);
+    }
+    
+    // Update "select all" checkbox state
+    const allCheckboxes = document.querySelectorAll('.entry-checkbox');
+    const selectAllCheckbox = document.getElementById('select-all-entries');
+    selectAllCheckbox.checked = allCheckboxes.length > 0 && 
+        Array.from(allCheckboxes).every(cb => cb.checked);
+    
+    updateDeleteButtonVisibility();
+}
+
+function updateDeleteButtonVisibility() {
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    if (selectedEntryIds.size > 0) {
+        deleteBtn.style.display = 'inline-block';
+        deleteBtn.textContent = `Delete Selected (${selectedEntryIds.size})`;
+    } else {
+        deleteBtn.style.display = 'none';
+    }
+}
+
+async function bulkDeleteEntries() {
+    if (selectedEntryIds.size === 0) return;
+    
+    const count = selectedEntryIds.size;
+    if (!confirm(`Are you sure you want to delete ${count} time ${count === 1 ? 'entry' : 'entries'}?`)) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/timeentries/bulk-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: Array.from(selectedEntryIds) })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            selectedEntryIds.clear();
+            document.getElementById('select-all-entries').checked = false;
+            await loadEntries();
+            showSuccess(`Successfully deleted ${result.deletedCount} time ${result.deletedCount === 1 ? 'entry' : 'entries'}!`);
+        } else {
+            showError('Failed to delete selected entries');
+        }
+    } catch (error) {
+        showError('Failed to delete selected entries');
+        console.error(error);
+    }
+}
+
+// Keyboard shortcuts
+function handleKeyboardShortcuts(e) {
+    // ALT+F3 - Filter by cell value
+    if (e.altKey && e.key === 'F3') {
+        e.preventDefault();
+        const activeElement = document.activeElement;
+        
+        // Check if we're in the entries table
+        const cell = activeElement.closest('td[data-column]');
+        if (cell) {
+            const column = cell.dataset.column;
+            const value = cell.textContent.trim();
+            
+            // Apply filter based on column
+            applyColumnFilter(column, value);
+        }
+    }
+}
+
+function applyColumnFilter(column, value) {
+    // Skip filtering for columns that can't be filtered
+    if (['startTime', 'endTime', 'duration'].includes(column)) {
+        showError(`Cannot filter by ${column} column`);
+        return;
+    }
+    
+    // Clear existing filters first
+    clearFilters();
+    
+    let applied = false;
+    
+    // Map column to filter field and apply
+    switch(column) {
+        case 'customer':
+            // Find customer by name
+            const customer = customers.find(c => c.name === value);
+            if (customer) {
+                document.getElementById('entry-customer-filter').value = customer.id;
+                applied = true;
+            }
+            break;
+        case 'project':
+            // Find project by name
+            const project = projects.find(p => p.name === value);
+            if (project) {
+                document.getElementById('entry-project-filter').value = project.id;
+                applied = true;
+            }
+            break;
+        case 'task':
+            // Find task by name
+            const task = tasks.find(t => t.name === value);
+            if (task) {
+                document.getElementById('entry-task-filter').value = task.id;
+                applied = true;
+            }
+            break;
+        case 'notes':
+            // Use search field for notes (only if not empty)
+            if (value) {
+                document.getElementById('entry-search').value = value;
+                applied = true;
+            }
+            break;
+    }
+    
+    if (applied) {
+        // Apply the filters
+        loadEntries();
+        showSuccess(`Filtered by ${column}: ${value}`);
+    } else {
+        showError(`Could not find ${column}: ${value}`);
     }
 }
 

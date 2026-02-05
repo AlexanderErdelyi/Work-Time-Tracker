@@ -353,6 +353,29 @@ public class TimeEntriesController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("bulk-delete")]
+    public async Task<IActionResult> BulkDeleteTimeEntries(BulkDeleteDto dto)
+    {
+        if (dto.Ids.Count == 0)
+        {
+            return BadRequest("No IDs provided");
+        }
+
+        var entries = await _context.TimeEntries
+            .Where(e => dto.Ids.Contains(e.Id))
+            .ToListAsync();
+
+        if (entries.Count == 0)
+        {
+            return NotFound("No matching entries found");
+        }
+
+        _context.TimeEntries.RemoveRange(entries);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { deletedCount = entries.Count });
+    }
+
     [HttpGet("daily-totals")]
     public async Task<ActionResult<IEnumerable<TimeEntrySummary>>> GetDailyTotals(
         [FromQuery] DateTime? startDate = null,

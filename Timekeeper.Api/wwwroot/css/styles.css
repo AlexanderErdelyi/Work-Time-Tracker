@@ -14,7 +14,7 @@ body {
 .container {
     max-width: 1400px;
     margin: 0 auto;
-    padding-right: 280px;
+    padding-right: 340px;
     transition: padding-right 0.3s ease;
 }
 
@@ -306,6 +306,28 @@ header p {
     border-bottom: 1px solid #eee;
 }
 
+.data-table td[data-column] {
+    cursor: text;
+    position: relative;
+}
+
+.data-table td[data-column]:focus {
+    outline: 2px solid #667eea;
+    outline-offset: -2px;
+    background-color: #f0f3ff;
+}
+
+.data-table td[data-column]:focus::after {
+    content: "ALT+F3 to filter";
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    font-size: 0.7em;
+    color: #667eea;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 .data-table tbody tr {
     cursor: pointer;
     transition: background-color 0.2s, transform 0.1s;
@@ -593,7 +615,7 @@ header p {
 }
 
 .summary-toggle.active {
-    right: 280px;
+    right: 340px;
 }
 
 .time-summary h3 {
