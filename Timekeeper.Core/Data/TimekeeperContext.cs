@@ -21,6 +21,7 @@ public class TimekeeperContext : DbContext
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.No).HasMaxLength(20);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(1000);
             entity.HasIndex(e => e.Name);
@@ -29,6 +30,7 @@ public class TimekeeperContext : DbContext
         modelBuilder.Entity<Project>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.No).HasMaxLength(20);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(1000);
             entity.HasIndex(e => e.Name);
@@ -44,6 +46,8 @@ public class TimekeeperContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Position).HasMaxLength(20);
+            entity.Property(e => e.ProcurementNumber).HasMaxLength(20);
             entity.HasIndex(e => e.Name);
 
             entity.HasOne(e => e.Project)

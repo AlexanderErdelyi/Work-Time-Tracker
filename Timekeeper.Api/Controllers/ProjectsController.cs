@@ -45,6 +45,7 @@ public class ProjectsController : ControllerBase
             .Select(p => new ProjectDto
             {
                 Id = p.Id,
+                No = p.No,
                 Name = p.Name,
                 Description = p.Description,
                 CustomerId = p.CustomerId,
@@ -73,6 +74,7 @@ public class ProjectsController : ControllerBase
         return Ok(new ProjectDto
         {
             Id = project.Id,
+            No = project.No,
             Name = project.Name,
             Description = project.Description,
             CustomerId = project.CustomerId,
@@ -94,6 +96,7 @@ public class ProjectsController : ControllerBase
 
         var project = new Project
         {
+            No = dto.No,
             Name = dto.Name,
             Description = dto.Description,
             CustomerId = dto.CustomerId
@@ -109,6 +112,7 @@ public class ProjectsController : ControllerBase
         var projectDto = new ProjectDto
         {
             Id = result.Id,
+            No = result.No,
             Name = result.Name,
             Description = result.Description,
             CustomerId = result.CustomerId,
@@ -141,6 +145,7 @@ public class ProjectsController : ControllerBase
             project.CustomerId = dto.CustomerId.Value;
         }
 
+        if (dto.No != null) project.No = dto.No;
         if (dto.Name != null) project.Name = dto.Name;
         if (dto.Description != null) project.Description = dto.Description;
         if (dto.IsActive.HasValue) project.IsActive = dto.IsActive.Value;

@@ -3,6 +3,7 @@ namespace Timekeeper.Core.Models;
 public class Project
 {
     public int Id { get; set; }
+    public string? No { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int CustomerId { get; set; }

@@ -3,6 +3,7 @@ namespace Timekeeper.Api.DTOs;
 public class CustomerDto
 {
     public int Id { get; set; }
+    public string? No { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsActive { get; set; }
@@ -12,12 +13,14 @@ public class CustomerDto
 
 public class CreateCustomerDto
 {
+    public string? No { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
 }
 
 public class UpdateCustomerDto
 {
+    public string? No { get; set; }
     public string? Name { get; set; }
     public string? Description { get; set; }
     public bool? IsActive { get; set; }
