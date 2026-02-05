@@ -5,8 +5,12 @@ public class TimeEntryDto
     public int Id { get; set; }
     public int TaskId { get; set; }
     public string TaskName { get; set; } = string.Empty;
+    public string? TaskPosition { get; set; }
+    public string? TaskProcurementNumber { get; set; }
     public string ProjectName { get; set; } = string.Empty;
+    public string? ProjectNo { get; set; }
     public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerNo { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime? EndTime { get; set; }
     public string? Notes { get; set; }

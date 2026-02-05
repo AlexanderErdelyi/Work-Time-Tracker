@@ -40,7 +40,10 @@ public class TasksController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(t => t.Name.Contains(search) || (t.Description != null && t.Description.Contains(search)));
+            query = query.Where(t => t.Name.Contains(search) || 
+                                    (t.Description != null && t.Description.Contains(search)) ||
+                                    (t.Position != null && t.Position.Contains(search)) ||
+                                    (t.ProcurementNumber != null && t.ProcurementNumber.Contains(search)));
         }
 
         var tasks = await query
@@ -50,6 +53,8 @@ public class TasksController : ControllerBase
                 Id = t.Id,
                 Name = t.Name,
                 Description = t.Description,
+                Position = t.Position,
+                ProcurementNumber = t.ProcurementNumber,
                 ProjectId = t.ProjectId,
                 ProjectName = t.Project.Name,
                 CustomerName = t.Project.Customer.Name,
@@ -80,6 +85,8 @@ public class TasksController : ControllerBase
             Id = task.Id,
             Name = task.Name,
             Description = task.Description,
+            Position = task.Position,
+            ProcurementNumber = task.ProcurementNumber,
             ProjectId = task.ProjectId,
             ProjectName = task.Project.Name,
             CustomerName = task.Project.Customer.Name,
@@ -102,6 +109,8 @@ public class TasksController : ControllerBase
         {
             Name = dto.Name,
             Description = dto.Description,
+            Position = dto.Position,
+            ProcurementNumber = dto.ProcurementNumber,
             ProjectId = dto.ProjectId
         };
 
@@ -118,6 +127,8 @@ public class TasksController : ControllerBase
             Id = result.Id,
             Name = result.Name,
             Description = result.Description,
+            Position = result.Position,
+            ProcurementNumber = result.ProcurementNumber,
             ProjectId = result.ProjectId,
             ProjectName = result.Project.Name,
             CustomerName = result.Project.Customer.Name,
@@ -151,6 +162,8 @@ public class TasksController : ControllerBase
 
         if (dto.Name != null) task.Name = dto.Name;
         if (dto.Description != null) task.Description = dto.Description;
+        if (dto.Position != null) task.Position = dto.Position;
+        if (dto.ProcurementNumber != null) task.ProcurementNumber = dto.ProcurementNumber;
         if (dto.IsActive.HasValue) task.IsActive = dto.IsActive.Value;
         task.UpdatedAt = DateTime.UtcNow;
 

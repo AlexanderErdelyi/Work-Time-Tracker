@@ -37,6 +37,7 @@ public class CustomersController : ControllerBase
             .Select(c => new CustomerDto
             {
                 Id = c.Id,
+                No = c.No,
                 Name = c.Name,
                 Description = c.Description,
                 IsActive = c.IsActive,
@@ -61,6 +62,7 @@ public class CustomersController : ControllerBase
         return Ok(new CustomerDto
         {
             Id = customer.Id,
+            No = customer.No,
             Name = customer.Name,
             Description = customer.Description,
             IsActive = customer.IsActive,
@@ -74,6 +76,7 @@ public class CustomersController : ControllerBase
     {
         var customer = new Customer
         {
+            No = dto.No,
             Name = dto.Name,
             Description = dto.Description
         };
@@ -84,6 +87,7 @@ public class CustomersController : ControllerBase
         var result = new CustomerDto
         {
             Id = customer.Id,
+            No = customer.No,
             Name = customer.Name,
             Description = customer.Description,
             IsActive = customer.IsActive,
@@ -104,6 +108,7 @@ public class CustomersController : ControllerBase
             return NotFound();
         }
 
+        if (dto.No != null) customer.No = dto.No;
         if (dto.Name != null) customer.Name = dto.Name;
         if (dto.Description != null) customer.Description = dto.Description;
         if (dto.IsActive.HasValue) customer.IsActive = dto.IsActive.Value;
