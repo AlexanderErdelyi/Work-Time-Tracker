@@ -38,9 +38,10 @@ function setupEventListeners() {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    // Timer controls
+    // Timer controls - task is now optional, so button is always enabled
     document.getElementById('timer-task-select').addEventListener('change', (e) => {
-        document.getElementById('start-timer-btn').disabled = !e.target.value;
+        // Button is now always enabled since task is optional
+        document.getElementById('start-timer-btn').disabled = false;
     });
     document.getElementById('timer-task-search').addEventListener('input', filterTaskOptions);
     document.getElementById('timer-task-search').addEventListener('focus', () => {
@@ -49,6 +50,7 @@ function setupEventListeners() {
     });
     document.getElementById('start-timer-btn').addEventListener('click', startTimer);
     document.getElementById('stop-timer-btn').addEventListener('click', stopTimer);
+    document.getElementById('change-task-btn').addEventListener('click', changeTimerTask);
 
     // Add buttons
     document.getElementById('add-customer-btn').addEventListener('click', () => showCustomerForm());
@@ -171,18 +173,34 @@ async function checkRunningTimer() {
 
 function showRunningTimer(timer) {
     currentTimer = timer;
-    document.getElementById('start-timer-form').style.display = 'none';
+    // Keep the start form visible but change button visibility
+    document.getElementById('start-timer-form').style.display = 'block';
+    document.getElementById('start-timer-btn').style.display = 'none';
+    document.getElementById('change-task-btn').style.display = 'inline-block';
     document.getElementById('stop-timer-form').style.display = 'block';
     document.getElementById('timer-info').style.display = 'block';
-    document.getElementById('running-task-name').textContent = timer.taskName;
-    document.getElementById('running-project-name').textContent = timer.projectName;
-    document.getElementById('running-customer-name').textContent = timer.customerName;
+    
+    // Update timer info display
+    document.getElementById('running-task-name').textContent = timer.taskName || 'No task selected';
+    document.getElementById('running-project-name').textContent = timer.projectName || 'N/A';
+    document.getElementById('running-customer-name').textContent = timer.customerName || 'N/A';
+    
+    // Set the current task in the selector if available
+    if (timer.taskId) {
+        document.getElementById('timer-task-select').value = timer.taskId;
+        // Also update the search box to show the task name
+        const searchBox = document.getElementById('timer-task-search');
+        searchBox.value = timer.taskName || '';
+    }
+    
     startTimerDisplay(new Date(timer.startTime));
 }
 
 function showStartTimerForm() {
     currentTimer = null;
     document.getElementById('start-timer-form').style.display = 'block';
+    document.getElementById('start-timer-btn').style.display = 'inline-block';
+    document.getElementById('change-task-btn').style.display = 'none';
     document.getElementById('stop-timer-form').style.display = 'none';
     document.getElementById('timer-info').style.display = 'none';
     stopTimerDisplay();
@@ -222,10 +240,16 @@ async function startTimer() {
     const notes = document.getElementById('timer-notes').value;
 
     try {
+        // Allow starting without a task (taskId can be null/empty)
+        const requestBody = { notes };
+        if (taskId) {
+            requestBody.taskId = parseInt(taskId);
+        }
+        
         const response = await fetch(`${API_BASE}/timeentries/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: parseInt(taskId), notes })
+            body: JSON.stringify(requestBody)
         });
 
         if (response.ok) {
@@ -270,6 +294,39 @@ async function stopTimer() {
         }
     } catch (error) {
         showError('Failed to stop timer');
+        console.error(error);
+    }
+}
+
+async function changeTimerTask() {
+    if (!currentTimer) return;
+
+    const taskId = document.getElementById('timer-task-select').value;
+    const notes = document.getElementById('timer-notes').value;
+
+    try {
+        // Update the running timer's task
+        const requestBody = { notes };
+        if (taskId) {
+            requestBody.taskId = parseInt(taskId);
+        }
+        
+        const response = await fetch(`${API_BASE}/timeentries/${currentTimer.id}/update`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (response.ok) {
+            const timer = await response.json();
+            showRunningTimer(timer);
+            showSuccess('Task updated successfully!');
+        } else {
+            const error = await response.text();
+            showError(error);
+        }
+    } catch (error) {
+        showError('Failed to update task');
         console.error(error);
     }
 }

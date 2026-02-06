@@ -30,16 +30,17 @@
             </div>
             <div class="timer-controls">
                 <div id="start-timer-form">
-                    <label for="timer-task-search">Select Task:</label>
+                    <label for="timer-task-search">Select Task (Optional):</label>
                     <div class="task-search-wrapper">
                         <input type="text" id="timer-task-search" class="form-control" placeholder="Search tasks, projects, or customers..." autocomplete="off">
                         <div id="timer-task-dropdown" class="task-dropdown"></div>
                     </div>
                     <select id="timer-task-select" style="display: none;">
-                        <option value="">-- Select a task --</option>
+                        <option value="">-- No task selected --</option>
                     </select>
                     <textarea id="timer-notes" class="form-control" placeholder="Notes (optional)" rows="2"></textarea>
-                    <button id="start-timer-btn" class="btn btn-primary" disabled>Start Timer</button>
+                    <button id="start-timer-btn" class="btn btn-primary">Start Timer</button>
+                    <button id="change-task-btn" class="btn btn-secondary" style="display: none;">Update Task</button>
                 </div>
                 <div id="stop-timer-form" style="display: none;">
                     <button id="stop-timer-btn" class="btn btn-danger">Stop Timer</button>

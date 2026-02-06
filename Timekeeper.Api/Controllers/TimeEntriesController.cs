@@ -48,12 +48,12 @@ public class TimeEntriesController : ControllerBase
 
         if (customerId.HasValue)
         {
-            query = query.Where(e => e.Task.Project.CustomerId == customerId.Value);
+            query = query.Where(e => e.Task != null && e.Task.Project.CustomerId == customerId.Value);
         }
 
         if (projectId.HasValue)
         {
-            query = query.Where(e => e.Task.ProjectId == projectId.Value);
+            query = query.Where(e => e.Task != null && e.Task.ProjectId == projectId.Value);
         }
 
         if (taskId.HasValue)
@@ -72,9 +72,9 @@ public class TimeEntriesController : ControllerBase
         {
             var searchLower = search.ToLower();
             query = query.Where(e => 
-                e.Task.Name.ToLower().Contains(searchLower) || 
-                e.Task.Project.Name.ToLower().Contains(searchLower) ||
-                e.Task.Project.Customer.Name.ToLower().Contains(searchLower) ||
+                (e.Task != null && e.Task.Name.ToLower().Contains(searchLower)) || 
+                (e.Task != null && e.Task.Project.Name.ToLower().Contains(searchLower)) ||
+                (e.Task != null && e.Task.Project.Customer.Name.ToLower().Contains(searchLower)) ||
                 (e.Notes != null && e.Notes.ToLower().Contains(searchLower)));
         }
 
@@ -84,13 +84,13 @@ public class TimeEntriesController : ControllerBase
             {
                 Id = e.Id,
                 TaskId = e.TaskId,
-                TaskName = e.Task.Name,
-                TaskPosition = e.Task.Position,
-                TaskProcurementNumber = e.Task.ProcurementNumber,
-                ProjectName = e.Task.Project.Name,
-                ProjectNo = e.Task.Project.No,
-                CustomerName = e.Task.Project.Customer.Name,
-                CustomerNo = e.Task.Project.Customer.No,
+                TaskName = e.Task != null ? e.Task.Name : null,
+                TaskPosition = e.Task != null ? e.Task.Position : null,
+                TaskProcurementNumber = e.Task != null ? e.Task.ProcurementNumber : null,
+                ProjectName = e.Task != null ? e.Task.Project.Name : null,
+                ProjectNo = e.Task != null ? e.Task.Project.No : null,
+                CustomerName = e.Task != null ? e.Task.Project.Customer.Name : null,
+                CustomerNo = e.Task != null ? e.Task.Project.Customer.No : null,
                 StartTime = e.StartTime,
                 EndTime = e.EndTime,
                 Notes = e.Notes,
@@ -122,13 +122,13 @@ public class TimeEntriesController : ControllerBase
         {
             Id = entry.Id,
             TaskId = entry.TaskId,
-            TaskName = entry.Task.Name,
-            TaskPosition = entry.Task.Position,
-            TaskProcurementNumber = entry.Task.ProcurementNumber,
-            ProjectName = entry.Task.Project.Name,
-            ProjectNo = entry.Task.Project.No,
-            CustomerName = entry.Task.Project.Customer.Name,
-            CustomerNo = entry.Task.Project.Customer.No,
+            TaskName = entry.Task?.Name,
+            TaskPosition = entry.Task?.Position,
+            TaskProcurementNumber = entry.Task?.ProcurementNumber,
+            ProjectName = entry.Task?.Project?.Name,
+            ProjectNo = entry.Task?.Project?.No,
+            CustomerName = entry.Task?.Project?.Customer?.Name,
+            CustomerNo = entry.Task?.Project?.Customer?.No,
             StartTime = entry.StartTime,
             EndTime = entry.EndTime,
             Notes = entry.Notes,
@@ -153,13 +153,13 @@ public class TimeEntriesController : ControllerBase
         {
             Id = entry.Id,
             TaskId = entry.TaskId,
-            TaskName = entry.Task.Name,
-            TaskPosition = entry.Task.Position,
-            TaskProcurementNumber = entry.Task.ProcurementNumber,
-            ProjectName = entry.Task.Project.Name,
-            ProjectNo = entry.Task.Project.No,
-            CustomerName = entry.Task.Project.Customer.Name,
-            CustomerNo = entry.Task.Project.Customer.No,
+            TaskName = entry.Task?.Name,
+            TaskPosition = entry.Task?.Position,
+            TaskProcurementNumber = entry.Task?.ProcurementNumber,
+            ProjectName = entry.Task?.Project?.Name,
+            ProjectNo = entry.Task?.Project?.No,
+            CustomerName = entry.Task?.Project?.Customer?.Name,
+            CustomerNo = entry.Task?.Project?.Customer?.No,
             StartTime = entry.StartTime,
             EndTime = entry.EndTime,
             Notes = entry.Notes,
@@ -181,13 +181,13 @@ public class TimeEntriesController : ControllerBase
             {
                 Id = entry.Id,
                 TaskId = entry.TaskId,
-                TaskName = entry.Task.Name,
-                TaskPosition = entry.Task.Position,
-                TaskProcurementNumber = entry.Task.ProcurementNumber,
-                ProjectName = entry.Task.Project.Name,
-                ProjectNo = entry.Task.Project.No,
-                CustomerName = entry.Task.Project.Customer.Name,
-                CustomerNo = entry.Task.Project.Customer.No,
+                TaskName = entry.Task?.Name,
+                TaskPosition = entry.Task?.Position,
+                TaskProcurementNumber = entry.Task?.ProcurementNumber,
+                ProjectName = entry.Task?.Project?.Name,
+                ProjectNo = entry.Task?.Project?.No,
+                CustomerName = entry.Task?.Project?.Customer?.Name,
+                CustomerNo = entry.Task?.Project?.Customer?.No,
                 StartTime = entry.StartTime,
                 EndTime = entry.EndTime,
                 Notes = entry.Notes,
@@ -218,13 +218,13 @@ public class TimeEntriesController : ControllerBase
             {
                 Id = entry.Id,
                 TaskId = entry.TaskId,
-                TaskName = entry.Task.Name,
-                TaskPosition = entry.Task.Position,
-                TaskProcurementNumber = entry.Task.ProcurementNumber,
-                ProjectName = entry.Task.Project.Name,
-                ProjectNo = entry.Task.Project.No,
-                CustomerName = entry.Task.Project.Customer.Name,
-                CustomerNo = entry.Task.Project.Customer.No,
+                TaskName = entry.Task?.Name,
+                TaskPosition = entry.Task?.Position,
+                TaskProcurementNumber = entry.Task?.ProcurementNumber,
+                ProjectName = entry.Task?.Project?.Name,
+                ProjectNo = entry.Task?.Project?.No,
+                CustomerName = entry.Task?.Project?.Customer?.Name,
+                CustomerNo = entry.Task?.Project?.Customer?.No,
                 StartTime = entry.StartTime,
                 EndTime = entry.EndTime,
                 Notes = entry.Notes,
@@ -247,14 +247,18 @@ public class TimeEntriesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<TimeEntryDto>> CreateTimeEntry(CreateTimeEntryDto dto)
     {
-        var task = await _context.Tasks
-            .Include(t => t.Project)
-                .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(t => t.Id == dto.TaskId);
-
-        if (task == null)
+        // Task is now optional
+        if (dto.TaskId.HasValue)
         {
-            return BadRequest("Task not found");
+            var task = await _context.Tasks
+                .Include(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+                .FirstOrDefaultAsync(t => t.Id == dto.TaskId.Value);
+
+            if (task == null)
+            {
+                return BadRequest("Task not found");
+            }
         }
 
         if (dto.EndTime.HasValue && dto.EndTime.Value < (dto.StartTime ?? DateTime.UtcNow))
@@ -283,13 +287,13 @@ public class TimeEntriesController : ControllerBase
         {
             Id = result.Id,
             TaskId = result.TaskId,
-            TaskName = result.Task.Name,
-            TaskPosition = result.Task.Position,
-            TaskProcurementNumber = result.Task.ProcurementNumber,
-            ProjectName = result.Task.Project.Name,
-            ProjectNo = result.Task.Project.No,
-            CustomerName = result.Task.Project.Customer.Name,
-            CustomerNo = result.Task.Project.Customer.No,
+            TaskName = result.Task?.Name,
+            TaskPosition = result.Task?.Position,
+            TaskProcurementNumber = result.Task?.ProcurementNumber,
+            ProjectName = result.Task?.Project?.Name,
+            ProjectNo = result.Task?.Project?.No,
+            CustomerName = result.Task?.Project?.Customer?.Name,
+            CustomerNo = result.Task?.Project?.Customer?.No,
             StartTime = result.StartTime,
             EndTime = result.EndTime,
             Notes = result.Notes,
@@ -314,6 +318,24 @@ public class TimeEntriesController : ControllerBase
         if (entry == null)
         {
             return NotFound();
+        }
+
+        // Allow updating TaskId
+        if (dto.TaskId.HasValue)
+        {
+            // Verify task exists
+            var taskExists = await _context.Tasks.AnyAsync(t => t.Id == dto.TaskId.Value);
+            if (!taskExists)
+            {
+                return BadRequest("Task not found");
+            }
+            entry.TaskId = dto.TaskId.Value;
+            
+            // Reload the entry with the new task relationship
+            await _context.Entry(entry).ReloadAsync();
+            await _context.Entry(entry).Reference(e => e.Task).LoadAsync();
+            await _context.Entry(entry.Task).Reference(t => t.Project).LoadAsync();
+            await _context.Entry(entry.Task.Project).Reference(p => p.Customer).LoadAsync();
         }
 
         if (dto.StartTime.HasValue) entry.StartTime = dto.StartTime.Value;
@@ -346,13 +368,13 @@ public class TimeEntriesController : ControllerBase
         {
             Id = entry.Id,
             TaskId = entry.TaskId,
-            TaskName = entry.Task.Name,
-            TaskPosition = entry.Task.Position,
-            TaskProcurementNumber = entry.Task.ProcurementNumber,
-            ProjectName = entry.Task.Project.Name,
-            ProjectNo = entry.Task.Project.No,
-            CustomerName = entry.Task.Project.Customer.Name,
-            CustomerNo = entry.Task.Project.Customer.No,
+            TaskName = entry.Task?.Name,
+            TaskPosition = entry.Task?.Position,
+            TaskProcurementNumber = entry.Task?.ProcurementNumber,
+            ProjectName = entry.Task?.Project?.Name,
+            ProjectNo = entry.Task?.Project?.No,
+            CustomerName = entry.Task?.Project?.Customer?.Name,
+            CustomerNo = entry.Task?.Project?.Customer?.No,
             StartTime = entry.StartTime,
             EndTime = entry.EndTime,
             Notes = entry.Notes,

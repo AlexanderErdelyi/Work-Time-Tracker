@@ -3,13 +3,13 @@ namespace Timekeeper.Api.DTOs;
 public class TimeEntryDto
 {
     public int Id { get; set; }
-    public int TaskId { get; set; }
-    public string TaskName { get; set; } = string.Empty;
+    public int? TaskId { get; set; }
+    public string? TaskName { get; set; }
     public string? TaskPosition { get; set; }
     public string? TaskProcurementNumber { get; set; }
-    public string ProjectName { get; set; } = string.Empty;
+    public string? ProjectName { get; set; }
     public string? ProjectNo { get; set; }
-    public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerName { get; set; }
     public string? CustomerNo { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime? EndTime { get; set; }
@@ -22,7 +22,7 @@ public class TimeEntryDto
 
 public class CreateTimeEntryDto
 {
-    public int TaskId { get; set; }
+    public int? TaskId { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
     public string? Notes { get; set; }
@@ -30,6 +30,7 @@ public class CreateTimeEntryDto
 
 public class UpdateTimeEntryDto
 {
+    public int? TaskId { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
     public string? Notes { get; set; }
@@ -37,7 +38,7 @@ public class UpdateTimeEntryDto
 
 public class StartTimerDto
 {
-    public int TaskId { get; set; }
+    public int? TaskId { get; set; }
     public string? Notes { get; set; }
 }
 
