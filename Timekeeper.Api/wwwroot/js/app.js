@@ -334,6 +334,8 @@ async function startTimerContinue(entryId) {
         if (response.ok) {
             const timer = await response.json();
             currentTimer = timer;
+            // Reset elapsedTimeOffset since the adjusted start time already includes the existing duration
+            elapsedTimeOffset = 0;
             showRunningTimer(timer);
             showSuccess('Continuing time tracking!');
             loadEntries();
