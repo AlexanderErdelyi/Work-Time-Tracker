@@ -1124,6 +1124,21 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
+function countWeekdays(startDate, endDate) {
+    // Count weekdays (Monday-Friday) between startDate and endDate (inclusive)
+    let count = 0;
+    const current = new Date(startDate);
+    while (current <= endDate) {
+        const dayOfWeek = current.getDay();
+        // Monday = 1, Tuesday = 2, ..., Friday = 5 (exclude Saturday = 6, Sunday = 0)
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            count++;
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    return count;
+}
+
 function updateTimeSummary() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1154,11 +1169,12 @@ function updateTimeSummary() {
     }
     
     // Target hours (8 hours/day, 40 hours/week, ~160 hours/month)
-    const workdaysThisWeek = Math.max(1, now.getDay() || 7); // Mon=1, Sun=7
-    const workdaysThisMonth = Math.floor((now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 20); // ~20 workdays/month
+    // Count actual weekdays (Mon-Fri) from start of week/month to today
+    const workdaysThisWeek = countWeekdays(startOfWeek, today);
+    const workdaysThisMonth = countWeekdays(startOfMonth, today);
     
     const targetToday = 8 * 60;
-    const targetWeek = workdaysThisWeek * 8 * 60;
+    const targetWeek = Math.max(workdaysThisWeek, 1) * 8 * 60;
     const targetMonth = Math.max(workdaysThisMonth, 1) * 8 * 60;
     
     document.getElementById('today-hours').textContent = formatHoursMinutes(todayMinutes);
