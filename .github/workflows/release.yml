@@ -418,6 +418,31 @@ jobs:
             exit 1
           }
       
+      - name: Build IIS Deployment Package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          
+          Write-Host "Building IIS Deployment Package..." -ForegroundColor Cyan
+          
+          # Run the IIS publish script
+          .\publish-iis.ps1 -Version $version
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "IIS package build failed!" -ForegroundColor Red
+            exit 1
+          }
+          
+          # Verify the IIS ZIP was created
+          $iisZipPath = ".\Release\IIS\Timekeeper-IIS-v$version.zip"
+          if (Test-Path $iisZipPath) {
+            $size = [math]::Round((Get-Item $iisZipPath).Length / 1MB, 2)
+            Write-Host "IIS package created successfully: $size MB" -ForegroundColor Green
+          } else {
+            Write-Host "ERROR: IIS ZIP package not found!" -ForegroundColor Red
+            exit 1
+          }
+      
       - name: Generate release notes
         id: release_notes
         shell: pwsh
@@ -475,6 +500,17 @@ jobs:
           $releaseNotes += "- Read **SIMPLE_USER_GUIDE.md** for step-by-step instructions`n"
           $releaseNotes += "- Check **SETUP_GUIDE.md** for troubleshooting`n"
           $releaseNotes += "- Open an issue on GitHub`n`n"
+          $releaseNotes += "### Option 3: IIS Server Deployment 🌐`n`n"
+          $releaseNotes += "Deploy to Windows Server with IIS for remote access:`n`n"
+          $releaseNotes += "1. Download **Timekeeper-IIS-v$version.zip** below`n"
+          $releaseNotes += "2. Copy to your Windows Server`n"
+          $releaseNotes += "3. Follow **IIS_DEPLOYMENT_GUIDE.txt** (included in ZIP)`n"
+          $releaseNotes += "4. Access from any computer on your network!`n`n"
+          $releaseNotes += "**✨ Features:**`n"
+          $releaseNotes += "- Access from multiple computers via browser`n"
+          $releaseNotes += "- HTTP or HTTPS with self-signed certificate`n"
+          $releaseNotes += "- Complete deployment guide included`n"
+          $releaseNotes += "- Requires .NET 8.0 Runtime on server`n`n"
           $releaseNotes += "---`n`n"
           $releaseNotes += "## 🔄 Updating from Previous Version`n`n"
           $releaseNotes += "1. Backup your **timekeeper.db** file`n"
@@ -500,6 +536,7 @@ jobs:
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64.zip
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.exe
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.zip
+            Release/IIS/Timekeeper-IIS-v${{ steps.get_version.outputs.VERSION }}.zip
           draft: false
           prerelease: false
         env:
