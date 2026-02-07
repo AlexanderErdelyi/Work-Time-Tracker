@@ -119,22 +119,27 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Customers</h2>
-                    <button id="add-customer-btn" class="btn btn-primary">+ New Customer</button>
+                    <div class="btn-group">
+                        <button id="add-customer-btn" class="btn btn-primary">+ New Customer</button>
+                        <button id="customer-column-selector-btn" class="btn btn-secondary">📋 Columns</button>
+                    </div>
                 </div>
-                <table id="customers-table" class="data-table">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="customers-tbody">
-                        <!-- Customers will be loaded here -->
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table id="customers-table" class="data-table resizable-table">
+                        <thead>
+                            <tr>
+                                <th data-column="no" class="resizable">No<div class="resize-handle"></div></th>
+                                <th data-column="name" class="resizable">Name<div class="resize-handle"></div></th>
+                                <th data-column="description" class="resizable">Description<div class="resize-handle"></div></th>
+                                <th data-column="status" class="resizable">Status<div class="resize-handle"></div></th>
+                                <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-tbody">
+                            <!-- Customers will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -143,23 +148,28 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Projects</h2>
-                    <button id="add-project-btn" class="btn btn-primary">+ New Project</button>
+                    <div class="btn-group">
+                        <button id="add-project-btn" class="btn btn-primary">+ New Project</button>
+                        <button id="project-column-selector-btn" class="btn btn-secondary">📋 Columns</button>
+                    </div>
                 </div>
-                <table id="projects-table" class="data-table">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>Name</th>
-                            <th>Customer</th>
-                            <th>Description</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="projects-tbody">
-                        <!-- Projects will be loaded here -->
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table id="projects-table" class="data-table resizable-table">
+                        <thead>
+                            <tr>
+                                <th data-column="no" class="resizable">No<div class="resize-handle"></div></th>
+                                <th data-column="name" class="resizable">Name<div class="resize-handle"></div></th>
+                                <th data-column="customer" class="resizable">Customer<div class="resize-handle"></div></th>
+                                <th data-column="description" class="resizable">Description<div class="resize-handle"></div></th>
+                                <th data-column="status" class="resizable">Status<div class="resize-handle"></div></th>
+                                <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
+                            </tr>
+                        </thead>
+                        <tbody id="projects-tbody">
+                            <!-- Projects will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -172,22 +182,24 @@
                         <button id="add-task-btn" class="btn btn-primary">+ New Task</button>
                         <button id="import-tasks-btn" class="btn btn-secondary">📥 Import Tasks</button>
                         <button id="download-template-btn" class="btn btn-secondary">📄 Download Template</button>
+                        <button id="task-column-selector-btn" class="btn btn-secondary">📋 Columns</button>
                     </div>
                 </div>
-                <table id="tasks-table" class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Position</th>
-                            <th>Name</th>
-                            <th>Project</th>
-                            <th>Customer</th>
-                            <th>Procurement No</th>
-                            <th>Description</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tasks-tbody">
+                <div class="table-wrapper">
+                    <table id="tasks-table" class="data-table resizable-table">
+                        <thead>
+                            <tr>
+                                <th data-column="position" class="resizable">Position<div class="resize-handle"></div></th>
+                                <th data-column="name" class="resizable">Name<div class="resize-handle"></div></th>
+                                <th data-column="project" class="resizable">Project<div class="resize-handle"></div></th>
+                                <th data-column="customer" class="resizable">Customer<div class="resize-handle"></div></th>
+                                <th data-column="procurementNo" class="resizable">Procurement No<div class="resize-handle"></div></th>
+                                <th data-column="description" class="resizable">Description<div class="resize-handle"></div></th>
+                                <th data-column="status" class="resizable">Status<div class="resize-handle"></div></th>
+                                <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasks-tbody">
                         <!-- Tasks will be loaded here -->
                     </tbody>
                 </table>
