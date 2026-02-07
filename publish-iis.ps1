@@ -68,6 +68,8 @@ Write-Host "Created logs directory for IIS stdout logging" -ForegroundColor Gree
 # Copy documentation
 Write-Host "Copying documentation..." -ForegroundColor Yellow
 Copy-Item ".\README.md" -Destination $publishFolder
+Copy-Item ".\IIS_DEPLOYMENT.md" -Destination $publishFolder -ErrorAction SilentlyContinue
+Copy-Item ".\IIS_QUICK_START.md" -Destination $publishFolder -ErrorAction SilentlyContinue
 Copy-Item ".\version.json" -Destination $publishFolder
 
 # Create IIS deployment guide
