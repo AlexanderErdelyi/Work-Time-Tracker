@@ -95,7 +95,7 @@ $iisGuide = @"
 
 1. Open **IIS Manager**
 2. Create a new **Application Pool**:
-   - Name: ``TimekeeperAppPool``
+   - Name: `TimekeeperAppPool`
    - .NET CLR Version: **No Managed Code**
    - Managed Pipeline Mode: **Integrated**
    - Identity: **ApplicationPoolIdentity** (default) or custom account
@@ -103,20 +103,20 @@ $iisGuide = @"
 ### 2. Deploy Application Files
 
 1. Copy all files from this folder to your server
-   - Recommended location: ``C:\inetpub\wwwroot\Timekeeper``
+   - Recommended location: `C:\inetpub\wwwroot\Timekeeper`
    - Or any folder of your choice
 
 2. Set folder permissions:
    - Right-click the folder → Properties → Security
-   - Add ``IIS AppPool\TimekeeperAppPool`` with **Modify** permissions
+   - Add `IIS AppPool\TimekeeperAppPool` with **Modify** permissions
    - This allows the app to create/modify the SQLite database
 
 ### 3. Create IIS Site
 
 1. In IIS Manager, right-click **Sites** → **Add Website**
 2. Configure:
-   - **Site name**: ``Timekeeper``
-   - **Application pool**: ``TimekeeperAppPool``
+   - **Site name**: `Timekeeper`
+   - **Application pool**: `TimekeeperAppPool`
    - **Physical path**: Path where you copied the files
    - **Binding**:
      - Type: **http**
@@ -129,13 +129,13 @@ $iisGuide = @"
 #### Option A: HTTP Only (Insecure but Simple)
 
 If using port 80:
-- Access from browser: ``http://your-server-ip``
+- Access from browser: `http://your-server-ip`
 - No additional configuration needed
 
 If using custom port (e.g., 8080):
 - In IIS, change binding port to 8080
-- Access from browser: ``http://your-server-ip:8080``
-- Open firewall port: ``netsh advfirewall firewall add rule name="Timekeeper HTTP" dir=in action=allow protocol=TCP localport=8080``
+- Access from browser: `http://your-server-ip:8080`
+- Open firewall port: `netsh advfirewall firewall add rule name="Timekeeper HTTP" dir=in action=allow protocol=TCP localport=8080`
 
 #### Option B: HTTPS with Self-Signed Certificate (Recommended)
 
@@ -160,7 +160,7 @@ If using custom port (e.g., 8080):
    ```
 
 4. **Access from browser**:
-   - Navigate to: ``https://your-server-ip``
+   - Navigate to: `https://your-server-ip`
    - You'll get a certificate warning (expected with self-signed cert)
    - Click "Advanced" → "Continue to site" (wording varies by browser)
    - Or add exception for this certificate
@@ -171,7 +171,7 @@ If using custom port (e.g., 8080):
      $cert = Get-ChildItem -Path "cert:\LocalMachine\My" | Where-Object {$_.Thumbprint -eq "$certThumbprint"}
      Export-Certificate -Cert $cert -FilePath "C:\timekeeper-cert.cer"
      ```
-   - Copy ``timekeeper-cert.cer`` to client computers
+   - Copy `timekeeper-cert.cer` to client computers
    - Double-click → Install Certificate
    - Store Location: **Local Machine**
    - Place in: **Trusted Root Certification Authorities**
@@ -180,13 +180,13 @@ If using custom port (e.g., 8080):
 
 If you want to use a friendly name instead of IP:
 
-1. On client computers, edit ``C:\Windows\System32\drivers\etc\hosts`` (requires admin):
-   ``````
+1. On client computers, edit `C:\Windows\System32\drivers\etc\hosts` (requires admin):
+   ```
    192.168.1.100    timekeeper.local
-   ``````
+   ```
    (Replace with your server's IP)
 
-2. Access via: ``http://timekeeper.local`` or ``https://timekeeper.local``
+2. Access via: `http://timekeeper.local` or `https://timekeeper.local`
 
 ### 6. Start the Site
 
@@ -197,36 +197,36 @@ If you want to use a friendly name instead of IP:
 ## Troubleshooting
 
 ### Check Application Pool
-- Ensure ``TimekeeperAppPool`` is started
+- Ensure `TimekeeperAppPool` is started
 - Check pool identity has permissions to the deployment folder
 
 ### View Logs
-- Check ``logs\stdout`` folder in your deployment directory
+- Check `logs\stdout` folder in your deployment directory
 - Enable detailed errors in web.config:
-  ``````xml
+  ```xml
   <aspNetCore processPath="dotnet" arguments=".\Timekeeper.Api.dll" stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" hostingModel="inprocess">
     <environmentVariables>
       <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Development" />
     </environmentVariables>
   </aspNetCore>
-  ``````
+  ```
 
 ### Database Issues
 - Ensure IIS AppPool identity has **Modify** permissions on deployment folder
-- Database file ``timekeeper.db`` will be created automatically
+- Database file `timekeeper.db` will be created automatically
 - Check permissions if database errors occur
 
 ### Port Already in Use
-- Use ``netstat -ano | findstr :80`` to check what's using port 80
+- Use `netstat -ano | findstr :80` to check what's using port 80
 - Choose a different port in IIS bindings
 
 ### Firewall Blocking
-- Check Windows Firewall: ``wf.msc``
+- Check Windows Firewall: `wf.msc`
 - Add inbound rule for your chosen port
 
 ### .NET Runtime Not Found
 - Install ASP.NET Core Runtime 8.0 Hosting Bundle
-- Restart IIS: ``iisreset`` in admin command prompt
+- Restart IIS: `iisreset` in admin command prompt
 
 ## Remote Access Checklist
 
@@ -238,16 +238,16 @@ If you want to use a friendly name instead of IP:
 ## Default Access
 
 After successful deployment:
-- **Local**: ``http://localhost`` or ``https://localhost``
-- **Network**: ``http://server-ip`` or ``https://server-ip``
-- **Internet** (if port forwarded): ``http://your-public-ip`` or ``https://your-public-ip``
+- **Local**: `http://localhost` or `https://localhost`
+- **Network**: `http://server-ip` or `https://server-ip`
+- **Internet** (if port forwarded): `http://your-public-ip` or `https://your-public-ip`
 
 ## Data Backup
 
-**IMPORTANT**: Your time tracking data is stored in ``timekeeper.db`` in the deployment folder.
+**IMPORTANT**: Your time tracking data is stored in `timekeeper.db` in the deployment folder.
 
 Backup regularly:
-- Copy ``timekeeper.db`` to a safe location
+- Copy `timekeeper.db` to a safe location
 - Consider automated backups via scheduled tasks
 
 ## Support
