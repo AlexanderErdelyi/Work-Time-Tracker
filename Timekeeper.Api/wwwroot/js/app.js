@@ -13,6 +13,7 @@ let tasks = [];
 let entries = [];
 let selectedEntryIds = new Set(); // Track selected entry IDs for bulk operations
 let currentFilters = {}; // Track current column filters
+let sortState = { column: null, direction: 'asc' }; // Track sort state
 
 // Settings state (loaded from localStorage)
 let settings = {
@@ -38,9 +39,10 @@ function setupEventListeners() {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    // Timer controls
+    // Timer controls - task is now optional, so button is always enabled
     document.getElementById('timer-task-select').addEventListener('change', (e) => {
-        document.getElementById('start-timer-btn').disabled = !e.target.value;
+        // Button is now always enabled since task is optional
+        document.getElementById('start-timer-btn').disabled = false;
     });
     document.getElementById('timer-task-search').addEventListener('input', filterTaskOptions);
     document.getElementById('timer-task-search').addEventListener('focus', () => {
@@ -49,6 +51,7 @@ function setupEventListeners() {
     });
     document.getElementById('start-timer-btn').addEventListener('click', startTimer);
     document.getElementById('stop-timer-btn').addEventListener('click', stopTimer);
+    document.getElementById('change-task-btn').addEventListener('click', changeTimerTask);
 
     // Add buttons
     document.getElementById('add-customer-btn').addEventListener('click', () => showCustomerForm());
@@ -80,8 +83,11 @@ function setupEventListeners() {
     document.getElementById('export-csv-btn').addEventListener('click', () => exportData('csv'));
     document.getElementById('export-xlsx-btn').addEventListener('click', () => exportData('xlsx'));
     
-    // Column selector
-    document.getElementById('column-selector-btn').addEventListener('click', toggleColumnSelector);
+    // Column selectors for all tables
+    document.getElementById('column-selector-btn').addEventListener('click', (e) => toggleColumnSelector(e, 'entries-table'));
+    document.getElementById('customer-column-selector-btn').addEventListener('click', (e) => toggleColumnSelector(e, 'customers-table'));
+    document.getElementById('project-column-selector-btn').addEventListener('click', (e) => toggleColumnSelector(e, 'projects-table'));
+    document.getElementById('task-column-selector-btn').addEventListener('click', (e) => toggleColumnSelector(e, 'tasks-table'));
 
     // Reports
     document.getElementById('load-reports-btn').addEventListener('click', loadReports);
@@ -97,7 +103,7 @@ function setupEventListeners() {
         // Close column selector when clicking outside
         const columnSelector = document.querySelector('.column-selector');
         if (columnSelector && !columnSelector.contains(e.target) && 
-            e.target.id !== 'column-selector-btn') {
+            !e.target.id.includes('column-selector-btn')) {
             columnSelector.remove();
         }
         
@@ -139,9 +145,29 @@ async function loadInitialData() {
         loadEntries()
     ]);
     populateFilters();
-    initializeColumnResizing();
-    loadColumnPreferences();
-    initializeColumnDragDrop();
+    
+    // Initialize features for entries table
+    initializeColumnResizing('entries-table');
+    loadColumnPreferences('entries-table');
+    initializeColumnDragDrop('entries-table');
+    initializeColumnSorting('entries-table');
+    
+    // Initialize features for other tables
+    initializeColumnResizing('customers-table');
+    loadColumnPreferences('customers-table');
+    initializeColumnDragDrop('customers-table');
+    initializeColumnSorting('customers-table');
+    
+    initializeColumnResizing('projects-table');
+    loadColumnPreferences('projects-table');
+    initializeColumnDragDrop('projects-table');
+    initializeColumnSorting('projects-table');
+    
+    initializeColumnResizing('tasks-table');
+    loadColumnPreferences('tasks-table');
+    initializeColumnDragDrop('tasks-table');
+    initializeColumnSorting('tasks-table');
+    
     initializeContextMenu();
 }
 
@@ -171,18 +197,34 @@ async function checkRunningTimer() {
 
 function showRunningTimer(timer) {
     currentTimer = timer;
-    document.getElementById('start-timer-form').style.display = 'none';
+    // Keep the start form visible but change button visibility
+    document.getElementById('start-timer-form').style.display = 'block';
+    document.getElementById('start-timer-btn').style.display = 'none';
+    document.getElementById('change-task-btn').style.display = 'inline-block';
     document.getElementById('stop-timer-form').style.display = 'block';
     document.getElementById('timer-info').style.display = 'block';
-    document.getElementById('running-task-name').textContent = timer.taskName;
-    document.getElementById('running-project-name').textContent = timer.projectName;
-    document.getElementById('running-customer-name').textContent = timer.customerName;
+    
+    // Update timer info display
+    document.getElementById('running-task-name').textContent = timer.taskName || 'No task selected';
+    document.getElementById('running-project-name').textContent = timer.projectName || 'N/A';
+    document.getElementById('running-customer-name').textContent = timer.customerName || 'N/A';
+    
+    // Set the current task in the selector if available
+    if (timer.taskId) {
+        document.getElementById('timer-task-select').value = timer.taskId;
+        // Also update the search box to show the task name
+        const searchBox = document.getElementById('timer-task-search');
+        searchBox.value = timer.taskName || '';
+    }
+    
     startTimerDisplay(new Date(timer.startTime));
 }
 
 function showStartTimerForm() {
     currentTimer = null;
     document.getElementById('start-timer-form').style.display = 'block';
+    document.getElementById('start-timer-btn').style.display = 'inline-block';
+    document.getElementById('change-task-btn').style.display = 'none';
     document.getElementById('stop-timer-form').style.display = 'none';
     document.getElementById('timer-info').style.display = 'none';
     stopTimerDisplay();
@@ -222,10 +264,16 @@ async function startTimer() {
     const notes = document.getElementById('timer-notes').value;
 
     try {
+        // Allow starting without a task (taskId can be null/empty)
+        const requestBody = { notes };
+        if (taskId) {
+            requestBody.taskId = parseInt(taskId);
+        }
+        
         const response = await fetch(`${API_BASE}/timeentries/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: parseInt(taskId), notes })
+            body: JSON.stringify(requestBody)
         });
 
         if (response.ok) {
@@ -270,6 +318,39 @@ async function stopTimer() {
         }
     } catch (error) {
         showError('Failed to stop timer');
+        console.error(error);
+    }
+}
+
+async function changeTimerTask() {
+    if (!currentTimer) return;
+
+    const taskId = document.getElementById('timer-task-select').value;
+    const notes = document.getElementById('timer-notes').value;
+
+    try {
+        // Update the running timer's task
+        const requestBody = { notes };
+        if (taskId) {
+            requestBody.taskId = parseInt(taskId);
+        }
+        
+        const response = await fetch(`${API_BASE}/timeentries/${currentTimer.id}/update`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (response.ok) {
+            const timer = await response.json();
+            showRunningTimer(timer);
+            showSuccess('Task updated successfully!');
+        } else {
+            const error = await response.text();
+            showError(error);
+        }
+    } catch (error) {
+        showError('Failed to update task');
         console.error(error);
     }
 }
@@ -427,13 +508,13 @@ function renderCustomers() {
     const tbody = document.getElementById('customers-tbody');
     tbody.innerHTML = customers.map(c => `
         <tr>
-            <td>${c.no || ''}</td>
-            <td>${c.name}</td>
-            <td>${c.description || ''}</td>
-            <td class="${c.isActive ? 'status-active' : 'status-inactive'}">
+            <td data-column="no">${c.no || ''}</td>
+            <td data-column="name">${c.name}</td>
+            <td data-column="description">${c.description || ''}</td>
+            <td data-column="status" class="${c.isActive ? 'status-active' : 'status-inactive'}">
                 ${c.isActive ? 'Active' : 'Inactive'}
             </td>
-            <td>
+            <td data-column="actions">
                 <button class="btn btn-secondary btn-sm" onclick="editCustomer(${c.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteCustomer(${c.id})">Delete</button>
             </td>
@@ -445,14 +526,14 @@ function renderProjects() {
     const tbody = document.getElementById('projects-tbody');
     tbody.innerHTML = projects.map(p => `
         <tr>
-            <td>${p.no || ''}</td>
-            <td>${p.name}</td>
-            <td>${p.customerName}</td>
-            <td>${p.description || ''}</td>
-            <td class="${p.isActive ? 'status-active' : 'status-inactive'}">
+            <td data-column="no">${p.no || ''}</td>
+            <td data-column="name">${p.name}</td>
+            <td data-column="customer">${p.customerName}</td>
+            <td data-column="description">${p.description || ''}</td>
+            <td data-column="status" class="${p.isActive ? 'status-active' : 'status-inactive'}">
                 ${p.isActive ? 'Active' : 'Inactive'}
             </td>
-            <td>
+            <td data-column="actions">
                 <button class="btn btn-secondary btn-sm" onclick="editProject(${p.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteProject(${p.id})">Delete</button>
             </td>
@@ -464,16 +545,16 @@ function renderTasks() {
     const tbody = document.getElementById('tasks-tbody');
     tbody.innerHTML = tasks.map(t => `
         <tr>
-            <td>${t.position || ''}</td>
-            <td>${t.name}</td>
-            <td>${t.projectName}</td>
-            <td>${t.customerName}</td>
-            <td>${t.procurementNumber || ''}</td>
-            <td>${t.description || ''}</td>
-            <td class="${t.isActive ? 'status-active' : 'status-inactive'}">
+            <td data-column="position">${t.position || ''}</td>
+            <td data-column="name">${t.name}</td>
+            <td data-column="project">${t.projectName}</td>
+            <td data-column="customer">${t.customerName}</td>
+            <td data-column="procurementNo">${t.procurementNumber || ''}</td>
+            <td data-column="description">${t.description || ''}</td>
+            <td data-column="status" class="${t.isActive ? 'status-active' : 'status-inactive'}">
                 ${t.isActive ? 'Active' : 'Inactive'}
             </td>
-            <td>
+            <td data-column="actions">
                 <button class="btn btn-secondary btn-sm" onclick="editTask(${t.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteTask(${t.id})">Delete</button>
             </td>
@@ -1547,8 +1628,8 @@ function downloadTemplate() {
 }
 
 // Column resizing functionality
-function initializeColumnResizing() {
-    const table = document.getElementById('entries-table');
+function initializeColumnResizing(tableId = 'entries-table') {
+    const table = document.getElementById(tableId);
     if (!table) return;
     
     const headers = table.querySelectorAll('th.resizable');
@@ -1579,7 +1660,7 @@ function initializeColumnResizing() {
                 document.body.style.cursor = '';
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);
-                saveColumnWidths();
+                saveColumnWidths(tableId);
             };
             
             document.addEventListener('mousemove', onMouseMove);
@@ -1589,7 +1670,7 @@ function initializeColumnResizing() {
 }
 
 // Column visibility toggle
-function toggleColumnSelector(e) {
+function toggleColumnSelector(e, tableId = 'entries-table') {
     // Remove existing selector if open
     const existing = document.querySelector('.column-selector');
     if (existing) {
@@ -1597,25 +1678,23 @@ function toggleColumnSelector(e) {
         return;
     }
     
-    const columns = [
-        { name: 'select', label: 'Select', fixed: true },
-        { name: 'customer', label: 'Customer' },
-        { name: 'project', label: 'Project' },
-        { name: 'task', label: 'Task' },
-        { name: 'startTime', label: 'Start Time' },
-        { name: 'endTime', label: 'End Time' },
-        { name: 'duration', label: 'Duration' },
-        { name: 'billedDuration', label: 'Billed Duration' },
-        { name: 'notes', label: 'Notes' },
-        { name: 'actions', label: 'Actions', fixed: true }
-    ];
+    // Get columns from the table header
+    const table = document.getElementById(tableId);
+    const headers = table.querySelectorAll('th[data-column]');
+    const columns = Array.from(headers).map(h => ({
+        name: h.getAttribute('data-column'),
+        label: h.textContent.replace(/[▲▼]/g, '').trim(),
+        fixed: h.getAttribute('data-column') === 'actions'
+    }));
     
     const selector = document.createElement('div');
     selector.className = 'column-selector';
+    selector.setAttribute('data-table-id', tableId);
     
-    const hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
+    const hiddenColumns = JSON.parse(localStorage.getItem(`${tableId}-hiddenColumns`) || '[]');
     
-    selector.innerHTML = columns.map(col => {
+    let selectorHtml = '<div class="column-selector-header"><h4>Column Visibility</h4></div>';
+    selectorHtml += columns.map(col => {
         const isHidden = hiddenColumns.includes(col.name);
         const disabled = col.fixed ? 'disabled' : '';
         return `
@@ -1623,11 +1702,15 @@ function toggleColumnSelector(e) {
                 <input type="checkbox" value="${col.name}" 
                     ${!isHidden ? 'checked' : ''} 
                     ${disabled}
-                    onchange="toggleColumnVisibility('${col.name}', this.checked)">
+                    onchange="toggleColumnVisibility('${tableId}', '${col.name}', this.checked)">
                 ${col.label}
             </label>
         `;
     }).join('');
+    
+    selectorHtml += `<div class="column-selector-footer"><button class="btn btn-secondary btn-sm" onclick="resetColumnSettings('${tableId}')">Reset to Default</button></div>`;
+    
+    selector.innerHTML = selectorHtml;
     
     // Position the selector
     const button = e.target;
@@ -1639,8 +1722,8 @@ function toggleColumnSelector(e) {
     document.body.appendChild(selector);
 }
 
-function toggleColumnVisibility(columnName, visible) {
-    const table = document.getElementById('entries-table');
+function toggleColumnVisibility(tableId, columnName, visible) {
+    const table = document.getElementById(tableId);
     const headers = table.querySelectorAll(`th[data-column="${columnName}"]`);
     const cells = table.querySelectorAll(`td[data-column="${columnName}"]`);
     
@@ -1661,7 +1744,7 @@ function toggleColumnVisibility(columnName, visible) {
     });
     
     // Save preferences
-    let hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
+    let hiddenColumns = JSON.parse(localStorage.getItem(`${tableId}-hiddenColumns`) || '[]');
     if (visible) {
         hiddenColumns = hiddenColumns.filter(c => c !== columnName);
     } else {
@@ -1669,30 +1752,30 @@ function toggleColumnVisibility(columnName, visible) {
             hiddenColumns.push(columnName);
         }
     }
-    localStorage.setItem('hiddenColumns', JSON.stringify(hiddenColumns));
+    localStorage.setItem(`${tableId}-hiddenColumns`, JSON.stringify(hiddenColumns));
 }
 
-function loadColumnPreferences() {
-    const hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
+function loadColumnPreferences(tableId = 'entries-table') {
+    const hiddenColumns = JSON.parse(localStorage.getItem(`${tableId}-hiddenColumns`) || '[]');
     hiddenColumns.forEach(columnName => {
-        toggleColumnVisibility(columnName, false);
+        toggleColumnVisibility(tableId, columnName, false);
     });
     
     // Load column widths
-    const columnWidths = JSON.parse(localStorage.getItem('columnWidths') || '{}');
+    const columnWidths = JSON.parse(localStorage.getItem(`${tableId}-columnWidths`) || '{}');
     Object.keys(columnWidths).forEach(columnName => {
-        const header = document.querySelector(`th[data-column="${columnName}"]`);
+        const header = document.querySelector(`#${tableId} th[data-column="${columnName}"]`);
         if (header) {
             header.style.width = columnWidths[columnName];
             header.style.minWidth = columnWidths[columnName];
         }
     });
     
-    loadColumnOrder();
+    loadColumnOrder(tableId);
 }
 
-function saveColumnWidths() {
-    const table = document.getElementById('entries-table');
+function saveColumnWidths(tableId) {
+    const table = document.getElementById(tableId);
     const headers = table.querySelectorAll('th[data-column]');
     const widths = {};
     
@@ -1703,7 +1786,124 @@ function saveColumnWidths() {
         }
     });
     
-    localStorage.setItem('columnWidths', JSON.stringify(widths));
+    localStorage.setItem(`${tableId}-columnWidths`, JSON.stringify(widths));
+}
+
+function resetColumnSettings(tableId) {
+    // Clear all column preferences for this table
+    localStorage.removeItem(`${tableId}-hiddenColumns`);
+    localStorage.removeItem(`${tableId}-columnWidths`);
+    localStorage.removeItem(`${tableId}-columnOrder`);
+    
+    // Close the column selector
+    const selector = document.querySelector('.column-selector');
+    if (selector) {
+        selector.remove();
+    }
+    
+    // Reload the page to reset columns to default
+    location.reload();
+}
+
+// Column sorting functionality
+function initializeColumnSorting(tableId = 'entries-table') {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th[data-column]');
+    headers.forEach(header => {
+        const columnName = header.getAttribute('data-column');
+        // Skip non-sortable columns
+        if (columnName === 'select' || columnName === 'actions') return;
+        
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', (e) => {
+            // Don't sort if clicking on resize handle or checkbox
+            if (e.target.classList.contains('resize-handle') || 
+                e.target.type === 'checkbox' ||
+                header.draggable) return;
+            
+            sortEntriesByColumn(columnName);
+        });
+    });
+}
+
+function sortEntriesByColumn(columnName) {
+    // Toggle direction if clicking same column
+    if (sortState.column === columnName) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.column = columnName;
+        sortState.direction = 'asc';
+    }
+    
+    // Sort the entries array
+    entries.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(columnName) {
+            case 'customer':
+                aVal = a.customerName?.toLowerCase() || '';
+                bVal = b.customerName?.toLowerCase() || '';
+                break;
+            case 'project':
+                aVal = a.projectName?.toLowerCase() || '';
+                bVal = b.projectName?.toLowerCase() || '';
+                break;
+            case 'task':
+                aVal = a.taskName?.toLowerCase() || '';
+                bVal = b.taskName?.toLowerCase() || '';
+                break;
+            case 'startTime':
+                aVal = new Date(a.startTime);
+                bVal = new Date(b.startTime);
+                break;
+            case 'endTime':
+                aVal = a.endTime ? new Date(a.endTime) : new Date(0);
+                bVal = b.endTime ? new Date(b.endTime) : new Date(0);
+                break;
+            case 'duration':
+                aVal = a.durationMinutes || 0;
+                bVal = b.durationMinutes || 0;
+                break;
+            case 'billedDuration':
+                aVal = a.billedDurationMinutes || 0;
+                bVal = b.billedDurationMinutes || 0;
+                break;
+            case 'notes':
+                aVal = a.notes?.toLowerCase() || '';
+                bVal = b.notes?.toLowerCase() || '';
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return sortState.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortState.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    // Update sort indicators in headers
+    updateSortIndicators(columnName);
+    
+    // Re-render the table
+    renderEntries();
+}
+
+function updateSortIndicators(activeColumn) {
+    const table = document.getElementById('entries-table');
+    const headers = table.querySelectorAll('th[data-column]');
+    
+    headers.forEach(header => {
+        const columnName = header.getAttribute('data-column');
+        // Remove existing sort indicators
+        header.classList.remove('sort-asc', 'sort-desc');
+        
+        // Add indicator to active column
+        if (columnName === activeColumn) {
+            header.classList.add(`sort-${sortState.direction}`);
+        }
+    });
 }
 
 // Inline editing for billed duration

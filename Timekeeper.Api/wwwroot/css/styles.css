@@ -942,3 +942,39 @@ body.dark-mode .column-selector label:hover {
 body.dark-mode .task-option-path {
     color: #a0a0a0;
 }
+/* Column sorting indicators */
+th[data-column].sort-asc::after {
+    content: ' ▲';
+    font-size: 0.8em;
+    color: #667eea;
+}
+
+th[data-column].sort-desc::after {
+    content: ' ▼';
+    font-size: 0.8em;
+    color: #667eea;
+}
+
+/* Column selector header and footer */
+.column-selector-header {
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 8px;
+}
+
+.column-selector-header h4 {
+    margin: 0;
+    font-size: 1em;
+}
+
+.column-selector-footer {
+    padding: 8px;
+    border-top: 1px solid #ddd;
+    margin-top: 8px;
+    text-align: center;
+}
+
+body.dark-mode .column-selector-header,
+body.dark-mode .column-selector-footer {
+    border-color: #3a3a4f;
+}

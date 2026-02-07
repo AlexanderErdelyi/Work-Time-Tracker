@@ -22,7 +22,7 @@ public class TimeEntryService : ITimeEntryService
             .FirstOrDefaultAsync(e => e.EndTime == null);
     }
 
-    public async Task<TimeEntry> StartTimerAsync(int taskId, string? notes = null)
+    public async Task<TimeEntry> StartTimerAsync(int? taskId, string? notes = null)
     {
         var runningEntry = await GetRunningEntryAsync();
         if (runningEntry != null)
@@ -30,10 +30,14 @@ public class TimeEntryService : ITimeEntryService
             throw new InvalidOperationException("A timer is already running. Stop it before starting a new one.");
         }
 
-        var task = await _context.Tasks.FindAsync(taskId);
-        if (task == null)
+        // Task is now optional
+        if (taskId.HasValue)
         {
-            throw new ArgumentException($"Task with ID {taskId} not found.", nameof(taskId));
+            var task = await _context.Tasks.FindAsync(taskId.Value);
+            if (task == null)
+            {
+                throw new ArgumentException($"Task with ID {taskId} not found.", nameof(taskId));
+            }
         }
 
         var entry = new TimeEntry
@@ -46,11 +50,17 @@ public class TimeEntryService : ITimeEntryService
         _context.TimeEntries.Add(entry);
         await _context.SaveChangesAsync();
 
-        return await _context.TimeEntries
-            .Include(e => e.Task)
-                .ThenInclude(t => t.Project)
-                    .ThenInclude(p => p.Customer)
-            .FirstAsync(e => e.Id == entry.Id);
+        // Reload with includes only if task exists
+        if (taskId.HasValue)
+        {
+            return await _context.TimeEntries
+                .Include(e => e.Task)
+                    .ThenInclude(t => t.Project)
+                        .ThenInclude(p => p.Customer)
+                .FirstAsync(e => e.Id == entry.Id);
+        }
+        
+        return entry;
     }
 
     public async Task<TimeEntry> StopTimerAsync(int entryId)
