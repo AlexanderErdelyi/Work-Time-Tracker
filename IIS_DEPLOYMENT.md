@@ -160,10 +160,12 @@ To view logs:
 2. Open the most recent log file
 3. Look for errors or startup messages
 
-Enable detailed logging by editing `web.config`:
+**Troubleshooting Only**: Enable detailed logging temporarily by editing `web.config`:
 ```xml
 <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Development" />
 ```
+
+**⚠️ SECURITY WARNING**: Development mode exposes detailed error messages that could reveal sensitive information. **ONLY use this temporarily for troubleshooting**, then change it back to "Production" immediately after debugging!
 
 ## HTTPS Configuration
 
@@ -343,10 +345,15 @@ Invoke-RestMethod -Uri "https://api.ipify.org"
 
 **Solution**:
 1. Check `logs\stdout` folder for error messages
-2. Enable detailed errors in `web.config`:
+2. **Temporary Troubleshooting**: Enable detailed errors in `web.config`:
    ```xml
    <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Development" />
    ```
+   **⚠️ IMPORTANT**: After troubleshooting, change it back to `Production`:
+   ```xml
+   <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
+   ```
+   Development mode exposes sensitive error information!
 3. Restart site and try again
 4. Check Windows Event Viewer → Application logs
 

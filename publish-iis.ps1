@@ -140,11 +140,11 @@ If using custom port (e.g., 8080):
 #### Option B: HTTPS with Self-Signed Certificate (Recommended)
 
 1. **Create Self-Signed Certificate** (run in PowerShell as Administrator):
-   ``````powershell
-   `$cert = New-SelfSignedCertificate -DnsName "timekeeper.local" -CertStoreLocation "cert:\LocalMachine\My" -NotAfter (Get-Date).AddYears(5)
-   `$certThumbprint = `$cert.Thumbprint
-   Write-Host "Certificate created with thumbprint: `$certThumbprint"
-   ``````
+   ```powershell
+   $cert = New-SelfSignedCertificate -DnsName "timekeeper.local" -CertStoreLocation "cert:\LocalMachine\My" -NotAfter (Get-Date).AddYears(5)
+   $certThumbprint = $cert.Thumbprint
+   Write-Host "Certificate created with thumbprint: $certThumbprint"
+   ```
 
 2. **Add HTTPS binding in IIS**:
    - Open IIS Manager → Select your site
@@ -155,9 +155,9 @@ If using custom port (e.g., 8080):
    - Click **OK**
 
 3. **Configure Firewall**:
-   ``````powershell
+   ```powershell
    netsh advfirewall firewall add rule name="Timekeeper HTTPS" dir=in action=allow protocol=TCP localport=443
-   ``````
+   ```
 
 4. **Access from browser**:
    - Navigate to: ``https://your-server-ip``
@@ -167,10 +167,10 @@ If using custom port (e.g., 8080):
 
 5. **Optional: Add certificate to client computers** (eliminates warnings):
    - Export certificate from server:
-     ``````powershell
-     `$cert = Get-ChildItem -Path "cert:\LocalMachine\My" | Where-Object {`$_.Thumbprint -eq "`$certThumbprint"}
-     Export-Certificate -Cert `$cert -FilePath "C:\timekeeper-cert.cer"
-     ``````
+     ```powershell
+     $cert = Get-ChildItem -Path "cert:\LocalMachine\My" | Where-Object {$_.Thumbprint -eq "$certThumbprint"}
+     Export-Certificate -Cert $cert -FilePath "C:\timekeeper-cert.cer"
+     ```
    - Copy ``timekeeper-cert.cer`` to client computers
    - Double-click → Install Certificate
    - Store Location: **Local Machine**
