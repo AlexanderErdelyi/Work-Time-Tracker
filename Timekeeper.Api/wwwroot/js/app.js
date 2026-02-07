@@ -13,6 +13,7 @@ let tasks = [];
 let entries = [];
 let selectedEntryIds = new Set(); // Track selected entry IDs for bulk operations
 let currentFilters = {}; // Track current column filters
+let sortState = { column: null, direction: 'asc' }; // Track sort state
 
 // Settings state (loaded from localStorage)
 let settings = {
@@ -144,6 +145,7 @@ async function loadInitialData() {
     initializeColumnResizing();
     loadColumnPreferences();
     initializeColumnDragDrop();
+    initializeColumnSorting();
     initializeContextMenu();
 }
 
@@ -1672,7 +1674,8 @@ function toggleColumnSelector(e) {
     
     const hiddenColumns = JSON.parse(localStorage.getItem('hiddenColumns') || '[]');
     
-    selector.innerHTML = columns.map(col => {
+    let selectorHtml = '<div class="column-selector-header"><h4>Column Visibility</h4></div>';
+    selectorHtml += columns.map(col => {
         const isHidden = hiddenColumns.includes(col.name);
         const disabled = col.fixed ? 'disabled' : '';
         return `
@@ -1685,6 +1688,10 @@ function toggleColumnSelector(e) {
             </label>
         `;
     }).join('');
+    
+    selectorHtml += '<div class="column-selector-footer"><button class="btn btn-secondary btn-sm" onclick="resetColumnSettings()">Reset to Default</button></div>';
+    
+    selector.innerHTML = selectorHtml;
     
     // Position the selector
     const button = e.target;
@@ -1761,6 +1768,123 @@ function saveColumnWidths() {
     });
     
     localStorage.setItem('columnWidths', JSON.stringify(widths));
+}
+
+function resetColumnSettings() {
+    // Clear all column preferences
+    localStorage.removeItem('hiddenColumns');
+    localStorage.removeItem('columnWidths');
+    localStorage.removeItem('columnOrder');
+    
+    // Close the column selector
+    const selector = document.querySelector('.column-selector');
+    if (selector) {
+        selector.remove();
+    }
+    
+    // Reload the page to reset columns to default
+    location.reload();
+}
+
+// Column sorting functionality
+function initializeColumnSorting() {
+    const table = document.getElementById('entries-table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th[data-column]');
+    headers.forEach(header => {
+        const columnName = header.getAttribute('data-column');
+        // Skip non-sortable columns
+        if (columnName === 'select' || columnName === 'actions') return;
+        
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', (e) => {
+            // Don't sort if clicking on resize handle or checkbox
+            if (e.target.classList.contains('resize-handle') || 
+                e.target.type === 'checkbox' ||
+                header.draggable) return;
+            
+            sortEntriesByColumn(columnName);
+        });
+    });
+}
+
+function sortEntriesByColumn(columnName) {
+    // Toggle direction if clicking same column
+    if (sortState.column === columnName) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.column = columnName;
+        sortState.direction = 'asc';
+    }
+    
+    // Sort the entries array
+    entries.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(columnName) {
+            case 'customer':
+                aVal = a.customerName?.toLowerCase() || '';
+                bVal = b.customerName?.toLowerCase() || '';
+                break;
+            case 'project':
+                aVal = a.projectName?.toLowerCase() || '';
+                bVal = b.projectName?.toLowerCase() || '';
+                break;
+            case 'task':
+                aVal = a.taskName?.toLowerCase() || '';
+                bVal = b.taskName?.toLowerCase() || '';
+                break;
+            case 'startTime':
+                aVal = new Date(a.startTime);
+                bVal = new Date(b.startTime);
+                break;
+            case 'endTime':
+                aVal = a.endTime ? new Date(a.endTime) : new Date(0);
+                bVal = b.endTime ? new Date(b.endTime) : new Date(0);
+                break;
+            case 'duration':
+                aVal = a.durationMinutes || 0;
+                bVal = b.durationMinutes || 0;
+                break;
+            case 'billedDuration':
+                aVal = a.billedDurationMinutes || 0;
+                bVal = b.billedDurationMinutes || 0;
+                break;
+            case 'notes':
+                aVal = a.notes?.toLowerCase() || '';
+                bVal = b.notes?.toLowerCase() || '';
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return sortState.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortState.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    // Update sort indicators in headers
+    updateSortIndicators(columnName);
+    
+    // Re-render the table
+    renderEntries();
+}
+
+function updateSortIndicators(activeColumn) {
+    const table = document.getElementById('entries-table');
+    const headers = table.querySelectorAll('th[data-column]');
+    
+    headers.forEach(header => {
+        const columnName = header.getAttribute('data-column');
+        // Remove existing sort indicators
+        header.classList.remove('sort-asc', 'sort-desc');
+        
+        // Add indicator to active column
+        if (columnName === activeColumn) {
+            header.classList.add(`sort-${sortState.direction}`);
+        }
+    });
 }
 
 // Inline editing for billed duration
