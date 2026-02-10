@@ -95,14 +95,16 @@
                         <thead>
                             <tr>
                                 <th data-column="select" class="resizable"><input type="checkbox" id="select-all-entries"><div class="resize-handle"></div></th>
-                                <th data-column="customer" class="resizable">Customer<div class="resize-handle"></div></th>
-                                <th data-column="project" class="resizable">Project<div class="resize-handle"></div></th>
-                                <th data-column="task" class="resizable">Task<div class="resize-handle"></div></th>
                                 <th data-column="startTime" class="resizable">Start Time<div class="resize-handle"></div></th>
-                                <th data-column="endTime" class="resizable">End Time<div class="resize-handle"></div></th>
+                                <th data-column="projectNo" class="resizable">Project No<div class="resize-handle"></div></th>
+                                <th data-column="taskPosition" class="resizable">Task Position<div class="resize-handle"></div></th>
+                                <th data-column="taskProcurementNo" class="resizable">Task Procurement No<div class="resize-handle"></div></th>
+                                <th data-column="project" class="resizable">Project Name<div class="resize-handle"></div></th>
+                                <th data-column="task" class="resizable">Task Name<div class="resize-handle"></div></th>
+                                <th data-column="taskDescription" class="resizable">Task Description<div class="resize-handle"></div></th>
+                                <th data-column="notes" class="resizable">Note<div class="resize-handle"></div></th>
                                 <th data-column="duration" class="resizable">Duration<div class="resize-handle"></div></th>
                                 <th data-column="billedDuration" class="resizable">Billed Duration<div class="resize-handle"></div></th>
-                                <th data-column="notes" class="resizable">Notes<div class="resize-handle"></div></th>
                                 <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
                             </tr>
                         </thead>
@@ -130,7 +132,6 @@
                             <tr>
                                 <th data-column="no" class="resizable">No<div class="resize-handle"></div></th>
                                 <th data-column="name" class="resizable">Name<div class="resize-handle"></div></th>
-                                <th data-column="description" class="resizable">Description<div class="resize-handle"></div></th>
                                 <th data-column="status" class="resizable">Status<div class="resize-handle"></div></th>
                                 <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
                             </tr>
@@ -157,10 +158,9 @@
                     <table id="projects-table" class="data-table resizable-table">
                         <thead>
                             <tr>
-                                <th data-column="no" class="resizable">No<div class="resize-handle"></div></th>
-                                <th data-column="name" class="resizable">Name<div class="resize-handle"></div></th>
                                 <th data-column="customer" class="resizable">Customer<div class="resize-handle"></div></th>
-                                <th data-column="description" class="resizable">Description<div class="resize-handle"></div></th>
+                                <th data-column="no" class="resizable">Project No<div class="resize-handle"></div></th>
+                                <th data-column="name" class="resizable">Project Name<div class="resize-handle"></div></th>
                                 <th data-column="status" class="resizable">Status<div class="resize-handle"></div></th>
                                 <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
                             </tr>
@@ -189,12 +189,13 @@
                     <table id="tasks-table" class="data-table resizable-table">
                         <thead>
                             <tr>
-                                <th data-column="position" class="resizable">Position<div class="resize-handle"></div></th>
-                                <th data-column="name" class="resizable">Name<div class="resize-handle"></div></th>
-                                <th data-column="project" class="resizable">Project<div class="resize-handle"></div></th>
                                 <th data-column="customer" class="resizable">Customer<div class="resize-handle"></div></th>
+                                <th data-column="project" class="resizable">Project Name<div class="resize-handle"></div></th>
+                                <th data-column="projectNo" class="resizable">Project No<div class="resize-handle"></div></th>
+                                <th data-column="position" class="resizable">Position<div class="resize-handle"></div></th>
+                                <th data-column="name" class="resizable">Task Name<div class="resize-handle"></div></th>
                                 <th data-column="procurementNo" class="resizable">Procurement No<div class="resize-handle"></div></th>
-                                <th data-column="description" class="resizable">Description<div class="resize-handle"></div></th>
+                                <th data-column="description" class="resizable">Task Description<div class="resize-handle"></div></th>
                                 <th data-column="status" class="resizable">Status<div class="resize-handle"></div></th>
                                 <th data-column="actions" class="resizable">Actions<div class="resize-handle"></div></th>
                             </tr>
