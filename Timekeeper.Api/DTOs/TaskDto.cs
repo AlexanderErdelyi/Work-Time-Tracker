@@ -9,6 +9,7 @@ public class TaskDto
     public string? ProcurementNumber { get; set; }
     public int ProjectId { get; set; }
     public string ProjectName { get; set; } = string.Empty;
+    public string? ProjectNo { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }

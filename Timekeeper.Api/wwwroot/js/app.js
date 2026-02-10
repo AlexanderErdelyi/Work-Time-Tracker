@@ -510,7 +510,6 @@ function renderCustomers() {
         <tr>
             <td data-column="no">${c.no || ''}</td>
             <td data-column="name">${c.name}</td>
-            <td data-column="description">${c.description || ''}</td>
             <td data-column="status" class="${c.isActive ? 'status-active' : 'status-inactive'}">
                 ${c.isActive ? 'Active' : 'Inactive'}
             </td>
@@ -526,10 +525,9 @@ function renderProjects() {
     const tbody = document.getElementById('projects-tbody');
     tbody.innerHTML = projects.map(p => `
         <tr>
+            <td data-column="customer">${p.customerName}</td>
             <td data-column="no">${p.no || ''}</td>
             <td data-column="name">${p.name}</td>
-            <td data-column="customer">${p.customerName}</td>
-            <td data-column="description">${p.description || ''}</td>
             <td data-column="status" class="${p.isActive ? 'status-active' : 'status-inactive'}">
                 ${p.isActive ? 'Active' : 'Inactive'}
             </td>
@@ -545,10 +543,11 @@ function renderTasks() {
     const tbody = document.getElementById('tasks-tbody');
     tbody.innerHTML = tasks.map(t => `
         <tr>
+            <td data-column="customer">${t.customerName}</td>
+            <td data-column="project">${t.projectName}</td>
+            <td data-column="projectNo">${t.projectNo || ''}</td>
             <td data-column="position">${t.position || ''}</td>
             <td data-column="name">${t.name}</td>
-            <td data-column="project">${t.projectName}</td>
-            <td data-column="customer">${t.customerName}</td>
             <td data-column="procurementNo">${t.procurementNumber || ''}</td>
             <td data-column="description">${t.description || ''}</td>
             <td data-column="status" class="${t.isActive ? 'status-active' : 'status-inactive'}">
@@ -576,14 +575,16 @@ function renderEntries() {
             ondblclick="resumeTracking(${e.id}, ${e.taskId}, '${(e.notes || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${durationSeconds})"
             title="${isRunning ? 'Currently running' : 'Double-click to continue tracking this entry'}">
             <td data-column="select" onclick="event.stopPropagation()"><input type="checkbox" class="entry-checkbox" data-entry-id="${e.id}" ${isChecked ? 'checked' : ''}></td>
-            <td data-column="customer" tabindex="0">${e.customerName}</td>
-            <td data-column="project" tabindex="0">${e.projectName}</td>
-            <td data-column="task" tabindex="0">${e.taskName}</td>
             <td data-column="startTime">${formatDateTime(e.startTime)}</td>
-            <td data-column="endTime">${e.endTime ? formatDateTime(e.endTime) : '<span class="status-active">Running</span>'}</td>
+            <td data-column="projectNo" tabindex="0">${e.projectNo || ''}</td>
+            <td data-column="taskPosition" tabindex="0">${e.taskPosition || ''}</td>
+            <td data-column="taskProcurementNo" tabindex="0">${e.taskProcurementNumber || ''}</td>
+            <td data-column="project" tabindex="0">${e.projectName || ''}</td>
+            <td data-column="task" tabindex="0">${e.taskName || ''}</td>
+            <td data-column="taskDescription" tabindex="0">${e.taskDescription || ''}</td>
+            <td data-column="notes" tabindex="0">${e.notes || ''}</td>
             <td data-column="duration">${e.durationMinutes ? formatDuration(e.durationMinutes) : '-'}</td>
             <td data-column="billedDuration" class="editable-cell" onclick="editBilledDuration(event, ${e.id}, ${billedDuration !== null ? billedDuration : 0})" title="Click to edit">${billedDuration !== null ? formatDuration(billedDuration) : '-'}</td>
-            <td data-column="notes" tabindex="0">${e.notes || ''}</td>
             <td data-column="actions" onclick="event.stopPropagation()">
                 <button class="btn btn-secondary btn-sm" onclick="editEntry(${e.id})">Edit</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteEntry(${e.id})">Delete</button>
@@ -708,7 +709,6 @@ function showCustomerForm(customer = null) {
         <form id="customer-form">
             <input type="text" id="customer-no" class="form-control" placeholder="Customer No (optional)" value="${customer?.no || ''}">
             <input type="text" id="customer-name" class="form-control" placeholder="Customer Name" value="${customer?.name || ''}" required>
-            <textarea id="customer-description" class="form-control" placeholder="Description" rows="3">${customer?.description || ''}</textarea>
             ${isEdit ? `
                 <label>
                     <input type="checkbox" id="customer-active" ${customer.isActive ? 'checked' : ''}> Active
@@ -742,7 +742,6 @@ function showProjectForm(project = null) {
                     `<option value="${c.id}" ${project?.customerId === c.id ? 'selected' : ''}>${c.name}</option>`
                 ).join('')}
             </select>
-            <textarea id="project-description" class="form-control" placeholder="Description" rows="3">${project?.description || ''}</textarea>
             ${isEdit ? `
                 <label>
                     <input type="checkbox" id="project-active" ${project.isActive ? 'checked' : ''}> Active
@@ -831,8 +830,7 @@ function showEntryForm(entry = null) {
 async function saveCustomer(id = null) {
     const data = {
         no: document.getElementById('customer-no').value || null,
-        name: document.getElementById('customer-name').value,
-        description: document.getElementById('customer-description').value || null
+        name: document.getElementById('customer-name').value
     };
 
     if (id) {
@@ -866,8 +864,7 @@ async function saveProject(id = null) {
     const data = {
         no: document.getElementById('project-no').value || null,
         name: document.getElementById('project-name').value,
-        customerId: parseInt(document.getElementById('project-customer').value),
-        description: document.getElementById('project-description').value || null
+        customerId: parseInt(document.getElementById('project-customer').value)
     };
 
     if (id) {
