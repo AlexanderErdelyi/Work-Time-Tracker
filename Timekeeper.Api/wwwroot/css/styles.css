@@ -411,7 +411,7 @@ header p {
     padding: 12px 28px;
     border: none;
     border-radius: 10px;
-    font-size: 0.95em;
+    font-size: 0.85em;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-weight: 600;
@@ -419,7 +419,6 @@ header p {
     position: relative;
     overflow: hidden;
     text-transform: uppercase;
-    font-size: 0.85em;
 }
 
 .btn::before {
@@ -712,12 +711,12 @@ header p {
         bottom: auto;
         top: 80px;
         right: 10px;
-        min-width: 280px;
-        max-width: 280px;
+        min-width: 300px;
+        max-width: 300px;
     }
     
     .summary-toggle.active {
-        right: 300px;
+        right: 320px;
     }
 }
 
