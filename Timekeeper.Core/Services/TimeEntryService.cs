@@ -106,6 +106,42 @@ public class TimeEntryService : ITimeEntryService
         return entry;
     }
 
+    public async Task<TimeEntry> ResumeTimerAsync(int entryId)
+    {
+        // Check for already running timer
+        var runningEntry = await GetRunningEntryAsync();
+        if (runningEntry != null && runningEntry.Id != entryId)
+        {
+            throw new InvalidOperationException(
+                $"Timer {runningEntry.Id} is already running. Stop it before resuming another.");
+        }
+
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == entryId);
+
+        if (entry == null)
+        {
+            throw new ArgumentException($"Time entry with ID {entryId} not found.");
+        }
+
+        if (!entry.EndTime.HasValue)
+        {
+            // Already running, just return it
+            return entry;
+        }
+
+        // Resume by clearing EndTime and BilledHours
+        entry.EndTime = null;
+        entry.BilledHours = null;
+        entry.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return entry;
+    }
+
     public async Task<bool> HasRunningTimerAsync()
     {
         return await _context.TimeEntries.AnyAsync(e => e.EndTime == null);

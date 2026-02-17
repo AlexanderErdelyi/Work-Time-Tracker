@@ -62,6 +62,18 @@ export function useCreateTimeEntry() {
   })
 }
 
+export function useResumeTimer() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.resume(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+    },
+  })
+}
+
 export function useUpdateTimeEntry() {
   const queryClient = useQueryClient()
   

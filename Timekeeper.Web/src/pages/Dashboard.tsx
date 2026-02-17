@@ -5,7 +5,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Badge } from '../components/ui/Badge'
 import { Play, Square, Clock, Search, Edit, RefreshCw } from 'lucide-react'
-import { useRunningTimer, useStartTimer, useStopTimer, useUpdateTimeEntry, useTimeEntries } from '../hooks/useTimeEntries'
+import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, useUpdateTimeEntry, useTimeEntries } from '../hooks/useTimeEntries'
 import { useTasks } from '../hooks/useTasks'
 import { useState, useEffect, useMemo } from 'react'
 import { calculateDuration, formatDurationHours } from '../lib/durationUtils'
@@ -18,6 +18,7 @@ export function Dashboard() {
   const { data: recentEntries = [] } = useTimeEntries({})
   const startTimer = useStartTimer()
   const stopTimer = useStopTimer()
+  const resumeTimer = useResumeTimer()
   const updateTimer = useUpdateTimeEntry()
   const [elapsed, setElapsed] = useState('00:00:00')
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>()
@@ -150,24 +151,18 @@ export function Dashboard() {
     setEditingNotes(false)
   }
 
-  const handleRestartTimer = (taskId?: number, entryNotes?: string) => {
+  const handleRestartTimer = (entryId: number) => {
     if (runningTimer) {
-      if (!confirm('A timer is already running. Stop it and start a new one?')) {
+      if (!confirm('A timer is already running. Stop it and resume this entry?')) {
         return
       }
       stopTimer.mutate(runningTimer.id, {
         onSuccess: () => {
-          startTimer.mutate({
-            taskId,
-            notes: entryNotes || 'Restarted timer'
-          })
+          resumeTimer.mutate(entryId)
         }
       })
     } else {
-      startTimer.mutate({
-        taskId,
-        notes: entryNotes || 'Restarted timer'
-      })
+      resumeTimer.mutate(entryId)
     }
   }
 
@@ -550,7 +545,7 @@ export function Dashboard() {
               {limitedRecentEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  onDoubleClick={() => handleRestartTimer(entry.taskId, entry.notes)}
+                  onDoubleClick={() => handleRestartTimer(entry.id)}
                   className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
                   title="Double-click to restart timer"
                 >
@@ -602,7 +597,7 @@ export function Dashboard() {
                       size="icon"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleRestartTimer(entry.taskId, entry.notes)
+                        handleRestartTimer(entry.id)
                       }}
                       title="Restart timer"
                     >

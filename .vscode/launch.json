@@ -1,0 +1,52 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Timekeeper (F5)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "echo 'Timekeeper is starting... Browser will open automatically at http://localhost:5173'",
+      "preLaunchTask": "launch-app",
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 1
+      }
+    },
+    {
+      "name": "Launch API Only",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "start-app",
+      "program": "${workspaceFolder}/Timekeeper.Api/bin/Debug/net8.0/Timekeeper.Api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/Timekeeper.Api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 2
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack Debug",
+      "configurations": ["Launch API Only", "Launch Timekeeper (F5)"],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 0
+      }
+    }
+  ]
+}

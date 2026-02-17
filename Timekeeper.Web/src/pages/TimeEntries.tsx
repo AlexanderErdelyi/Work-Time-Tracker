@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -9,6 +9,8 @@ import {
   type ColumnDef,
   type SortingState,
   type ColumnFiltersState,
+  type VisibilityState,
+  type ColumnOrderState,
 } from '@tanstack/react-table'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -28,6 +30,9 @@ import {
   Clock,
   Filter,
   X,
+  Settings,
+  GripVertical,
+  RotateCcw,
 } from 'lucide-react'
 import { 
   useTimeEntries, 
@@ -38,14 +43,62 @@ import { exportApi } from '../api'
 import type { TimeEntry } from '../types'
 import { formatDate } from '../lib/dateUtils'
 
+// Default column configuration
+const DEFAULT_COLUMN_ORDER: string[] = [
+  'select',
+  'startTime',
+  'customerName',
+  'projectName',
+  'taskName',
+  'taskProcurementNumber',
+  'notes',
+  'billedHours',
+  'actions',
+]
+
+const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
+  select: true,
+  startTime: true,
+  customerName: true,
+  projectName: true,
+  taskName: true,
+  taskProcurementNumber: true,
+  notes: true,
+  billedHours: true,
+  actions: true,
+}
+
 export function TimeEntries() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'startTime', desc: true }])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([ ])
   const [globalFilter, setGlobalFilter] = useState('')
   const [rowSelection, setRowSelection] = useState({})
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [showColumnSettings, setShowColumnSettings] = useState(false)
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+
+  // Load column visibility and order from localStorage
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    const saved = localStorage.getItem('timekeeper_columnVisibility')
+    return saved ? JSON.parse(saved) : DEFAULT_COLUMN_VISIBILITY
+  })
+
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => {
+    const saved = localStorage.getItem('timekeeper_columnOrder')
+    return saved ? JSON.parse(saved) : DEFAULT_COLUMN_ORDER
+  })
+
+  // Save column visibility to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('timekeeper_columnVisibility', JSON.stringify(columnVisibility))
+  }, [columnVisibility])
+
+  // Save column order to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('timekeeper_columnOrder', JSON.stringify(columnOrder))
+  }, [columnOrder])
 
   const { data: entries = [], isLoading } = useTimeEntries({})
   const deleteEntry = useDeleteTimeEntry()
@@ -92,6 +145,7 @@ export function TimeEntries() {
         ),
       },
       {
+        id: 'startTime',
         accessorKey: 'startTime',
         header: ({ column }) => {
           return (
@@ -121,6 +175,7 @@ export function TimeEntries() {
         ),
       },
       {
+        id: 'customerName',
         accessorKey: 'customerName',
         header: 'Customer',
         cell: ({ row }) => (
@@ -128,6 +183,7 @@ export function TimeEntries() {
         ),
       },
       {
+        id: 'projectName',
         accessorKey: 'projectName',
         header: 'Project',
         cell: ({ row }) => (
@@ -135,6 +191,7 @@ export function TimeEntries() {
         ),
       },
       {
+        id: 'taskName',
         accessorKey: 'taskName',
         header: 'Task',
         cell: ({ row }) => (
@@ -142,40 +199,27 @@ export function TimeEntries() {
         ),
       },
       {
-        accessorKey: 'durationMinutes',
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2 lg:px-3"
-            >
-              Duration
-              {column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : column.getIsSorted() === 'desc' ? (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronsUpDown className="ml-2 h-4 w-4" />
-              )}
-            </Button>
-          )
-        },
-        cell: ({ row }) => {
-          const minutes = row.original.durationMinutes || 0
-          const hours = Math.floor(minutes / 60)
-          const mins = Math.floor(minutes % 60)
-          return (
-            <Badge variant="outline" className="font-mono">
-              {hours}h {mins}m
-            </Badge>
-          )
-        },
+        id: 'taskProcurementNumber',
+        accessorKey: 'taskProcurementNumber',
+        header: 'Procurement',
+        cell: ({ row }) => (
+          <div className="max-w-[150px] truncate">{row.original.taskProcurementNumber || '—'}</div>
+        ),
       },
-      // Conditionally include BilledHours column
-      ...(isBillingEnabled ? [{
-        accessorKey: 'billedHours' as const,
-        header: ({ column }: any) => {
+      {
+        id: 'notes',
+        accessorKey: 'notes',
+        header: 'Notes',
+        cell: ({ row }) => (
+          <div className="max-w-[300px] truncate text-sm text-muted-foreground">
+            {row.original.notes || '—'}
+          </div>
+        ),
+      },
+      {
+        id: 'billedHours',
+        accessorKey: 'billedHours',
+        header: ({ column }) => {
           return (
             <Button
               variant="ghost"
@@ -193,7 +237,7 @@ export function TimeEntries() {
             </Button>
           )
         },
-        cell: ({ row }: any) => {
+        cell: ({ row }) => {
           const billed = row.original.billedHours
           if (billed == null) return <span className="text-muted-foreground">—</span>
           return (
@@ -202,15 +246,6 @@ export function TimeEntries() {
             </Badge>
           )
         },
-      }] : []),
-      {
-        accessorKey: 'notes',
-        header: 'Notes',
-        cell: ({ row }) => (
-          <div className="max-w-[300px] truncate text-sm text-muted-foreground">
-            {row.original.notes || '—'}
-          </div>
-        ),
       },
       {
         id: 'actions',
@@ -228,7 +263,7 @@ export function TimeEntries() {
         ),
       },
     ],
-    [isBillingEnabled]
+    []
   )
 
   const table = useReactTable({
@@ -239,12 +274,16 @@ export function TimeEntries() {
       columnFilters,
       globalFilter,
       rowSelection,
+      columnVisibility,
+      columnOrder,
     },
     enableRowSelection: (row) => !row.original.isRunning,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
+    onColumnOrderChange: setColumnOrder,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -255,6 +294,44 @@ export function TimeEntries() {
       },
     },
   })
+
+  const handleResetColumns = () => {
+    setColumnVisibility(DEFAULT_COLUMN_VISIBILITY)
+    setColumnOrder(DEFAULT_COLUMN_ORDER)
+  }
+
+  const handleToggleColumn = (columnId: string) => {
+    setColumnVisibility(prev => ({
+      ...prev,
+      [columnId]: !prev[columnId]
+    }))
+  }
+
+  const handleDragStart = (columnId: string) => {
+    setDraggedColumn(columnId)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleDrop = (targetColumnId: string) => {
+    if (!draggedColumn || draggedColumn === targetColumnId) return
+
+    setColumnOrder(prevOrder => {
+      const newOrder = [...prevOrder]
+      const draggedIndex = newOrder.indexOf(draggedColumn)
+      const targetIndex = newOrder.indexOf(targetColumnId)
+      
+      // Remove dragged column and insert at target position
+      newOrder.splice(draggedIndex, 1)
+      newOrder.splice(targetIndex, 0, draggedColumn)
+      
+      return newOrder
+    })
+    
+    setDraggedColumn(null)
+  }
 
   const handleDelete = async (id: number) => {
     if (confirm('Are you sure you want to delete this time entry?')) {
@@ -322,6 +399,14 @@ export function TimeEntries() {
           >
             <Filter className="h-4 w-4" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowColumnSettings(!showColumnSettings)}
+            className="gap-2"
+          >
+            <Settings className="h-4 w-4" />
+            Columns
           </Button>
           {selectedCount > 0 && (
             <Button
@@ -401,6 +486,102 @@ export function TimeEntries() {
                 Showing {filteredEntries.length} of {entries.length} entries
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Column Settings */}
+      {showColumnSettings && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Column Settings</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetColumns}
+                className="gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset to Default
+              </Button>
+            </div>
+            <CardDescription>
+              Toggle column visibility and drag to reorder columns
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Column Visibility */}
+            <div>
+              <h4 className="text-sm font-medium mb-3">Column Visibility</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {table.getAllColumns()
+                  .filter(col => col.id !== 'select' && col.id !== 'actions')
+                  .map(column => (
+                    <label
+                      key={column.id}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={columnVisibility[column.id] !== false}
+                        onChange={() => handleToggleColumn(column.id)}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm">
+                        {column.id === 'startTime' && 'Date & Time'}
+                        {column.id === 'customerName' && 'Customer'}
+                        {column.id === 'projectName' && 'Project'}
+                        {column.id === 'taskName' && 'Task'}
+                        {column.id === 'taskProcurementNumber' && 'Procurement'}
+                        {column.id === 'notes' && 'Notes'}
+                        {column.id === 'billedHours' && 'Billed Hours'}
+                      </span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+
+            {/* Column Order */}
+            <div>
+              <h4 className="text-sm font-medium mb-3">Column Order</h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                Drag and drop to reorder columns
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {columnOrder
+                  .filter(colId => colId !== 'select' && colId !== 'actions')
+                  .filter(colId => columnVisibility[colId] !== false)
+                  .map((columnId, index) => (
+                    <div
+                      key={columnId}
+                      draggable
+                      onDragStart={() => handleDragStart(columnId)}
+                      onDragOver={handleDragOver}
+                      onDrop={() => handleDrop(columnId)}
+                      className={`
+                        flex items-center gap-2 px-3 py-2 bg-accent rounded-md cursor-move
+                        transition-all hover:bg-accent/70 border
+                        ${draggedColumn === columnId ? 'opacity-50' : ''}
+                      `}
+                    >
+                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        {columnId === 'startTime' && 'Date & Time'}
+                        {columnId === 'customerName' && 'Customer'}
+                        {columnId === 'projectName' && 'Project'}
+                        {columnId === 'taskName' && 'Task'}
+                        {columnId === 'taskProcurementNumber' && 'Procurement'}
+                        {columnId === 'notes' && 'Notes'}
+                        {columnId === 'billedHours' && 'Billed Hours'}
+                      </span>
+                      <Badge variant="secondary" className="text-xs">
+                        {index + 1}
+                      </Badge>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

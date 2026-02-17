@@ -1,0 +1,17 @@
+{
+  "debug.openDebug": "openOnDebugBreak",
+  "debug.internalConsoleOptions": "neverOpen",
+  "debug.toolBarLocation": "docked",
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/node_modules": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/*.db": true
+  }
+}

@@ -264,6 +264,45 @@ public class TimeEntriesController : ControllerBase
         }
     }
 
+    [HttpPost("{id}/resume")]
+    public async Task<ActionResult<TimeEntryDto>> ResumeTimer(int id)
+    {
+        try
+        {
+            var entry = await _timeEntryService.ResumeTimerAsync(id);
+
+            return Ok(new TimeEntryDto
+            {
+                Id = entry.Id,
+                TaskId = entry.TaskId,
+                TaskName = entry.Task?.Name,
+                TaskDescription = entry.Task?.Description,
+                TaskPosition = entry.Task?.Position,
+                TaskProcurementNumber = entry.Task?.ProcurementNumber,
+                ProjectName = entry.Task?.Project?.Name,
+                ProjectNo = entry.Task?.Project?.No,
+                CustomerName = entry.Task?.Project?.Customer?.Name,
+                CustomerNo = entry.Task?.Project?.Customer?.No,
+                StartTime = entry.StartTime,
+                EndTime = entry.EndTime,
+                Notes = entry.Notes,
+                DurationMinutes = null,
+                BilledHours = entry.BilledHours,
+                IsRunning = true,
+                CreatedAt = entry.CreatedAt,
+                UpdatedAt = entry.UpdatedAt
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<TimeEntryDto>> CreateTimeEntry(CreateTimeEntryDto dto)
     {
@@ -345,19 +384,19 @@ public class TimeEntriesController : ControllerBase
         // Allow updating TaskId
         if (dto.TaskId.HasValue)
         {
-            // Verify task exists
-            var taskExists = await _context.Tasks.AnyAsync(t => t.Id == dto.TaskId.Value);
-            if (!taskExists)
+            // Verify task exists and load it with all relationships
+            var task = await _context.Tasks
+                .Include(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+                .FirstOrDefaultAsync(t => t.Id == dto.TaskId.Value);
+            
+            if (task == null)
             {
                 return BadRequest("Task not found");
             }
-            entry.TaskId = dto.TaskId.Value;
             
-            // Reload the entry with the new task relationship
-            await _context.Entry(entry).ReloadAsync();
-            await _context.Entry(entry).Reference(e => e.Task).LoadAsync();
-            await _context.Entry(entry.Task).Reference(t => t.Project).LoadAsync();
-            await _context.Entry(entry.Task.Project).Reference(p => p.Customer).LoadAsync();
+            entry.TaskId = dto.TaskId.Value;
+            entry.Task = task;
         }
 
         if (dto.StartTime.HasValue) entry.StartTime = dto.StartTime.Value;

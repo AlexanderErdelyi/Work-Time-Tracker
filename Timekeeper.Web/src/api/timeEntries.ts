@@ -52,6 +52,11 @@ export const timeEntriesApi = {
       method: 'POST',
     }),
 
+  resume: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/resume`, {
+      method: 'POST',
+    }),
+
   getDailyTotals: (params?: FilterParams) => {
     const query = params ? buildQueryString(params) : ''
     return fetchApi<DailyTotal[]>(`/timeentries/daily-totals${query}`)

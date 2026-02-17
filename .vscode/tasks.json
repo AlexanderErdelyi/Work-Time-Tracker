@@ -1,0 +1,132 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "stop-all-servers",
+      "type": "shell",
+      "command": "$port5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5000) { Stop-Process -Id $port5000 -Force -ErrorAction SilentlyContinue }; $port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5173) { Stop-Process -Id $port5173 -Force -ErrorAction SilentlyContinue }; $port5176 = Get-NetTCPConnection -LocalPort 5176 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5176) { Stop-Process -Id $port5176 -Force -ErrorAction SilentlyContinue }; Get-Process -Name 'Timekeeper.Api','node' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Write-Host 'All servers stopped (ports 5000, 5173, 5176)'",
+      "windows": {
+        "command": "$port5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5000) { Stop-Process -Id $port5000 -Force -ErrorAction SilentlyContinue }; $port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5173) { Stop-Process -Id $port5173 -Force -ErrorAction SilentlyContinue }; $port5176 = Get-NetTCPConnection -LocalPort 5176 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5176) { Stop-Process -Id $port5176 -Force -ErrorAction SilentlyContinue }; Get-Process -Name 'Timekeeper.Api','node' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Write-Host 'All servers stopped (ports 5000, 5173, 5176)'"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build-api",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/Timekeeper.Api/Timekeeper.Api.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "run-api",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/Timekeeper.Api/Timekeeper.Api.csproj"],
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Building.*$",
+          "endsPattern": "^.*Application started.*|^.*Now listening on.*|^.*Content root path.*$"
+        }
+      }
+    },
+    {
+      "label": "run-frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/Timekeeper.Web"
+      },
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*VITE.*$",
+          "endsPattern": "^.*Local:.*http://localhost:[0-9]+.*$"
+        }
+      }
+    },
+    {
+      "label": "start-app",
+      "dependsOn": ["stop-all-servers", "build-api"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "launch-app",
+      "dependsOn": ["start-app", "run-api", "run-frontend", "open-browser"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false
+      }
+    },
+    {
+      "label": "open-browser",
+      "type": "shell",
+      "command": "Start-Sleep -Seconds 5; Start-Process 'http://localhost:5173'",
+      "windows": {
+        "command": "Start-Sleep -Seconds 5; Start-Process 'http://localhost:5173'"
+      },
+      "presentation": {
+        "echo": false,
+        "reveal": "never",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    }
+  ]
+}
