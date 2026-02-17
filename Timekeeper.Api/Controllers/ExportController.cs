@@ -48,6 +48,29 @@ public class ExportController : ControllerBase
             $"timekeeper-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
     }
 
+    [HttpGet("today/csv")]
+    public async Task<IActionResult> ExportTodayCsv()
+    {
+        var today = DateTime.Today;
+        var tomorrow = today.AddDays(1);
+        var entries = await GetFilteredEntries(today, tomorrow, null, null, null);
+        var csv = _exportService.ExportToCsv(entries);
+
+        return File(csv, "text/csv", $"timekeeper-today-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    [HttpGet("today/xlsx")]
+    public async Task<IActionResult> ExportTodayXlsx()
+    {
+        var today = DateTime.Today;
+        var tomorrow = today.AddDays(1);
+        var entries = await GetFilteredEntries(today, tomorrow, null, null, null);
+        var xlsx = _exportService.ExportToXlsx(entries);
+
+        return File(xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+            $"timekeeper-today-{DateTime.UtcNow:yyyyMMdd}.xlsx");
+    }
+
     private async Task<List<TimeEntryDto>> GetFilteredEntries(
         DateTime? startDate,
         DateTime? endDate,

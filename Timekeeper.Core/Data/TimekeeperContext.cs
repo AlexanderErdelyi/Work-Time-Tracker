@@ -13,6 +13,9 @@ public class TimekeeperContext : DbContext
     public DbSet<Project> Projects { get; set; } = null!;
     public DbSet<TaskItem> Tasks { get; set; } = null!;
     public DbSet<TimeEntry> TimeEntries { get; set; } = null!;
+    public DbSet<Break> Breaks { get; set; } = null!;
+    public DbSet<WorkDay> WorkDays { get; set; } = null!;
+    public DbSet<QuickAction> QuickActions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +68,44 @@ public class TimekeeperContext : DbContext
 
             entity.HasOne(e => e.Task)
                 .WithMany(t => t.TimeEntries)
+                .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.WorkDay)
+                .WithMany(w => w.TimeEntries)
+                .HasForeignKey(e => e.WorkDayId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Break>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Notes).HasMaxLength(2000);
+            entity.HasIndex(e => e.StartTime);
+
+            entity.HasOne(e => e.WorkDay)
+                .WithMany(w => w.Breaks)
+                .HasForeignKey(e => e.WorkDayId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WorkDay>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Notes).HasMaxLength(2000);
+            entity.HasIndex(e => e.Date);
+            entity.HasIndex(e => e.CheckInTime);
+        });
+
+        modelBuilder.Entity<QuickAction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Icon).HasMaxLength(50);
+            entity.HasIndex(e => e.SortOrder);
+
+            entity.HasOne(e => e.Task)
+                .WithMany()
                 .HasForeignKey(e => e.TaskId)
                 .OnDelete(DeleteBehavior.Restrict);
         });

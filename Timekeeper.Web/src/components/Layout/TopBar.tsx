@@ -4,9 +4,11 @@ import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
 import { useRunningTimer } from '../../hooks/useTimeEntries'
 import { calculateDuration } from '../../lib/durationUtils'
+import { CommandPalette } from '../CommandPalette'
 
 export function TopBar() {
   const [darkMode, setDarkMode] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const { data: runningTimer } = useRunningTimer()
   const [elapsed, setElapsed] = useState('00:00:00')
 
@@ -22,6 +24,19 @@ export function TopBar() {
       document.documentElement.classList.remove('dark')
     }
     setDarkMode(isDark)
+  }, [])
+
+  useEffect(() => {
+    // Global keyboard shortcut for Command Palette
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setCommandPaletteOpen((open) => !open)
+      }
+    }
+
+    document.addEventListener('keydown', down)
+    return () => document.removeEventListener('keydown', down)
   }, [])
 
   useEffect(() => {
@@ -104,11 +119,17 @@ export function TopBar() {
           size="sm"
           className="gap-2"
           title="Command Palette (Ctrl+K)"
+          onClick={() => setCommandPaletteOpen(true)}
         >
           <Command className="h-4 w-4" />
           <span className="hidden sm:inline">Quick Actions</span>
         </Button>
       </div>
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
     </div>
   )
 }
