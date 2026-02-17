@@ -8,8 +8,12 @@ import { Tasks } from './pages/Tasks'
 import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
 import { WorkDays } from './pages/WorkDays'
+import { useNotifications } from './hooks/useNotifications'
 
 function App() {
+  // Initialize notification system
+  useNotifications();
+
   return (
     <BrowserRouter>
       <AppShell>

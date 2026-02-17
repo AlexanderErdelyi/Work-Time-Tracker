@@ -16,7 +16,9 @@ export function BreaksList() {
     return `${mins}m`;
   };
 
-  const totalBreakMinutes = breaks.reduce((sum, breakItem) => sum + breakItem.durationMinutes, 0);
+  // Ensure breaks is always an array
+  const breaksList = Array.isArray(breaks) ? breaks : [];
+  const totalBreakMinutes = breaksList.reduce((sum, breakItem) => sum + breakItem.durationMinutes, 0);
 
   return (
     <Card>
@@ -31,7 +33,7 @@ export function BreaksList() {
               Your break history for today
             </CardDescription>
           </div>
-          {breaks.length > 0 && (
+          {breaksList.length > 0 && (
             <div className="text-right">
               <div className="text-sm text-muted-foreground">Total</div>
               <div className="text-lg font-semibold">{formatDuration(totalBreakMinutes)}</div>
@@ -44,13 +46,13 @@ export function BreaksList() {
           <div className="text-center py-4 text-muted-foreground">
             Loading breaks...
           </div>
-        ) : breaks.length === 0 ? (
+        ) : breaksList.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             No breaks taken today
           </div>
         ) : (
           <div className="space-y-2">
-            {breaks.map((breakItem) => (
+            {breaksList.map((breakItem) => (
               <div
                 key={breakItem.id}
                 className="border rounded-lg p-3 flex items-center justify-between hover:bg-accent transition-colors"

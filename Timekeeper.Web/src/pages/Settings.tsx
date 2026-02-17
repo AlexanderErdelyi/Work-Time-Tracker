@@ -63,6 +63,21 @@ export function Settings() {
   const [reminderInterval, setReminderInterval] = useState(
     localStorage.getItem('timekeeper_reminderInterval') || '60'
   )
+  const [breakReminderEnabled, setBreakReminderEnabled] = useState(
+    localStorage.getItem('timekeeper_breakReminderEnabled') === 'true'
+  )
+  const [breakReminderInterval, setBreakReminderInterval] = useState(
+    localStorage.getItem('timekeeper_breakReminderInterval') || '120'
+  )
+  const [dailyGoalNotification, setDailyGoalNotification] = useState(
+    localStorage.getItem('timekeeper_dailyGoalNotification') === 'true'
+  )
+  const [continuousWorkAlert, setContinuousWorkAlert] = useState(
+    localStorage.getItem('timekeeper_continuousWorkAlert') === 'true'
+  )
+  const [continuousWorkDuration, setContinuousWorkDuration] = useState(
+    localStorage.getItem('timekeeper_continuousWorkDuration') || '240'
+  )
 
   const handleSaveUserSettings = () => {
     localStorage.setItem('timekeeper_userName', userName)
@@ -95,6 +110,17 @@ export function Settings() {
   const handleSaveNotificationSettings = () => {
     localStorage.setItem('timekeeper_notifications', enableNotifications.toString())
     localStorage.setItem('timekeeper_reminderInterval', reminderInterval)
+    localStorage.setItem('timekeeper_breakReminderEnabled', breakReminderEnabled.toString())
+    localStorage.setItem('timekeeper_breakReminderInterval', breakReminderInterval)
+    localStorage.setItem('timekeeper_dailyGoalNotification', dailyGoalNotification.toString())
+    localStorage.setItem('timekeeper_continuousWorkAlert', continuousWorkAlert.toString())
+    localStorage.setItem('timekeeper_continuousWorkDuration', continuousWorkDuration)
+    
+    // Request notification permission if enabling
+    if (enableNotifications && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+    
     alert('Notification settings saved!')
   }
 
@@ -384,16 +410,16 @@ export function Settings() {
             <Bell className="h-5 w-5" />
             <CardTitle>Notifications</CardTitle>
           </div>
-          <CardDescription>Configure notification preferences</CardDescription>
+          <CardDescription>Configure notification preferences and reminders</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="enableNotifications" className="text-base">
                 Enable Notifications
               </Label>
               <p className="text-sm text-muted-foreground">
-                Get reminders to track your time
+                Get browser notifications for tracking reminders and alerts
               </p>
             </div>
             <input
@@ -404,21 +430,114 @@ export function Settings() {
               className="h-6 w-6 rounded border-gray-300 cursor-pointer"
             />
           </div>
+          
           {enableNotifications && (
-            <div className="space-y-2">
-              <Label htmlFor="reminderInterval">Reminder Interval (minutes)</Label>
-              <Input
-                id="reminderInterval"
-                type="number"
-                value={reminderInterval}
-                onChange={(e) => setReminderInterval(e.target.value)}
-                placeholder="60"
-              />
-              <p className="text-xs text-muted-foreground">
-                How often to remind you to track time when no timer is running
-              </p>
+            <div className="space-y-6 pl-4 border-l-2 border-primary/20">
+              {/* Time Tracking Reminder */}
+              <div className="space-y-2">
+                <Label htmlFor="reminderInterval" className="text-base">Time Tracking Reminder</Label>
+                <Input
+                  id="reminderInterval"
+                  type="number"
+                  value={reminderInterval}
+                  onChange={(e) => setReminderInterval(e.target.value)}
+                  placeholder="60"
+                  min="5"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Remind to start tracking when no timer is running (minutes)
+                </p>
+              </div>
+
+              {/* Break Reminder */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="breakReminderEnabled" className="text-base">Break Reminders</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Get reminded to take breaks during work
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="breakReminderEnabled"
+                    checked={breakReminderEnabled}
+                    onChange={(e) => setBreakReminderEnabled(e.target.checked)}
+                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                  />
+                </div>
+                {breakReminderEnabled && (
+                  <div className="space-y-2 pl-4">
+                    <Label htmlFor="breakReminderInterval">Break Interval (minutes)</Label>
+                    <Input
+                      id="breakReminderInterval"
+                      type="number"
+                      value={breakReminderInterval}
+                      onChange={(e) => setBreakReminderInterval(e.target.value)}
+                      placeholder="120"
+                      min="15"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Suggest taking a break after this duration of continuous work
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Continuous Work Alert */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="continuousWorkAlert" className="text-base">Continuous Work Alert</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Alert when working too long without a break
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="continuousWorkAlert"
+                    checked={continuousWorkAlert}
+                    onChange={(e) => setContinuousWorkAlert(e.target.checked)}
+                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                  />
+                </div>
+                {continuousWorkAlert && (
+                  <div className="space-y-2 pl-4">
+                    <Label htmlFor="continuousWorkDuration">Alert Threshold (minutes)</Label>
+                    <Input
+                      id="continuousWorkDuration"
+                      type="number"
+                      value={continuousWorkDuration}
+                      onChange={(e) => setContinuousWorkDuration(e.target.value)}
+                      placeholder="240"
+                      min="60"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Alert if working this long without taking a break
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Daily Goal Notification */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="dailyGoalNotification" className="text-base">Daily Goal Notifications</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Notify when reaching daily work hour goals
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  id="dailyGoalNotification"
+                  checked={dailyGoalNotification}
+                  onChange={(e) => setDailyGoalNotification(e.target.checked)}
+                  className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                />
+              </div>
             </div>
           )}
+          
           <Button onClick={handleSaveNotificationSettings} className="gap-2">
             <Save className="h-4 w-4" />
             Save Notification Settings
