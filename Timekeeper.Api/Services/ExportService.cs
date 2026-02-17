@@ -15,13 +15,14 @@ public class ExportService : IExportService
     public byte[] ExportToCsv(IEnumerable<TimeEntryDto> entries)
     {
         var csv = new StringBuilder();
-        csv.AppendLine("Start Date,Project No,Task Position,Procurement No,Project Name,Task Name,Task Description,Description 2,Notes,Billed Duration (Hours)");
+        csv.AppendLine("Start Date,Project No,Task Position,Procurement No,Project Name,Task Name,Task Description,Description 2,Notes,Duration (Hours),Billed Hours");
 
         foreach (var entry in entries)
         {
             var startDate = entry.StartTime.ToString("yyyy-MM-dd");
-            var billedDuration = entry.DurationMinutes.HasValue ? (entry.DurationMinutes.Value / 60.0).ToString("F2") : "";
-            csv.AppendLine($"\"{startDate}\",\"{entry.ProjectNo ?? ""}\",\"{entry.TaskPosition ?? ""}\",\"{entry.TaskProcurementNumber ?? ""}\",\"{entry.ProjectName ?? ""}\",\"{entry.TaskName ?? ""}\",\"{entry.TaskDescription?.Replace("\"", "\"\"") ?? ""}\",\"\",\"{entry.Notes?.Replace("\"", "\"\"") ?? ""}\",\"{billedDuration}\"");
+            var duration = entry.DurationMinutes.HasValue ? (entry.DurationMinutes.Value / 60.0).ToString("F2") : "";
+            var billedHours = entry.BilledHours?.ToString("F2") ?? "";
+            csv.AppendLine($"\"{startDate}\",\"{entry.ProjectNo ?? ""}\",\"{entry.TaskPosition ?? ""}\",\"{entry.TaskProcurementNumber ?? ""}\",\"{entry.ProjectName ?? ""}\",\"{entry.TaskName ?? ""}\",\"{entry.TaskDescription?.Replace("\"", "\"\"\"") ?? ""}\",\"\",\"{entry.Notes?.Replace("\"", "\"\"\"") ?? ""}\",\"{duration}\",\"{billedHours}\"");
         }
 
         return Encoding.UTF8.GetBytes(csv.ToString());
@@ -41,9 +42,10 @@ public class ExportService : IExportService
         worksheet.Cell(1, 7).Value = "Task Description";
         worksheet.Cell(1, 8).Value = "Description 2";
         worksheet.Cell(1, 9).Value = "Notes";
-        worksheet.Cell(1, 10).Value = "Billed Duration (Hours)";
+        worksheet.Cell(1, 10).Value = "Duration (Hours)";
+        worksheet.Cell(1, 11).Value = "Billed Hours";
 
-        var headerRange = worksheet.Range(1, 1, 1, 10);
+        var headerRange = worksheet.Range(1, 1, 1, 11);
         headerRange.Style.Font.Bold = true;
         headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
 
@@ -68,6 +70,8 @@ public class ExportService : IExportService
             {
                 worksheet.Cell(row, 10).Value = "";
             }
+            
+            worksheet.Cell(row, 11).Value = entry.BilledHours?.ToString("F2") ?? "";
 
             row++;
         }

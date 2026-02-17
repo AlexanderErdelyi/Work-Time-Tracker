@@ -31,6 +31,20 @@ export function Settings() {
     localStorage.getItem('timekeeper_dailyTarget') || '8'
   )
 
+  // Billing Settings
+  const [enableBilling, setEnableBilling] = useState(
+    localStorage.getItem('timekeeper_enableBilling') === 'true'
+  )
+  const [roundingThreshold, setRoundingThreshold] = useState(
+    localStorage.getItem('timekeeper_roundingThreshold') || '3'
+  )
+  const [billingIncrement, setBillingIncrement] = useState(
+    localStorage.getItem('timekeeper_billingIncrement') || '0.25'
+  )
+  const [recentEntriesCount, setRecentEntriesCount] = useState(
+    localStorage.getItem('timekeeper_recentEntriesCount') || '20'
+  )
+
   // Display Settings
   const [dateFormat, setDateFormat] = useState(
     localStorage.getItem('timekeeper_dateFormat') || 'MMM d, yyyy'
@@ -61,6 +75,14 @@ export function Settings() {
     localStorage.setItem('timekeeper_weeklyTarget', weeklyHoursTarget)
     localStorage.setItem('timekeeper_dailyTarget', dailyHoursTarget)
     alert('Time tracking settings saved!')
+  }
+
+  const handleSaveBillingSettings = () => {
+    localStorage.setItem('timekeeper_enableBilling', enableBilling.toString())
+    localStorage.setItem('timekeeper_roundingThreshold', roundingThreshold)
+    localStorage.setItem('timekeeper_billingIncrement', billingIncrement)
+    localStorage.setItem('timekeeper_recentEntriesCount', recentEntriesCount)
+    alert('Billing settings saved! Refresh the page to see changes.')
   }
 
   const handleSaveDisplaySettings = () => {
@@ -206,6 +228,86 @@ export function Settings() {
           <Button onClick={handleSaveTrackingSettings} className="gap-2">
             <Save className="h-4 w-4" />
             Save Tracking Settings
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Billing Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            <CardTitle>Billing & Hours</CardTitle>
+          </div>
+          <CardDescription>Configure billing hours calculation with rounding</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="enableBilling"
+              checked={enableBilling}
+              onChange={(e) => setEnableBilling(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="enableBilling" className="cursor-pointer">
+              Enable billing hours calculation with rounding
+            </Label>
+          </div>
+          
+          {enableBilling && (
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="roundingThreshold">Rounding Threshold (minutes)</Label>
+                <Input
+                  id="roundingThreshold"
+                  type="number"
+                  value={roundingThreshold}
+                  onChange={(e) => setRoundingThreshold(e.target.value)}
+                  placeholder="3"
+                  min="0"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Segments below this won't be billed
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billingIncrement">Billing Increment (hours)</Label>
+                <select
+                  id="billingIncrement"
+                  value={billingIncrement}
+                  onChange={(e) => setBillingIncrement(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="0.25">0.25 (15 minutes)</option>
+                  <option value="0.5">0.5 (30 minutes)</option>
+                  <option value="1.0">1.0 (60 minutes)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Round to nearest increment
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="recentEntriesCount">Recent Entries Count</Label>
+                <Input
+                  id="recentEntriesCount"
+                  type="number"
+                  value={recentEntriesCount}
+                  onChange={(e) => setRecentEntriesCount(e.target.value)}
+                  placeholder="20"
+                  min="1"
+                  max="100"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown in dashboard (1-100)
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <Button onClick={handleSaveBillingSettings} className="gap-2">
+            <Save className="h-4 w-4" />
+            Save Billing Settings
           </Button>
         </CardContent>
       </Card>

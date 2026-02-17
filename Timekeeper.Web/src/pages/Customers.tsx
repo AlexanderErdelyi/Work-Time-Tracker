@@ -3,8 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
-import { Plus, Search, Edit, Trash2 } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder, ListTree } from 'lucide-react'
 import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from '../hooks/useCustomers'
+import { useProjects } from '../hooks/useProjects'
+import { useTasks } from '../hooks/useTasks'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog'
 import { Label } from '../components/ui/Label'
 import { Textarea } from '../components/ui/Textarea'
@@ -15,6 +17,9 @@ export function Customers() {
   const [search, setSearch] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<number>>(new Set())
+  const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set())
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
   
   const { data: customers = [], isLoading } = useCustomers({ search })
   const createCustomer = useCreateCustomer()
@@ -93,6 +98,30 @@ export function Customers() {
     }
   }
 
+  const toggleCustomerExpanded = (customerId: number) => {
+    setExpandedCustomers(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(customerId)) {
+        newSet.delete(customerId)
+      } else {
+        newSet.add(customerId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleProjectExpanded = (projectId: number) => {
+    setExpandedProjects(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(projectId)) {
+        newSet.delete(projectId)
+      } else {
+        newSet.add(projectId)
+      }
+      return newSet
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -102,10 +131,28 @@ export function Customers() {
             Manage your customer database
           </p>
         </div>
-        <Button onClick={openCreateDialog} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Customer
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            onClick={() => setViewMode('list')}
+            className="gap-2"
+          >
+            <Folder className="h-4 w-4" />
+            List View
+          </Button>
+          <Button 
+            variant={viewMode === 'tree' ? 'default' : 'outline'}
+            onClick={() => setViewMode('tree')}
+            className="gap-2"
+          >
+            <ListTree className="h-4 w-4" />
+            Tree View
+          </Button>
+          <Button onClick={openCreateDialog} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Customer
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -137,7 +184,7 @@ export function Customers() {
             <p className="text-center text-muted-foreground py-8">
               No customers found. Create your first customer to get started!
             </p>
-          ) : (
+          ) : viewMode === 'list' ? (
             <div className="space-y-2">
               {customers.map((customer) => (
                 <div
@@ -184,6 +231,22 @@ export function Customers() {
                     </Button>
                   </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {customers.map((customer) => (
+                <CustomerTreeItem
+                  key={customer.id}
+                  customer={customer}
+                  isExpanded={expandedCustomers.has(customer.id)}
+                  onToggleExpanded={() => toggleCustomerExpanded(customer.id)}
+                  expandedProjects={expandedProjects}
+                  onToggleProject={toggleProjectExpanded}
+                  onEditCustomer={openEditDialog}
+                  onDeleteCustomer={handleDelete}
+                  onToggleActive={toggleActive}
+                />
               ))}
             </div>
           )}
@@ -262,6 +325,179 @@ export function Customers() {
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Customer Tree Item Component
+interface CustomerTreeItemProps {
+  customer: Customer
+  isExpanded: boolean
+  onToggleExpanded: () => void
+  expandedProjects: Set<number>
+  onToggleProject: (projectId: number) => void
+  onEditCustomer: (customer: Customer) => void
+  onDeleteCustomer: (id: number) => void
+  onToggleActive: (customer: Customer) => void
+}
+
+function CustomerTreeItem({
+  customer,
+  isExpanded,
+  onToggleExpanded,
+  expandedProjects,
+  onToggleProject,
+  onEditCustomer,
+  onDeleteCustomer,
+  onToggleActive,
+}: CustomerTreeItemProps) {
+  const { data: projects = [] } = useProjects({ customerId: customer.id })
+
+  return (
+    <div className="border rounded-lg">
+      {/* Customer Header */}
+      <div className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors">
+        <div className="flex items-center gap-2 flex-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleExpanded}
+            className="h-6 w-6 p-0"
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold">{customer.name}</h3>
+          {customer.no && (
+            <span className="text-sm text-muted-foreground">({customer.no})</span>
+          )}
+          <Badge
+            variant={customer.isActive ? 'success' : 'secondary'}
+            className="cursor-pointer"
+            onClick={() => onToggleActive(customer)}
+          >
+            {customer.isActive ? 'Active' : 'Inactive'}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            ({projects.length} project{projects.length !== 1 ? 's' : ''})
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onEditCustomer(customer)}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDeleteCustomer(customer.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Projects List (when expanded) */}
+      {isExpanded && (
+        <div className="pl-8 pr-4 pb-4 space-y-2">
+          {projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No projects yet. Add a project to get started!
+            </p>
+          ) : (
+            projects.map((project) => (
+              <ProjectTreeItem
+                key={project.id}
+                project={project}
+                isExpanded={expandedProjects.has(project.id)}
+                onToggleExpanded={() => onToggleProject(project.id)}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Project Tree Item Component
+interface ProjectTreeItemProps {
+  project: any
+  isExpanded: boolean
+  onToggleExpanded: () => void
+}
+
+function ProjectTreeItem({
+  project,
+  isExpanded,
+  onToggleExpanded,
+}: ProjectTreeItemProps) {
+  const { data: tasks = [] } = useTasks({ projectId: project.id })
+
+  return (
+    <div className="border-l-2 border-l-accent pl-4">
+      {/* Project Header */}
+      <div className="flex items-center justify-between py-2 hover:bg-accent/30 transition-colors rounded px-2">
+        <div className="flex items-center gap-2 flex-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleExpanded}
+            className="h-6 w-6 p-0"
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+          </Button>
+          <Folder className="h-3 w-3 text-muted-foreground" />
+          <span className="text-sm font-medium">{project.name}</span>
+          {project.no && (
+            <span className="text-xs text-muted-foreground">({project.no})</span>
+          )}
+          <Badge variant={project.isActive ? 'success' : 'secondary'} className="text-xs">
+            {project.isActive ? 'Active' : 'Inactive'}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            ({tasks.length} task{tasks.length !== 1 ? 's' : ''})
+          </span>
+        </div>
+      </div>
+
+      {/* Tasks List (when expanded) */}
+      {isExpanded && (
+        <div className="pl-6 space-y-1 mt-1">
+          {tasks.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-1">
+              No tasks yet.
+            </p>
+          ) : (
+            tasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex items-center gap-2 py-1 px-2 hover:bg-accent/20 rounded text-xs"
+              >
+                <ListTree className="h-3 w-3 text-muted-foreground" />
+                <span>{task.name}</span>
+                {task.position && (
+                  <span className="text-muted-foreground">({task.position})</span>
+                )}
+                <Badge variant={task.isActive ? 'success' : 'secondary'} className="text-xs">
+                  {task.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -104,6 +104,7 @@ public class ExportController : ControllerBase
                 EndTime = e.EndTime,
                 Notes = e.Notes,
                 DurationMinutes = (e.EndTime!.Value - e.StartTime).TotalMinutes,
+                BilledHours = e.BilledHours,
                 IsRunning = false,
                 CreatedAt = e.CreatedAt,
                 UpdatedAt = e.UpdatedAt

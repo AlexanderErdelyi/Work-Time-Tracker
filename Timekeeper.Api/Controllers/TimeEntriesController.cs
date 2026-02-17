@@ -96,6 +96,7 @@ public class TimeEntriesController : ControllerBase
                 EndTime = e.EndTime,
                 Notes = e.Notes,
                 DurationMinutes = e.EndTime.HasValue ? (e.EndTime.Value - e.StartTime).TotalMinutes : null,
+                BilledHours = e.BilledHours,
                 IsRunning = e.EndTime == null,
                 CreatedAt = e.CreatedAt,
                 UpdatedAt = e.UpdatedAt
@@ -135,6 +136,7 @@ public class TimeEntriesController : ControllerBase
             EndTime = entry.EndTime,
             Notes = entry.Notes,
             DurationMinutes = entry.EndTime.HasValue ? (entry.EndTime.Value - entry.StartTime).TotalMinutes : null,
+            BilledHours = entry.BilledHours,
             IsRunning = entry.EndTime == null,
             CreatedAt = entry.CreatedAt,
             UpdatedAt = entry.UpdatedAt
@@ -167,6 +169,7 @@ public class TimeEntriesController : ControllerBase
             EndTime = entry.EndTime,
             Notes = entry.Notes,
             DurationMinutes = null,
+            BilledHours = entry.BilledHours,
             IsRunning = true,
             CreatedAt = entry.CreatedAt,
             UpdatedAt = entry.UpdatedAt
@@ -206,6 +209,7 @@ public class TimeEntriesController : ControllerBase
                 EndTime = entry.EndTime,
                 Notes = entry.Notes,
                 DurationMinutes = null,
+                BilledHours = entry.BilledHours,
                 IsRunning = true,
                 CreatedAt = entry.CreatedAt,
                 UpdatedAt = entry.UpdatedAt
@@ -244,6 +248,7 @@ public class TimeEntriesController : ControllerBase
                 EndTime = entry.EndTime,
                 Notes = entry.Notes,
                 DurationMinutes = entry.Duration?.TotalMinutes,
+                BilledHours = entry.BilledHours,
                 IsRunning = false,
                 CreatedAt = entry.CreatedAt,
                 UpdatedAt = entry.UpdatedAt
@@ -314,6 +319,7 @@ public class TimeEntriesController : ControllerBase
             EndTime = result.EndTime,
             Notes = result.Notes,
             DurationMinutes = result.Duration?.TotalMinutes,
+            BilledHours = result.BilledHours,
             IsRunning = result.IsRunning,
             CreatedAt = result.CreatedAt,
             UpdatedAt = result.UpdatedAt
@@ -396,6 +402,7 @@ public class TimeEntriesController : ControllerBase
             EndTime = entry.EndTime,
             Notes = entry.Notes,
             DurationMinutes = entry.Duration?.TotalMinutes,
+            BilledHours = entry.BilledHours,
             IsRunning = entry.IsRunning,
             CreatedAt = entry.CreatedAt,
             UpdatedAt = entry.UpdatedAt

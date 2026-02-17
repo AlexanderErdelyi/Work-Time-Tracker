@@ -26,10 +26,13 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Clock,
+  Filter,
+  X,
 } from 'lucide-react'
 import { 
   useTimeEntries, 
-  useDeleteTimeEntry 
+  useDeleteTimeEntry,
+  useBulkDeleteTimeEntries 
 } from '../hooks/useTimeEntries'
 import { exportApi } from '../api'
 import type { TimeEntry } from '../types'
@@ -39,12 +42,55 @@ export function TimeEntries() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'startTime', desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
+  const [rowSelection, setRowSelection] = useState({})
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
 
   const { data: entries = [], isLoading } = useTimeEntries({})
   const deleteEntry = useDeleteTimeEntry()
+  const bulkDelete = useBulkDeleteTimeEntries()
+
+  // Check if billing is enabled
+  const isBillingEnabled = localStorage.getItem('timekeeper_enableBilling') === 'true'
+
+  // Filter entries by date range
+  const filteredEntries = useMemo(() => {
+    if (!startDate && !endDate) return entries
+    
+    return entries.filter(entry => {
+      const entryDate = new Date(entry.startTime)
+      const start = startDate ? new Date(startDate) : null
+      const end = endDate ? new Date(endDate + 'T23:59:59') : null
+      
+      if (start && entryDate < start) return false
+      if (end && entryDate > end) return false
+      return true
+    })
+  }, [entries, startDate, endDate])
 
   const columns = useMemo<ColumnDef<TimeEntry>[]>(
     () => [
+      {
+        id: 'select',
+        header: ({ table }) => (
+          <input
+            type="checkbox"
+            checked={table.getIsAllPageRowsSelected()}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+            className="h-4 w-4"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={row.getIsSelected()}
+            disabled={row.original.isRunning}
+            onChange={row.getToggleSelectedHandler()}
+            className="h-4 w-4"
+          />
+        ),
+      },
       {
         accessorKey: 'startTime',
         header: ({ column }) => {
@@ -126,6 +172,37 @@ export function TimeEntries() {
           )
         },
       },
+      // Conditionally include BilledHours column
+      ...(isBillingEnabled ? [{
+        accessorKey: 'billedHours' as const,
+        header: ({ column }: any) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2 lg:px-3"
+            >
+              Billed Hours
+              {column.getIsSorted() === 'asc' ? (
+                <ChevronUp className="ml-2 h-4 w-4" />
+              ) : column.getIsSorted() === 'desc' ? (
+                <ChevronDown className="ml-2 h-4 w-4" />
+              ) : (
+                <ChevronsUpDown className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+          )
+        },
+        cell: ({ row }: any) => {
+          const billed = row.original.billedHours
+          if (billed == null) return <span className="text-muted-foreground">—</span>
+          return (
+            <Badge variant="secondary" className="font-mono">
+              {billed.toFixed(2)}h
+            </Badge>
+          )
+        },
+      }] : []),
       {
         accessorKey: 'notes',
         header: 'Notes',
@@ -151,17 +228,20 @@ export function TimeEntries() {
         ),
       },
     ],
-    []
+    [isBillingEnabled]
   )
 
   const table = useReactTable({
-    data: entries,
+    data: filteredEntries,
     columns,
     state: {
       sorting,
       columnFilters,
       globalFilter,
+      rowSelection,
     },
+    enableRowSelection: (row) => !row.original.isRunning,
+    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
@@ -186,6 +266,28 @@ export function TimeEntries() {
     }
   }
 
+  const handleBulkDelete = async () => {
+    const selectedIds = Object.keys(rowSelection)
+      .filter(key => rowSelection[key])
+      .map(key => filteredEntries[parseInt(key)].id)
+    
+    if (selectedIds.length === 0) return
+    
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} time entries?`)) {
+      try {
+        await bulkDelete.mutateAsync(selectedIds)
+        setRowSelection({})
+      } catch (error) {
+        console.error('Failed to delete time entries:', error)
+      }
+    }
+  }
+
+  const clearFilters = () => {
+    setStartDate('')
+    setEndDate('')
+  }
+
   const handleExport = async () => {
     try {
       await exportApi.exportExcel({})
@@ -195,11 +297,13 @@ export function TimeEntries() {
   }
 
   const totalHours = useMemo(() => {
-    const totalMinutes = entries.reduce((sum, entry) => {
+    const totalMinutes = filteredEntries.reduce((sum, entry) => {
       return sum + (entry.durationMinutes || 0)
     }, 0)
     return (totalMinutes / 60).toFixed(2)
-  }, [entries])
+  }, [filteredEntries])
+
+  const selectedCount = Object.keys(rowSelection).filter(key => rowSelection[key]).length
 
   return (
     <div className="space-y-6">
@@ -211,6 +315,24 @@ export function TimeEntries() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </Button>
+          {selectedCount > 0 && (
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Selected ({selectedCount})
+            </Button>
+          )}
           <Button variant="outline" onClick={handleExport} className="gap-2">
             <Download className="h-4 w-4" />
             Export
@@ -231,13 +353,65 @@ export function TimeEntries() {
         </CardContent>
       </Card>
 
+      {/* Date Filters */}
+      {showFilters && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Filter by Date Range</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <label htmlFor="startDate" className="text-sm font-medium mb-2 block">
+                  Start Date
+                </label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  placeholder="Start date"
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="endDate" className="text-sm font-medium mb-2 block">
+                  End Date
+                </label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  placeholder="End date"
+                />
+              </div>
+              {(startDate || endDate) && (
+                <Button
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="gap-2 mt-7"
+                >
+                  <X className="h-4 w-4" />
+                  Clear
+                </Button>
+              )}
+            </div>
+            {(startDate || endDate) && (
+              <p className="text-sm text-muted-foreground mt-3">
+                Showing {filteredEntries.length} of {entries.length} entries
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>All Time Entries</CardTitle>
               <CardDescription>
-                {entries.length} entries • Total: <span className="font-mono font-semibold">{totalHours}h</span>
+                {filteredEntries.length} entries • Total: <span className="font-mono font-semibold">{totalHours}h</span>
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">

@@ -16,6 +16,7 @@ public class TimeEntryDto
     public DateTime? EndTime { get; set; }
     public string? Notes { get; set; }
     public double? DurationMinutes { get; set; }
+    public decimal? BilledHours { get; set; }
     public bool IsRunning { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -48,6 +49,7 @@ public class TimeEntrySummary
     public DateTime Date { get; set; }
     public double TotalMinutes { get; set; }
     public double TotalHours { get; set; }
+    public decimal TotalBilledHours { get; set; }
     public int EntryCount { get; set; }
 }
 

@@ -43,7 +43,7 @@ export interface TaskItem {
   id: number
   name: string
   description?: string
-  position?: number
+  position?: string
   procurementNumber?: string
   projectId: number
   projectName?: string
@@ -57,7 +57,7 @@ export interface TaskDto {
   id?: number
   name: string
   description?: string
-  position?: number
+  position?: string
   procurementNumber?: string
   projectId: number
   isActive?: boolean
@@ -77,6 +77,7 @@ export interface TimeEntry {
   endTime?: string
   notes?: string
   durationMinutes?: number
+  billedHours?: number
   isRunning: boolean
   createdAt: string
   updatedAt?: string

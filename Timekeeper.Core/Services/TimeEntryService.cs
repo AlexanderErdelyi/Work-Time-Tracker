@@ -7,10 +7,12 @@ namespace Timekeeper.Core.Services;
 public class TimeEntryService : ITimeEntryService
 {
     private readonly TimekeeperContext _context;
+    private readonly IBillingService _billingService;
 
-    public TimeEntryService(TimekeeperContext context)
+    public TimeEntryService(TimekeeperContext context, IBillingService billingService)
     {
         _context = context;
+        _billingService = billingService;
     }
 
     public async Task<TimeEntry?> GetRunningEntryAsync()
@@ -86,6 +88,19 @@ public class TimeEntryService : ITimeEntryService
 
         entry.EndTime = DateTime.UtcNow;
         entry.UpdatedAt = DateTime.UtcNow;
+        
+        // Calculate billed hours
+        if (entry.Duration.HasValue)
+        {
+            // Default settings: 3 min threshold, 0.25h (15 min) increment
+            // These can be made configurable later
+            entry.BilledHours = _billingService.CalculateBilledHours(
+                entry.Duration.Value,
+                roundingThresholdMinutes: 3,
+                billingIncrementHours: 0.25m
+            );
+        }
+        
         await _context.SaveChangesAsync();
 
         return entry;

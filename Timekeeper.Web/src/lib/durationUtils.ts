@@ -26,11 +26,16 @@ export function formatDurationHours(duration: string): string {
 }
 
 export function calculateDuration(startTime: string, endTime?: string): string {
+  // Ensure we're working with UTC times to avoid timezone issues
+  // Parse the ISO string and get UTC timestamp
   const start = new Date(startTime)
   const end = endTime ? new Date(endTime) : new Date()
   
+  // Calculate difference in milliseconds
   const diffMs = end.getTime() - start.getTime()
-  const seconds = Math.floor(diffMs / 1000)
+  
+  // Ensure non-negative duration (in case of clock skew)
+  const seconds = Math.max(0, Math.floor(diffMs / 1000))
   
   return formatDuration(seconds)
 }
