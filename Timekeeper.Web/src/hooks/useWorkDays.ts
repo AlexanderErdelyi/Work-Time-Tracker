@@ -43,6 +43,34 @@ export const useCheckOut = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workDayStatus'] });
       queryClient.invalidateQueries({ queryKey: ['todayWorkDay'] });
+      queryClient.invalidateQueries({ queryKey: ['workDays'] });
+    },
+  });
+};
+
+export const useUpdateWorkDay = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { checkInTime?: string; checkOutTime?: string; notes?: string } }) => 
+      workDaysApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workDays'] });
+      queryClient.invalidateQueries({ queryKey: ['workDayStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['todayWorkDay'] });
+    },
+  });
+};
+
+export const useDeleteWorkDay = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (id: number) => workDaysApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workDays'] });
+      queryClient.invalidateQueries({ queryKey: ['workDayStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['todayWorkDay'] });
     },
   });
 };

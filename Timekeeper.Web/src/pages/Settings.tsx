@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
+import SoundSelectionModal from '../components/SoundSelectionModal'
 import { 
   User,
   Clock, 
@@ -13,6 +14,7 @@ import {
   Database,
   Save,
   RefreshCw,
+  Volume2,
 } from 'lucide-react'
 
 export function Settings() {
@@ -58,7 +60,7 @@ export function Settings() {
 
   // Notification Settings
   const [enableNotifications, setEnableNotifications] = useState(
-    localStorage.getItem('timekeeper_notifications') === 'true'
+    localStorage.getItem('timekeeper_enableNotifications') === 'true'
   )
   const [reminderInterval, setReminderInterval] = useState(
     localStorage.getItem('timekeeper_reminderInterval') || '60'
@@ -78,6 +80,10 @@ export function Settings() {
   const [continuousWorkDuration, setContinuousWorkDuration] = useState(
     localStorage.getItem('timekeeper_continuousWorkDuration') || '240'
   )
+  const [notificationSound, setNotificationSound] = useState(
+    localStorage.getItem('timekeeper_notificationSound') || 'default'
+  )
+  const [isSoundModalOpen, setIsSoundModalOpen] = useState(false)
 
   const handleSaveUserSettings = () => {
     localStorage.setItem('timekeeper_userName', userName)
@@ -108,13 +114,14 @@ export function Settings() {
   }
 
   const handleSaveNotificationSettings = () => {
-    localStorage.setItem('timekeeper_notifications', enableNotifications.toString())
+    localStorage.setItem('timekeeper_enableNotifications', enableNotifications.toString())
     localStorage.setItem('timekeeper_reminderInterval', reminderInterval)
     localStorage.setItem('timekeeper_breakReminderEnabled', breakReminderEnabled.toString())
     localStorage.setItem('timekeeper_breakReminderInterval', breakReminderInterval)
     localStorage.setItem('timekeeper_dailyGoalNotification', dailyGoalNotification.toString())
     localStorage.setItem('timekeeper_continuousWorkAlert', continuousWorkAlert.toString())
     localStorage.setItem('timekeeper_continuousWorkDuration', continuousWorkDuration)
+    localStorage.setItem('timekeeper_notificationSound', notificationSound)
     
     // Request notification permission if enabling
     if (enableNotifications && 'Notification' in window && Notification.permission === 'default') {
@@ -122,6 +129,11 @@ export function Settings() {
     }
     
     alert('Notification settings saved!')
+  }
+
+  const handleSoundSelect = (soundFileName: string) => {
+    setNotificationSound(soundFileName);
+    localStorage.setItem('timekeeper_notificationSound', soundFileName);
   }
 
   const handleExportData = async () => {
@@ -535,13 +547,73 @@ export function Settings() {
                   className="h-5 w-5 rounded border-gray-300 cursor-pointer"
                 />
               </div>
+
+              {/* Notification Sound Selection */}
+              <div className="space-y-3">
+                <Label className="text-base">Notification Sound</Label>
+                <p className="text-sm text-muted-foreground">
+                  Choose from available notification sounds
+                </p>
+                <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Volume2 className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <div className="font-medium">
+                        {notificationSound === 'default' 
+                          ? 'Default Beep' 
+                          : notificationSound.replace(/\.[^/.]+$/, '').replace(/notification(\d+)/, 'Sound $1')
+                        }
+                      </div>
+                      <div className="text-xs text-muted-foreground">Current selection</div>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => setIsSoundModalOpen(true)} 
+                    variant="outline"
+                    type="button"
+                  >
+                    Change Sound
+                  </Button>
+                </div>
+              </div>
+
+              {/* Sound Selection Modal */}
+              <SoundSelectionModal
+                isOpen={isSoundModalOpen}
+                onClose={() => setIsSoundModalOpen(false)}
+                currentSound={notificationSound}
+                onSoundSelect={handleSoundSelect}
+              />
             </div>
           )}
           
-          <Button onClick={handleSaveNotificationSettings} className="gap-2">
-            <Save className="h-4 w-4" />
-            Save Notification Settings
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleSaveNotificationSettings} className="gap-2">
+              <Save className="h-4 w-4" />
+              Save Notification Settings
+            </Button>
+            {enableNotifications && (
+              <Button 
+                onClick={async () => {
+                  if (Notification.permission !== 'granted') {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                      alert('Please grant notification permission to test notifications');
+                      return;
+                    }
+                  }
+                  new Notification('Test Notification', {
+                    body: 'If you see this, notifications are working! 🎉',
+                    icon: '/vite.svg',
+                  });
+                }}
+                variant="outline"
+                className="gap-2"
+              >
+                Test Notification
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 

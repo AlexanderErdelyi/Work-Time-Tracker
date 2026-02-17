@@ -15,8 +15,8 @@ interface BreakStatus {
   isOnBreak: boolean;
   breakStartTime?: string;
   totalBreakMinutesToday: number;
-  continuousWorkMinutes: number;
-  timeSinceLastBreakMinutes: number;
+  continuousWorkMinutes?: number;
+  timeSinceLastBreakMinutes?: number;
 }
 
 interface ActiveTimer {
@@ -40,7 +40,7 @@ export function useNotifications() {
       const response = await axios.get(`${API_URL}/api/workdays/status`);
       return response.data;
     },
-    refetchInterval: notificationsEnabled ? 60000 : false, // Check every minute
+    refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
   });
 
@@ -51,7 +51,7 @@ export function useNotifications() {
       const response = await axios.get(`${API_URL}/api/breaks/status`);
       return response.data;
     },
-    refetchInterval: notificationsEnabled ? 60000 : false, // Check every minute
+    refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
   });
 
@@ -59,29 +59,50 @@ export function useNotifications() {
   const { data: activeTimer } = useQuery<ActiveTimer | null>({
     queryKey: ['active-timer'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/api/timeentries/active`);
+      const response = await axios.get(`${API_URL}/api/timeentries/running`);
       return response.data || null;
     },
-    refetchInterval: notificationsEnabled ? 60000 : false, // Check every minute
+    refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
   });
 
   // Run notification checks
   useEffect(() => {
-    if (!notificationsEnabled || !workDayStatus || !breakStatus) {
+    console.log('[Notifications] Hook triggered', { 
+      notificationsEnabled, 
+      hasWorkDayStatus: !!workDayStatus, 
+      hasBreakStatus: !!breakStatus,
+      activeTimer 
+    });
+    
+    if (!notificationsEnabled) {
       return;
     }
 
     const isTimerRunning = activeTimer?.isRunning || false;
-    const isOnBreak = breakStatus.isOnBreak;
-    const continuousWorkMinutes = breakStatus.continuousWorkMinutes;
-    const timeSinceLastBreakMinutes = breakStatus.timeSinceLastBreakMinutes;
-    const totalWorkedMinutesToday = workDayStatus.totalMinutesToday;
+    const isOnBreak = breakStatus?.isOnBreak || false;
+    const isCheckedIn = workDayStatus?.isCheckedIn || false;
+    const checkInTime = workDayStatus?.checkInTime;
+    const continuousWorkMinutes = breakStatus?.continuousWorkMinutes || 0;
+    const timeSinceLastBreakMinutes = breakStatus?.timeSinceLastBreakMinutes || 0;
+    const totalWorkedMinutesToday = workDayStatus?.totalMinutesToday || 0;
+    
+    console.log('[Notifications] Calling checkAll with:', {
+      isTimerRunning,
+      isOnBreak,
+      isCheckedIn,
+      checkInTime,
+      continuousWorkMinutes,
+      timeSinceLastBreakMinutes,
+      totalWorkedMinutesToday
+    });
 
     // Run all notification checks
     notificationService.checkAll({
       isTimerRunning,
       isOnBreak,
+      isCheckedIn,
+      checkInTime,
       continuousWorkMinutes,
       timeSinceLastBreakMinutes,
       totalWorkedMinutesToday,

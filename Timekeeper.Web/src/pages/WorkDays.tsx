@@ -3,19 +3,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
-import { Calendar, Clock, LogIn, LogOut, Filter } from 'lucide-react';
-import { useWorkDays } from '../hooks/useWorkDays';
-import { formatDate, formatTime } from '../lib/dateUtils';
+import { Calendar, Clock, LogIn, LogOut, Filter, Edit, Trash2 } from 'lucide-react';
+import { useWorkDays, useUpdateWorkDay, useDeleteWorkDay } from '../hooks/useWorkDays';
+import { formatDate, formatTime, formatDateForInput } from '../lib/dateUtils';
+import { WorkDay } from '../api/workDays';
 
 export function WorkDays() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [filterApplied, setFilterApplied] = useState(false);
+  const [editingWorkDay, setEditingWorkDay] = useState<WorkDay | null>(null);
+  const [editForm, setEditForm] = useState({ checkInTime: '', checkOutTime: '', notes: '' });
   
-  const { data: workDays = [], isLoading } = useWorkDays(
+  const { data: workDays = [], isLoading, error } = useWorkDays(
     filterApplied ? startDate : undefined,
     filterApplied ? endDate : undefined
   );
+  
+  const updateWorkDay = useUpdateWorkDay();
+  const deleteWorkDay = useDeleteWorkDay();
+  
+  console.log('[WorkDays] workDays:', workDays, 'count:', workDays?.length, 'isLoading:', isLoading);
 
   const handleApplyFilter = () => {
     setFilterApplied(true);
@@ -25,6 +33,53 @@ export function WorkDays() {
     setStartDate('');
     setEndDate('');
     setFilterApplied(false);
+  };
+
+  const handleEdit = (workDay: WorkDay) => {
+    setEditingWorkDay(workDay);
+    setEditForm({
+      checkInTime: workDay.checkInTime ? formatDateForInput(workDay.checkInTime) : '',
+      checkOutTime: workDay.checkOutTime ? formatDateForInput(workDay.checkOutTime) : '',
+      notes: workDay.notes || ''
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingWorkDay) return;
+    
+    try {
+      await updateWorkDay.mutateAsync({
+        id: editingWorkDay.id,
+        data: {
+          checkInTime: editForm.checkInTime || undefined,
+          checkOutTime: editForm.checkOutTime || undefined,
+          notes: editForm.notes || undefined
+        }
+      });
+      setEditingWorkDay(null);
+    } catch (error) {
+      console.error('Failed to update work day:', error);
+      alert('Failed to update work day. Please try again.');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingWorkDay(null);
+    setEditForm({ checkInTime: '', checkOutTime: '', notes: '' });
+  };
+
+  const handleDelete = async (workDay: WorkDay) => {
+    if (!confirm(`Are you sure you want to delete the work day for ${formatDate(workDay.date, 'MMMM d, yyyy')}?`)) {
+      return;
+    }
+    
+    try {
+      await deleteWorkDay.mutateAsync(workDay.id);
+    } catch (error) {
+      console.error('Failed to delete work day:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete work day: ${errorMessage}`);
+    }
   };
 
   const formatDuration = (minutes: number) => {
@@ -109,6 +164,10 @@ export function WorkDays() {
             <div className="text-center py-8 text-muted-foreground">
               Loading work days...
             </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600">
+              Error loading work days: {error instanceof Error ? error.message : 'Unknown error'}
+            </div>
           ) : workDays.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No work days found. Start tracking by checking in!
@@ -168,18 +227,40 @@ export function WorkDays() {
                       )}
                     </div>
 
-                    {/* Total Hours */}
-                    <div className="text-right">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="text-2xl font-bold">
-                            {formatDuration(workDay.totalWorkedMinutes)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Total Worked
+                    {/* Total Hours and Actions */}
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <div className="text-2xl font-bold">
+                              {formatDuration(workDay.totalWorkedMinutes)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Total Worked
+                            </div>
                           </div>
                         </div>
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(workDay)}
+                          className="h-8 px-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(workDay)}
+                          className="h-8 px-2 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -189,6 +270,63 @@ export function WorkDays() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      {editingWorkDay && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md m-4">
+            <CardHeader>
+              <CardTitle>Edit Work Day</CardTitle>
+              <CardDescription>
+                Update times and notes for {formatDate(editingWorkDay.date, 'MMMM d, yyyy')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Check In Time
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    value={editForm.checkInTime}
+                    onChange={(e) => setEditForm({ ...editForm, checkInTime: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Check Out Time
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    value={editForm.checkOutTime}
+                    onChange={(e) => setEditForm({ ...editForm, checkOutTime: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Notes
+                  </label>
+                  <Input
+                    type="text"
+                    value={editForm.notes}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    placeholder="Optional notes..."
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveEdit} disabled={updateWorkDay.isPending}>
+                    {updateWorkDay.isPending ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

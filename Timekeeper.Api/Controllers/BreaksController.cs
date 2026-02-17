@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Timekeeper.Core.Services;
 using Timekeeper.Api.DTOs;
+using Timekeeper.Core.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Timekeeper.Api.Controllers;
 
@@ -9,10 +11,12 @@ namespace Timekeeper.Api.Controllers;
 public class BreaksController : ControllerBase
 {
     private readonly IBreakService _breakService;
+    private readonly TimekeeperContext _context;
 
-    public BreaksController(IBreakService breakService)
+    public BreaksController(IBreakService breakService, TimekeeperContext context)
     {
         _breakService = breakService;
+        _context = context;
     }
 
     [HttpGet("active")]
@@ -37,11 +41,51 @@ public class BreaksController : ControllerBase
     {
         var isOnBreak = await _breakService.IsOnBreakAsync();
         var activeBreak = await _breakService.GetActiveBreakAsync();
+        var todayBreaks = await _breakService.GetTodayBreaksAsync();
+        
+        // Calculate total break minutes today
+        var totalBreakMinutesToday = todayBreaks
+            .Where(b => b.EndTime.HasValue)
+            .Sum(b => (int)b.Duration.TotalMinutes);
+        
+        // Calculate continuous work minutes (time since check-in or last break end)
+        double? continuousWorkMinutes = null;
+        double? timeSinceLastBreakMinutes = null;
+        
+        // Get the work day to find check-in time
+        var workDay = await _context.WorkDays
+            .Where(w => w.CheckInTime.HasValue && w.CheckInTime.Value.Date == DateTime.Today)
+            .OrderByDescending(w => w.CheckInTime)
+            .FirstOrDefaultAsync();
+        
+        if (workDay?.CheckInTime != null)
+        {
+            var lastBreak = todayBreaks.OrderByDescending(b => b.EndTime ?? b.StartTime).FirstOrDefault();
+            var referenceTime = lastBreak?.EndTime ?? workDay.CheckInTime.Value;
+            
+            if (!isOnBreak)
+            {
+                continuousWorkMinutes = (DateTime.Now - referenceTime).TotalMinutes;
+            }
+            
+            if (lastBreak?.EndTime.HasValue == true)
+            {
+                timeSinceLastBreakMinutes = (DateTime.Now - lastBreak.EndTime.Value).TotalMinutes;
+            }
+            else
+            {
+                // No breaks taken yet, use time since check-in
+                timeSinceLastBreakMinutes = (DateTime.Now - workDay.CheckInTime.Value).TotalMinutes;
+            }
+        }
 
         return Ok(new
         {
             isOnBreak,
-            activeBreak = activeBreak != null ? MapToDto(activeBreak) : null
+            breakStartTime = activeBreak?.StartTime,
+            totalBreakMinutesToday,
+            continuousWorkMinutes,
+            timeSinceLastBreakMinutes
         });
     }
 

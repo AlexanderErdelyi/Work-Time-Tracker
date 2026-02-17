@@ -12,6 +12,8 @@ public interface IWorkDayService
     Task<WorkDay> CheckInAsync(DateTime? time = null, string? notes = null);
     Task<WorkDay> CheckOutAsync(DateTime? time = null, string? notes = null);
     Task<bool> IsCheckedInAsync();
+    Task<WorkDay?> UpdateWorkDayAsync(int id, DateTime? checkInTime, DateTime? checkOutTime, string? notes);
+    Task DeleteWorkDayAsync(int id);
 }
 
 public class WorkDayService : IWorkDayService
@@ -120,5 +122,54 @@ public class WorkDayService : IWorkDayService
     {
         var workDay = await GetTodayWorkDayAsync();
         return workDay?.IsCheckedIn ?? false;
+    }
+
+    public async Task<WorkDay?> UpdateWorkDayAsync(int id, DateTime? checkInTime, DateTime? checkOutTime, string? notes)
+    {
+        var workDay = await _context.WorkDays.FindAsync(id);
+        if (workDay == null)
+        {
+            return null;
+        }
+
+        if (checkInTime.HasValue)
+        {
+            workDay.CheckInTime = checkInTime;
+        }
+
+        if (checkOutTime.HasValue)
+        {
+            workDay.CheckOutTime = checkOutTime;
+        }
+
+        if (notes != null)
+        {
+            workDay.Notes = notes;
+        }
+
+        await _context.SaveChangesAsync();
+        return workDay;
+    }
+
+    public async Task DeleteWorkDayAsync(int id)
+    {
+        var workDay = await _context.WorkDays
+            .Include(w => w.TimeEntries)
+            .Include(w => w.Breaks)
+            .FirstOrDefaultAsync(w => w.Id == id);
+
+        if (workDay == null)
+        {
+            throw new InvalidOperationException($"Work day with ID {id} not found.");
+        }
+
+        // Check if work day has time entries or breaks
+        if (workDay.TimeEntries.Any() || workDay.Breaks.Any())
+        {
+            throw new InvalidOperationException("Cannot delete work day with associated time entries or breaks. Delete them first.");
+        }
+
+        _context.WorkDays.Remove(workDay);
+        await _context.SaveChangesAsync();
     }
 }

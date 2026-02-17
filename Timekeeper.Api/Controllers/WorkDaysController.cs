@@ -43,6 +43,8 @@ public class WorkDaysController : ControllerBase
         return Ok(new
         {
             isCheckedIn,
+            checkInTime = workDay?.CheckInTime,
+            totalMinutesToday = workDay?.TotalWorkedMinutes ?? 0,
             workDay = workDay != null ? MapToDto(workDay) : null
         });
     }
@@ -68,6 +70,37 @@ public class WorkDaysController : ControllerBase
         }
     }
 
+    [HttpPut("{id}")]
+    public async Task<ActionResult<WorkDayDto>> UpdateWorkDay(int id, [FromBody] UpdateWorkDayDto dto)
+    {
+        try
+        {
+            var workDay = await _workDayService.UpdateWorkDayAsync(id, dto.CheckInTime, dto.CheckOutTime, dto.Notes);
+            if (workDay == null)
+                return NotFound();
+            
+            return Ok(MapToDto(workDay));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteWorkDay(int id)
+    {
+        try
+        {
+            await _workDayService.DeleteWorkDayAsync(id);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     private static WorkDayDto MapToDto(Core.Models.WorkDay workDay)
     {
         return new WorkDayDto
@@ -86,5 +119,12 @@ public class WorkDaysController : ControllerBase
 public class CheckInOutDto
 {
     public DateTime? Time { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class UpdateWorkDayDto
+{
+    public DateTime? CheckInTime { get; set; }
+    public DateTime? CheckOutTime { get; set; }
     public string? Notes { get; set; }
 }

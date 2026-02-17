@@ -37,8 +37,10 @@
     {
       "label": "run-api",
       "type": "shell",
-      "command": "dotnet",
-      "args": ["run", "--project", "${workspaceFolder}/Timekeeper.Api/Timekeeper.Api.csproj"],
+      "command": "cd ${workspaceFolder}/Timekeeper.Api; $env:ASPNETCORE_ENVIRONMENT='Development'; dotnet bin/Debug/net8.0/Timekeeper.Api.dll",
+      "windows": {
+        "command": "cd ${workspaceFolder}/Timekeeper.Api; $env:ASPNETCORE_ENVIRONMENT='Development'; dotnet bin/Debug/net8.0/Timekeeper.Api.dll"
+      },
       "isBackground": true,
       "presentation": {
         "echo": true,

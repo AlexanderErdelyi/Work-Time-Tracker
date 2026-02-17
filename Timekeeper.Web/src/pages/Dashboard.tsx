@@ -13,6 +13,9 @@ import { formatDate } from '../lib/dateUtils'
 import { CheckInCard } from '../components/Dashboard/CheckInCard'
 import { BreakCard } from '../components/Dashboard/BreakCard'
 import { BreaksList } from '../components/Dashboard/BreaksList'
+import axios from 'axios'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export function Dashboard() {
   const { data: runningTimer } = useRunningTimer()
@@ -102,7 +105,20 @@ export function Dashboard() {
     setSelectedTaskId(taskId)
   }
 
-  const handleQuickStart = () => {
+  const handleQuickStart = async () => {
+    // First, check in if not already checked in
+    try {
+      const statusResponse = await axios.get(`${API_URL}/api/workdays/status`);
+      if (!statusResponse.data.isCheckedIn) {
+        await axios.post(`${API_URL}/api/workdays/checkin`, {
+          notes: 'Auto check-in from Quick Start'
+        });
+      }
+    } catch (error) {
+      console.error('Error checking in:', error);
+    }
+    
+    // Then start the timer
     startTimer.mutate(
       { 
         notes: 'Quick start from dashboard'

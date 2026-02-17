@@ -24,19 +24,25 @@ class NotificationService {
    */
   async requestPermission(): Promise<boolean> {
     if (!('Notification' in window)) {
-      console.warn('Browser does not support notifications');
+      console.warn('[Notifications] Browser does not support notifications');
       return false;
     }
 
+    console.log('[Notifications] Current permission:', Notification.permission);
+    
     if (Notification.permission === 'granted') {
+      console.log('[Notifications] Permission already granted');
       return true;
     }
 
     if (Notification.permission !== 'denied') {
+      console.log('[Notifications] Requesting permission...');
       const permission = await Notification.requestPermission();
+      console.log('[Notifications] Permission result:', permission);
       return permission === 'granted';
     }
 
+    console.warn('[Notifications] Permission denied');
     return false;
   }
 
@@ -56,41 +62,181 @@ class NotificationService {
   }
 
   /**
-   * Show a browser notification
+   * Show a browser notification with sound
    */
   private showNotification(title: string, body: string, tag: string): void {
-    if (Notification.permission === 'granted') {
-      new Notification(title, {
+    console.log('[Notifications] showNotification called', { 
+      title, 
+      body, 
+      tag, 
+      permission: Notification.permission,
+      isDocumentFocused: document.hasFocus()
+    });
+
+    if (Notification.permission !== 'granted') {
+      console.warn('[Notifications] Cannot show notification - permission not granted');
+      return;
+    }
+
+    try {
+      console.log('[Notifications] Creating Notification object...');
+      
+      // Try creating notification without tag first (tags can cause issues)
+      const notification = new Notification(title, {
         body,
-        tag,
         icon: '/vite.svg',
         badge: '/vite.svg',
-        requireInteraction: false,
+        requireInteraction: true,
+        silent: true, // We'll play our own custom sound
+        timestamp: Date.now(),
+        // Don't use tag - it can suppress notifications if one with same tag exists
       });
+
+      console.log('[Notifications] Notification object created:', notification);
+
+      notification.onshow = () => {
+        console.log('[Notifications] ✅ Notification shown successfully!');
+      };
+
+      notification.onclick = () => {
+        console.log('[Notifications] Notification clicked');
+        window.focus();
+        notification.close();
+      };
+
+      notification.onclose = () => {
+        console.log('[Notifications] Notification closed');
+      };
+
+      notification.onerror = (error) => {
+        console.error('[Notifications] ❌ Notification error:', error);
+      };
+
+      // Play custom musical sound
+      this.playNotificationSound();
+      
+      // Check if notification is showing after a short delay
+      setTimeout(() => {
+        console.log('[Notifications] Notification check - state:', {
+          tag: notification.tag,
+          timestamp: notification.timestamp,
+          data: notification.data
+        });
+      }, 500);
+      
+    } catch (error) {
+      console.error('[Notifications] Failed to create notification:', error);
+    }
+  }
+
+  /**
+   * Play notification sound using audio file or fallback
+   */
+  private playNotificationSound(): void {
+    try {
+      // Get selected sound from settings
+      const selectedSound = localStorage.getItem('timekeeper_notificationSound') || 'default';
+      
+      if (selectedSound === 'default') {
+        // Use fallback beep for default
+        this.playFallbackBeep();
+        return;
+      }
+      
+      // Try to play custom notification sound file
+      const audio = new Audio(`/sounds/${selectedSound}`);
+      audio.volume = 0.5; // 50% volume
+      
+      audio.play().then(() => {
+        console.log('[Notifications] Notification sound played:', selectedSound);
+      }).catch(error => {
+        console.warn('[Notifications] Could not play sound file, using fallback beep:', error);
+        // Fallback to simple beep if file not found
+        this.playFallbackBeep();
+      });
+      
+    } catch (error) {
+      console.warn('[Notifications] Could not play sound:', error);
+      this.playFallbackBeep();
+    }
+  }
+
+  /**
+   * Fallback beep sound if audio file not available
+   */
+  private playFallbackBeep(): void {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.2);
+    } catch (error) {
+      console.warn('[Notifications] Fallback beep also failed:', error);
     }
   }
 
   /**
    * Check if timer reminder should be shown
-   * Shows reminder when no timer is running for X minutes
+   * Shows reminder when checked in but no timer is running for X minutes
    */
-  checkTimerReminder(isTimerRunning: boolean): void {
+  checkTimerReminder(isCheckedIn: boolean, checkInTime: string | undefined, isTimerRunning: boolean): void {
     const settings = this.getSettings();
     
-    if (!settings.enableNotifications || isTimerRunning) {
+    const now = Date.now();
+    
+    // Don't show reminder if not checked in or timer is already running
+    if (!settings.enableNotifications || !isCheckedIn || isTimerRunning || !checkInTime) {
+      // When timer starts or user checks out, reset the countdown
+      // Set to current time so when timer stops, we start counting from then
+      if (isTimerRunning) {
+        this.lastReminderTime = now;
+      } else if (!isCheckedIn) {
+        this.lastReminderTime = 0;
+      }
       return;
     }
 
-    const now = Date.now();
     const intervalMs = settings.reminderInterval * 60 * 1000;
+    
+    // If this is the first check after check-in or timer stop, start counting from now
+    if (this.lastReminderTime === 0) {
+      this.lastReminderTime = now;
+      console.log('[Notifications] Starting timer reminder countdown');
+      return;
+    }
+    
+    const timeSinceLastReminderMs = now - this.lastReminderTime;
+    
+    console.log('[Notifications] checkTimerReminder', { 
+      enabled: settings.enableNotifications, 
+      isCheckedIn,
+      checkInTime,
+      isTimerRunning,
+      intervalMinutes: settings.reminderInterval,
+      timeSinceLastReminderMinutes: Math.floor(timeSinceLastReminderMs / 60000),
+      shouldNotify: timeSinceLastReminderMs >= intervalMs
+    });
 
-    if (now - this.lastReminderTime >= intervalMs) {
+    // Show reminder if idle for X minutes
+    if (timeSinceLastReminderMs >= intervalMs) {
+      console.log('[Notifications] Showing timer reminder - idle without timer');
       this.showNotification(
         'Time Tracking Reminder',
-        'You haven\'t started tracking time yet. Don\'t forget to track your work!',
+        `You've been idle for ${settings.reminderInterval} minutes. Start a timer to track your work!`,
         'timer-reminder'
       );
-      this.lastReminderTime = now;
+      this.lastReminderTime = now; // Reset the countdown
     }
   }
 
@@ -223,6 +369,8 @@ class NotificationService {
   async checkAll(status: {
     isTimerRunning: boolean;
     isOnBreak: boolean;
+    isCheckedIn: boolean;
+    checkInTime?: string;
     continuousWorkMinutes: number;
     timeSinceLastBreakMinutes: number;
     totalWorkedMinutesToday: number;
@@ -243,7 +391,7 @@ class NotificationService {
     this.checkDailyReset();
 
     // Run all checks
-    this.checkTimerReminder(status.isTimerRunning);
+    this.checkTimerReminder(status.isCheckedIn, status.checkInTime, status.isTimerRunning);
     this.checkBreakReminder(status.isTimerRunning, status.isOnBreak, status.continuousWorkMinutes);
     this.checkContinuousWorkAlert(status.isTimerRunning, status.isOnBreak, status.timeSinceLastBreakMinutes);
     this.checkDailyGoalNotification(status.totalWorkedMinutesToday);

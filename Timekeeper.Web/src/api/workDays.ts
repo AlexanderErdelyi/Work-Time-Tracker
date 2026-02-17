@@ -45,5 +45,14 @@ export const workDaysApi = {
   checkOut: async (notes?: string) => {
     const response = await axios.post<WorkDay>(`${API_URL}/checkout`, { notes });
     return response.data;
+  },
+
+  update: async (id: number, data: { checkInTime?: string; checkOutTime?: string; notes?: string }) => {
+    const response = await axios.put<WorkDay>(`${API_URL}/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: number) => {
+    await axios.delete(`${API_URL}/${id}`);
   }
 };
