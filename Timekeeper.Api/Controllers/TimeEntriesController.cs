@@ -171,8 +171,18 @@ public class TimeEntriesController : ControllerBase
     }
 
     [HttpPost("start")]
-    public async Task<ActionResult<TimeEntryDto>> StartTimer(StartTimerDto dto)
+    public async Task<ActionResult<TimeEntryDto>> StartTimer([FromBody] StartTimerDto? dto)
     {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        if (dto == null)
+        {
+            dto = new StartTimerDto();
+        }
+
         try
         {
             var entry = await _timeEntryService.StartTimerAsync(dto.TaskId, dto.Notes);

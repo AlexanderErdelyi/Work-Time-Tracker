@@ -29,6 +29,14 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
+    
+    // Development CORS policy for Vite dev server
+    options.AddPolicy("Development", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176")
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
 });
 
 var app = builder.Build();
@@ -45,12 +53,20 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseCors("Development");
+}
+else
+{
+    app.UseCors();
 }
 
-app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapControllers();
+
+// SPA fallback - serve index.html for all non-API, non-file routes
+// This enables React Router to work correctly
+app.MapFallbackToFile("index.html");
 
 app.Run();

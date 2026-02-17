@@ -30,8 +30,8 @@ public class TimeEntryService : ITimeEntryService
             throw new InvalidOperationException("A timer is already running. Stop it before starting a new one.");
         }
 
-        // Task is now optional
-        if (taskId.HasValue)
+        // Task is now optional - only validate if taskId is provided and > 0
+        if (taskId.HasValue && taskId.Value > 0)
         {
             var task = await _context.Tasks.FindAsync(taskId.Value);
             if (task == null)
@@ -40,9 +40,12 @@ public class TimeEntryService : ITimeEntryService
             }
         }
 
+        // Set taskId to null if it's 0 or negative
+        var validTaskId = (taskId.HasValue && taskId.Value > 0) ? taskId : null;
+
         var entry = new TimeEntry
         {
-            TaskId = taskId,
+            TaskId = validTaskId,
             StartTime = DateTime.UtcNow,
             Notes = notes
         };
@@ -51,7 +54,7 @@ public class TimeEntryService : ITimeEntryService
         await _context.SaveChangesAsync();
 
         // Reload with includes only if task exists
-        if (taskId.HasValue)
+        if (validTaskId.HasValue)
         {
             return await _context.TimeEntries
                 .Include(e => e.Task)

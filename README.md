@@ -1,6 +1,28 @@
 # ⏱️ Timekeeper - Time Tracking Application
 
-A comprehensive C# .NET 8 time tracking application with a clean web interface for managing time entries, customers, projects, and tasks.
+A comprehensive C# .NET 8 time tracking application with a **modern React UI** for managing time entries, customers, projects, and tasks.
+
+## ✨ Modern React UI (NEW!)
+
+Timekeeper now features a completely redesigned, futuristic user interface built with:
+- **React 18 + TypeScript** - Modern, type-safe frontend
+- **Tailwind CSS + shadcn/ui** - Beautiful, customizable components
+- **Vite** - Lightning-fast development and builds
+- **Tanstack Query** - Smart data fetching and caching
+- **Dark Mode** - Full dark theme support
+- **Responsive Design** - Works on desktop, tablet, and mobile
+
+**Status**: Core functionality complete (~65% of planned features)  
+**See**: [REACT_UI_STATUS.md](REACT_UI_STATUS.md) for detailed implementation status
+
+**Development Mode**:
+```bash
+cd Timekeeper.Web
+npm install
+npm run dev  # Opens on http://localhost:5173
+```
+
+---
 
 ## 🚀 Ready to Share with Your Team?
 

@@ -14,6 +14,15 @@ Write-Host ""
 # Set location to script directory
 Set-Location -Path $PSScriptRoot
 
+# Build React UI first
+Write-Host "Building React Frontend..." -ForegroundColor Yellow
+& "$PSScriptRoot\build-ui.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "UI Build failed!" -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+
 # Import code signing module
 Import-Module "$PSScriptRoot\CodeSigning.psm1" -Force
 
