@@ -3,6 +3,7 @@ import { Command } from 'cmdk';
 import { Play, CheckSquare, Clock, FileDown, X, Zap } from 'lucide-react';
 import { useQuickActions } from '../hooks/useQuickActions';
 import { useStartTimer } from '../hooks/useTimeEntries';
+import { useCheckIn } from '../hooks/useWorkDays';
 import '../styles/command-palette.css';
 
 interface CommandPaletteProps {
@@ -13,6 +14,7 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const { data: quickActions, isLoading } = useQuickActions();
   const startTimer = useStartTimer();
+  const checkIn = useCheckIn();
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -41,8 +43,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         }
         break;
       case 'CheckIn':
-        // TODO: Implement check-in
-        console.log('Check-in action');
+        checkIn.mutate();
         break;
       case 'StartBreak':
         // TODO: Implement break
