@@ -5,6 +5,7 @@ public class TimeEntryDto
     public int Id { get; set; }
     public int? TaskId { get; set; }
     public string? TaskName { get; set; }
+    public string? TaskDescription { get; set; }
     public string? TaskPosition { get; set; }
     public string? TaskProcurementNumber { get; set; }
     public string? ProjectName { get; set; }
