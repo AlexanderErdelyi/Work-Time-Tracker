@@ -11,6 +11,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { calculateDuration, formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { CheckInCard } from '../components/Dashboard/CheckInCard'
+import { BreakCard } from '../components/Dashboard/BreakCard'
+import { BreaksList } from '../components/Dashboard/BreaksList'
 
 export function Dashboard() {
   const { data: runningTimer } = useRunningTimer()
@@ -183,9 +185,12 @@ export function Dashboard() {
       </div>
 
       {/* Work Day & Timer Cards Grid */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
         {/* Check-In Card */}
         <CheckInCard />
+
+        {/* Break Card */}
+        <BreakCard />
 
         {/* Timer Card - Spans full width when no work day or single column on mobile */}
         <div className="md:col-span-1">
@@ -530,6 +535,9 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Today's Breaks */}
+      <BreaksList />
 
       {/* Recent Activity */}
       <Card>

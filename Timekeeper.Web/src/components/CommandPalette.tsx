@@ -4,6 +4,7 @@ import { Play, CheckSquare, Clock, FileDown, X, Zap } from 'lucide-react';
 import { useQuickActions } from '../hooks/useQuickActions';
 import { useStartTimer } from '../hooks/useTimeEntries';
 import { useCheckIn } from '../hooks/useWorkDays';
+import { useStartBreak } from '../hooks/useBreaks';
 import '../styles/command-palette.css';
 
 interface CommandPaletteProps {
@@ -15,6 +16,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const { data: quickActions, isLoading } = useQuickActions();
   const startTimer = useStartTimer();
   const checkIn = useCheckIn();
+  const startBreak = useStartBreak();
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -46,8 +48,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         checkIn.mutate();
         break;
       case 'StartBreak':
-        // TODO: Implement break
-        console.log('Start break action');
+        startBreak.mutate(undefined);
         break;
       case 'ExportToday':
         window.open('/api/export/today/xlsx', '_blank');

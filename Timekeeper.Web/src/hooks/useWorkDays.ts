@@ -1,6 +1,13 @@
 ﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workDaysApi } from '../api/workDays';
 
+export const useWorkDays = (startDate?: string, endDate?: string) => {
+  return useQuery({
+    queryKey: ['workDays', startDate, endDate],
+    queryFn: () => workDaysApi.getAll(startDate, endDate),
+  });
+};
+
 export const useWorkDayStatus = () => {
   return useQuery({
     queryKey: ['workDayStatus'],

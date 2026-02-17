@@ -8,6 +8,7 @@ public interface IWorkDayService
 {
     Task<WorkDay?> GetTodayWorkDayAsync();
     Task<WorkDay?> GetWorkDayByDateAsync(DateTime date);
+    Task<List<WorkDay>> GetWorkDaysAsync(DateTime? startDate = null, DateTime? endDate = null);
     Task<WorkDay> CheckInAsync(DateTime? time = null, string? notes = null);
     Task<WorkDay> CheckOutAsync(DateTime? time = null, string? notes = null);
     Task<bool> IsCheckedInAsync();
@@ -39,6 +40,28 @@ public class WorkDayService : IWorkDayService
                 .ThenInclude(e => e.Task)
             .Include(w => w.Breaks)
             .FirstOrDefaultAsync(w => w.Date.Date == date.Date);
+    }
+
+    public async Task<List<WorkDay>> GetWorkDaysAsync(DateTime? startDate = null, DateTime? endDate = null)
+    {
+        var query = _context.WorkDays
+            .Include(w => w.TimeEntries)
+            .Include(w => w.Breaks)
+            .AsQueryable();
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(w => w.Date >= startDate.Value.Date);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(w => w.Date <= endDate.Value.Date);
+        }
+
+        return await query
+            .OrderByDescending(w => w.Date)
+            .ToListAsync();
     }
 
     public async Task<WorkDay> CheckInAsync(DateTime? time = null, string? notes = null)

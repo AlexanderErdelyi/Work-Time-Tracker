@@ -7,6 +7,7 @@ import { Projects } from './pages/Projects'
 import { Tasks } from './pages/Tasks'
 import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
+import { WorkDays } from './pages/WorkDays'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/entries" element={<TimeEntries />} />
+          <Route path="/workdays" element={<WorkDays />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/tasks" element={<Tasks />} />

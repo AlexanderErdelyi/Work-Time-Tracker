@@ -28,6 +28,7 @@ builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<IImportService, ImportService>();
 builder.Services.AddScoped<IWorkDayService, WorkDayService>();
+builder.Services.AddScoped<IBreakService, BreakService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>

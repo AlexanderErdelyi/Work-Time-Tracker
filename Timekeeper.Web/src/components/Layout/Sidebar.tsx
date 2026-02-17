@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import { 
   LayoutDashboard, 
-  Clock, 
+  Clock,
+  Calendar,
   Users, 
   Briefcase, 
   ListTodo, 
@@ -17,6 +18,7 @@ import { useState } from 'react'
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Time Entries', href: '/entries', icon: Clock },
+  { name: 'Work Days', href: '/workdays', icon: Calendar },
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Projects', href: '/projects', icon: Briefcase },
   { name: 'Tasks', href: '/tasks', icon: ListTodo },

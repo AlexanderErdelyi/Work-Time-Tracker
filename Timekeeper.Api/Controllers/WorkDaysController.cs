@@ -25,6 +25,15 @@ public class WorkDaysController : ControllerBase
         return Ok(MapToDto(workDay));
     }
 
+    [HttpGet]
+    public async Task<ActionResult<List<WorkDayDto>>> GetWorkDays(
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null)
+    {
+        var workDays = await _workDayService.GetWorkDaysAsync(startDate, endDate);
+        return Ok(workDays.Select(MapToDto).ToList());
+    }
+
     [HttpGet("status")]
     public async Task<ActionResult<object>> GetStatus()
     {
