@@ -6,6 +6,7 @@ import { Label } from '../components/ui/Label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import SoundSelectionModal from '../components/SoundSelectionModal'
 import { useTasks } from '../hooks/useTasks'
+import { usePWA } from '../hooks/usePWA'
 import { SystemIdleDetectionService } from '../services/systemIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
 import { 
@@ -24,6 +25,7 @@ import {
   Monitor,
   Check,
   AlertCircle,
+  Smartphone,
 } from 'lucide-react'
 
 export function Settings() {
@@ -110,6 +112,9 @@ export function Settings() {
   const [systemIdlePermission, setSystemIdlePermission] = useState<PermissionState>('prompt')
   const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const [detectionMethod, setDetectionMethod] = useState<'system-level' | 'browser-only' | 'none'>('none')
+
+  // PWA Installation State
+  const { isSupported: pwaSupported, isInstalled: pwaInstalled, isInstalling: pwaInstalling, canInstall: pwaCanInstall, installPWA } = usePWA()
 
   // Check system idle detection availability on mount
   useEffect(() => {
@@ -999,6 +1004,128 @@ export function Settings() {
                   in your browser only.
                 </p>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* PWA Installation */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Smartphone className="h-5 w-5" />
+            <CardTitle>Install as App</CardTitle>
+          </div>
+          <CardDescription>Run Timekeeper in a separate window with taskbar access</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {pwaInstalled ? (
+            // Already installed
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex gap-3">
+                <Check className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-green-900">
+                  <p className="font-medium mb-1">✅ App installed successfully</p>
+                  <p className="text-green-800">
+                    Timekeeper is running as a standalone app. You can pin it to your taskbar for quick access.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : pwaCanInstall ? (
+            // Can install
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex gap-3">
+                  <Smartphone className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-medium mb-2">Install Timekeeper as a desktop app</p>
+                    <p className="text-blue-800 mb-3">
+                      Run Timekeeper in its own window with a dedicated taskbar icon - no more searching through browser tabs!
+                    </p>
+                    <p className="font-medium mb-1">Benefits:</p>
+                    <ul className="list-disc list-inside space-y-1 text-blue-800">
+                      <li>Appears in Windows taskbar</li>
+                      <li>Opens in dedicated window (no browser UI)</li>
+                      <li>Fast access - click taskbar icon</li>
+                      <li>Works offline</li>
+                      <li>Auto-updates with new features</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <Button 
+                onClick={installPWA} 
+                disabled={pwaInstalling}
+                className="gap-2 w-full"
+              >
+                {pwaInstalling ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Installing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Install Timekeeper App
+                  </>
+                )}
+              </Button>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-xs text-gray-600 mb-2">
+                  <strong>Alternative installation:</strong> If the button doesn't work, you can also install from your browser:
+                </p>
+                <ul className="text-xs text-gray-600 list-disc list-inside space-y-1 ml-2">
+                  <li>Edge: Click the <strong>⊕</strong> icon in the address bar → "Install Timekeeper"</li>
+                  <li>Chrome: Click the <strong>⋮</strong> menu → "Install Timekeeper"</li>
+                </ul>
+              </div>
+            </div>
+          ) : !pwaSupported ? (
+            // Not supported
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900">
+                  <p className="font-medium mb-1">App installation not available</p>
+                  <p className="text-amber-800">
+                    Your browser doesn't support Progressive Web App installation.
+                  </p>
+                  <p className="text-amber-700 mt-2 text-xs">
+                    <strong>Recommendation:</strong> Use Microsoft Edge or Google Chrome for app installation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Waiting for prompt
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex gap-3">
+                <Smartphone className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-900">
+                  <p className="font-medium mb-2">App installation will be available soon</p>
+                  <p className="text-blue-800 mb-3">
+                    Your browser supports app installation, but the install prompt hasn't appeared yet.
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    <strong>Manual installation:</strong> Look for the install icon in your browser's address bar or menu.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* How to pin to taskbar */}
+          {pwaInstalled && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <p className="text-xs text-gray-600 font-medium mb-2">📌 Pin to Windows Taskbar:</p>
+              <ol className="text-xs text-gray-600 list-decimal list-inside space-y-1 ml-2">
+                <li>Open the Start menu and find "Timekeeper"</li>
+                <li>Right-click → "Pin to taskbar"</li>
+                <li>Or drag the app icon to your taskbar</li>
+              </ol>
             </div>
           )}
         </CardContent>
