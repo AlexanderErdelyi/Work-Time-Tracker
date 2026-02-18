@@ -1,5 +1,5 @@
 // Service Worker for Timekeeper PWA
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v10';
 const CACHE_NAME = `timekeeper-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install
@@ -7,8 +7,10 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
+  '/smart-launcher.html',
+  '/icon-generator-premium.html',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
   '/libs/gif.js',
   '/libs/gif.worker.js',
 ];

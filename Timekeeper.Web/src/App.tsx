@@ -8,6 +8,7 @@ import { Tasks } from './pages/Tasks'
 import { Reports } from './pages/Reports'
 import { Settings } from './pages/Settings'
 import { WorkDays } from './pages/WorkDays'
+import { ServiceManager } from './pages/ServiceManager'
 import { useNotifications } from './hooks/useNotifications'
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/service" element={<ServiceManager />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </AppShell>

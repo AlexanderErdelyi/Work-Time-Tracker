@@ -7,6 +7,7 @@ import {
   Briefcase, 
   ListTodo, 
   BarChart3, 
+  Server,
   Settings,
   ChevronLeft,
   ChevronRight
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Projects', href: '/projects', icon: Briefcase },
   { name: 'Tasks', href: '/tasks', icon: ListTodo },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'Service Manager', href: '/service', icon: Server },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
