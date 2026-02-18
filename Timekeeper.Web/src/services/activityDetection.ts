@@ -1,7 +1,14 @@
 /**
  * Activity Detection Service
  * Tracks user activity (mouse, keyboard, page visibility) to detect idle periods
+ * Supports system-level detection (Idle Detection API) with fallback to browser-only detection
  */
+
+import { 
+  SystemIdleDetectionService, 
+  getSystemIdleDetection,
+  type SystemIdleState 
+} from './systemIdleDetection';
 
 interface ActivitySettings {
   enableIdleDetection: boolean;
@@ -15,6 +22,8 @@ export interface IdleState {
   idleDurationMs: number;
 }
 
+export type DetectionMethod = 'system-level' | 'browser-only' | 'none';
+
 type ActivityCallback = (isIdle: boolean, idleDurationMs: number) => void;
 type IdleStartCallback = (idleStartTime: Date) => void;
 
@@ -26,11 +35,15 @@ class ActivityDetectionService {
   private activityCallbacks: ActivityCallback[] = [];
   private idleStartCallbacks: IdleStartCallback[] = [];
   private isInitialized: boolean = false;
+  private detectionMethod: DetectionMethod = 'none';
+  private systemIdleService: SystemIdleDetectionService | null = null;
+  private systemIdleUnsubscribe: (() => void) | null = null;
 
   /**
    * Initialize activity detection
+   * Tries system-level detection first, falls back to browser-only
    */
-  initialize(): void {
+  async initialize(): Promise<void> {
     if (this.isInitialized) {
       console.log('[ActivityDetection] Already initialized');
       return;
@@ -45,9 +58,111 @@ class ActivityDetectionService {
     
     if (!settings.enableIdleDetection) {
       console.warn('[ActivityDetection] Idle detection is DISABLED in settings');
+      this.detectionMethod = 'none';
       return;
     }
+
+    // Try system-level detection first
+    const systemDetectionStarted = await this.trySystemLevelDetection(settings);
     
+    if (systemDetectionStarted) {
+      this.detectionMethod = 'system-level';
+      console.log('✅ [ActivityDetection] Using system-level idle detection');
+    } else {
+      // Fallback to browser-only detection
+      this.initializeBrowserDetection();
+      this.detectionMethod = 'browser-only';
+      console.log('⚠️ [ActivityDetection] Using browser-only idle detection');
+    }
+    
+    this.isInitialized = true;
+    console.log('[ActivityDetection] Initialized successfully');
+  }
+
+  /**
+   * Try to start system-level idle detection
+   */
+  private async trySystemLevelDetection(settings: ActivitySettings): Promise<boolean> {
+    // Check if API is supported
+    if (!SystemIdleDetectionService.isSupported()) {
+      console.log('[ActivityDetection] System idle detection not supported in this browser');
+      return false;
+    }
+
+    // Check permission status
+    const permission = await SystemIdleDetectionService.checkPermission();
+    
+    if (permission !== 'granted') {
+      console.log('[ActivityDetection] System idle detection permission not granted:', permission);
+      return false;
+    }
+
+    try {
+      // Get system idle service instance
+      this.systemIdleService = getSystemIdleDetection();
+
+      // Subscribe to state changes
+      this.systemIdleUnsubscribe = this.systemIdleService.onStateChange(this.handleSystemIdleChange);
+
+      // Start monitoring
+      const started = await this.systemIdleService.start({
+        thresholdMinutes: settings.idleThresholdMinutes
+      });
+
+      if (!started) {
+        console.error('[ActivityDetection] Failed to start system idle detection');
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[ActivityDetection] Error starting system idle detection:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Handle system idle state change
+   */
+  private handleSystemIdleChange = (state: SystemIdleState): void => {
+    const wasIdle = this.isCurrentlyIdle;
+    const isNowIdle = state === 'idle' || state === 'locked';
+
+    console.log('[ActivityDetection] System idle state changed:', {
+      from: wasIdle ? 'idle' : 'active',
+      to: state,
+      willTriggerCallbacks: isNowIdle !== wasIdle
+    });
+
+    if (isNowIdle && !wasIdle) {
+      // Became idle
+      this.isCurrentlyIdle = true;
+      this.idleStartTime = new Date();
+      
+      // Notify callbacks about idle start
+      this.idleStartCallbacks.forEach(callback => callback(this.idleStartTime!));
+      
+      // Notify general callbacks
+      this.activityCallbacks.forEach(callback => callback(true, 0));
+      
+    } else if (!isNowIdle && wasIdle) {
+      // Became active
+      const idleDuration = this.idleStartTime ? Date.now() - this.idleStartTime.getTime() : 0;
+      this.isCurrentlyIdle = false;
+      this.idleStartTime = null;
+      
+      // Update last activity time
+      this.lastActivityTime = Date.now();
+      
+      // Notify callbacks
+      this.activityCallbacks.forEach(callback => callback(false, idleDuration));
+    }
+  };
+
+  /**
+   * Initialize browser-only detection (fallback method)
+   */
+  private initializeBrowserDetection(): void {
     // Track mouse movements
     document.addEventListener('mousemove', this.recordActivity);
     document.addEventListener('mousedown', this.recordActivity);
@@ -72,17 +187,25 @@ class ActivityDetectionService {
 
     // Start checking for idle state
     this.startIdleCheck();
-    
-    this.isInitialized = true;
-    console.log('[ActivityDetection] Initialized successfully');
   }
 
   /**
-   * Clean up event listeners
+   * Clean up event listeners and stop detection
    */
   destroy(): void {
     console.log('[ActivityDetection] Destroying...');
     
+    // Stop system-level detection if active
+    if (this.systemIdleService) {
+      this.systemIdleService.stop();
+      if (this.systemIdleUnsubscribe) {
+        this.systemIdleUnsubscribe();
+        this.systemIdleUnsubscribe = null;
+      }
+      this.systemIdleService = null;
+    }
+
+    // Clean up browser-only detection
     document.removeEventListener('mousemove', this.recordActivity);
     document.removeEventListener('mousedown', this.recordActivity);
     document.removeEventListener('mouseup', this.recordActivity);
@@ -102,6 +225,7 @@ class ActivityDetectionService {
     }
     
     this.isInitialized = false;
+    this.detectionMethod = 'none';
   }
 
   /**
@@ -268,6 +392,40 @@ class ActivityDetectionService {
    */
   isIdle(): boolean {
     return this.isCurrentlyIdle;
+  }
+
+  /**
+   * Get current detection method
+   */
+  getDetectionMethod(): DetectionMethod {
+    return this.detectionMethod;
+  }
+
+  /**
+   * Check if system-level detection is available
+   */
+  static async isSystemDetectionAvailable(): Promise<boolean> {
+    if (!SystemIdleDetectionService.isSupported()) {
+      return false;
+    }
+
+    const permission = await SystemIdleDetectionService.checkPermission();
+    return permission === 'granted';
+  }
+
+  /**
+   * Request permission for system-level idle detection
+   */
+  static async requestSystemDetectionPermission(): Promise<boolean> {
+    return await SystemIdleDetectionService.requestPermission();
+  }
+
+  /**
+   * Restart detection (useful after permission grant)
+   */
+  async restart(): Promise<void> {
+    this.destroy();
+    await this.initialize();
   }
 }
 

@@ -147,7 +147,12 @@ export function useIdleDetection() {
     }
 
     console.log('[IdleDetection] Initializing...');
-    activityDetectionService.initialize();
+    
+    // Initialize async (try system-level detection, fallback to browser-only)
+    activityDetectionService.initialize().then(() => {
+      const detectionMethod = activityDetectionService.getDetectionMethod();
+      console.log(`[IdleDetection] Initialized with ${detectionMethod} detection`);
+    });
 
     // Subscribe to idle start events
     const unsubscribeIdleStart = activityDetectionService.onIdleStart(handleIdleStart);

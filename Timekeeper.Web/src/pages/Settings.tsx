@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -6,6 +6,8 @@ import { Label } from '../components/ui/Label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import SoundSelectionModal from '../components/SoundSelectionModal'
 import { useTasks } from '../hooks/useTasks'
+import { SystemIdleDetectionService } from '../services/systemIdleDetection'
+import { activityDetectionService } from '../services/activityDetection'
 import { 
   User,
   Clock, 
@@ -19,6 +21,9 @@ import {
   Activity,
   Zap,
   X,
+  Monitor,
+  Check,
+  AlertCircle,
 } from 'lucide-react'
 
 export function Settings() {
@@ -100,6 +105,31 @@ export function Settings() {
     localStorage.getItem('timekeeper_autoResumeOnActivity') === 'true'
   )
 
+  // System Idle Detection State
+  const [systemIdleSupported, setSystemIdleSupported] = useState(false)
+  const [systemIdlePermission, setSystemIdlePermission] = useState<PermissionState>('prompt')
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false)
+  const [detectionMethod, setDetectionMethod] = useState<'system-level' | 'browser-only' | 'none'>('none')
+
+  // Check system idle detection availability on mount
+  useEffect(() => {
+    const checkSystemIdleAvailability = async () => {
+      const supported = SystemIdleDetectionService.isSupported()
+      setSystemIdleSupported(supported)
+
+      if (supported) {
+        const permission = await SystemIdleDetectionService.checkPermission()
+        setSystemIdlePermission(permission)
+      }
+
+      // Get current detection method
+      const method = activityDetectionService.getDetectionMethod()
+      setDetectionMethod(method)
+    }
+
+    checkSystemIdleAvailability()
+  }, [])
+
   // Quick Tasks Settings
   const [quickTaskIds, setQuickTaskIds] = useState<number[]>(
     JSON.parse(localStorage.getItem('timekeeper_quickTasks') || '[]')
@@ -164,6 +194,34 @@ export function Settings() {
     localStorage.setItem('timekeeper_autoResumeOnActivity', autoResumeOnActivity.toString())
     alert('Idle detection settings saved! Refresh the page to apply changes.')
   }
+
+  const handleRequestSystemIdlePermission = async () => {
+    setIsRequestingPermission(true)
+    try {
+      const granted = await SystemIdleDetectionService.requestPermission()
+      
+      if (granted) {
+        setSystemIdlePermission('granted')
+        alert('✅ System idle detection enabled!\n\nThe app can now detect activity across all applications and monitors.\n\nRestarting detection...')
+        
+        // Restart detection to use system-level method
+        await activityDetectionService.restart()
+        
+        // Update detection method
+        const method = activityDetectionService.getDetectionMethod()
+        setDetectionMethod(method)
+      } else {
+        setSystemIdlePermission('denied')
+        alert('⚠️ Permission denied.\n\nFalling back to browser-only detection.\nThis only tracks activity within the browser tab.')
+      }
+    } catch (error) {
+      console.error('Error requesting system idle permission:', error)
+      alert('❌ Error requesting permission. Please try again.')
+    } finally {
+      setIsRequestingPermission(false)
+    }
+  }
+
   const handleAddQuickTask = () => {
     if (!selectedTaskForQuick) return
     const taskId = parseInt(selectedTaskForQuick)
@@ -832,6 +890,117 @@ export function Settings() {
             <Save className="h-4 w-4" />
             Save Idle Detection Settings
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* System Idle Detection */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Monitor className="h-5 w-5" />
+            <CardTitle>System Idle Detection</CardTitle>
+          </div>
+          <CardDescription>Cross-application activity monitoring</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!systemIdleSupported ? (
+            // Not supported
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900">
+                  <p className="font-medium mb-1">System idle detection not available</p>
+                  <p className="text-amber-800">
+                    Your browser doesn't support system-level idle detection. Using browser-only detection instead.
+                  </p>
+                  <p className="text-amber-700 mt-2 text-xs">
+                    <strong>Recommendation:</strong> Use Microsoft Edge or Google Chrome for best idle detection.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : systemIdlePermission === 'granted' ? (
+            // Permission granted
+            <div className="space-y-3">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex gap-3">
+                  <Check className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-green-900">
+                    <p className="font-medium mb-1">✅ System idle detection active</p>
+                    <p className="text-green-800">
+                      Activity is monitored across all applications and monitors.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex gap-2">
+                  <Monitor className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-medium mb-2">What's being detected:</p>
+                    <ul className="list-disc list-inside space-y-1 text-blue-800">
+                      <li>Mouse and keyboard activity system-wide</li>
+                      <li>Activity on any monitor or workspace</li>
+                      <li>Activity in other applications (Word, Excel, etc.)</li>
+                      <li>Screen lock/unlock events</li>
+                    </ul>
+                    <p className="mt-3 text-xs text-blue-700">
+                      <strong>Current method:</strong> {detectionMethod === 'system-level' ? 'System-level ✅' : detectionMethod === 'browser-only' ? 'Browser-only ⚠️' : 'None'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Permission not granted
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex gap-3">
+                  <Monitor className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-medium mb-2">Enable cross-application idle detection</p>
+                    <p className="text-blue-800 mb-3">
+                      Grant permission to detect your activity even when working in other applications or browsers.
+                    </p>
+                    <p className="font-medium mb-1">Benefits:</p>
+                    <ul className="list-disc list-inside space-y-1 text-blue-800">
+                      <li>Works when using Word, Excel, Outlook, etc.</li>
+                      <li>Detects activity on multiple monitors</li>
+                      <li>More accurate idle detection</li>
+                      <li>Reduces false positives</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleRequestSystemIdlePermission} 
+                disabled={isRequestingPermission}
+                className="gap-2 w-full"
+              >
+                {isRequestingPermission ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Requesting Permission...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Grant System Idle Detection Permission
+                  </>
+                )}
+              </Button>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-xs text-gray-600">
+                  <strong>Privacy note:</strong> This permission allows the app to know when your computer is idle,
+                  but does NOT track which applications you use or what you're doing. The detection happens locally
+                  in your browser only.
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

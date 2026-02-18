@@ -4,17 +4,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Badge } from '../components/ui/Badge'
-import { Play, Square, Clock, Search, Edit, RefreshCw, Pause } from 'lucide-react'
+import { Play, Square, Clock, Search, Edit, RefreshCw, Pause, Monitor, Activity } from 'lucide-react'
 import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries } from '../hooks/useTimeEntries'
 import { useTasks } from '../hooks/useTasks'
 import { useState, useEffect, useMemo } from 'react'
-import { calculateDuration, formatDurationHours } from '../lib/durationUtils'
+import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { CheckInCard } from '../components/Dashboard/CheckInCard'
 import { BreakCard } from '../components/Dashboard/BreakCard'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
+import { activityDetectionService } from '../services/activityDetection'
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -37,6 +38,7 @@ export function Dashboard() {
   const [notes, setNotes] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
   const [runningNotes, setRunningNotes] = useState('')
+  const [detectionMethod, setDetectionMethod] = useState<'system-level' | 'browser-only' | 'none'>('none')
 
   // Idle detection
   const {
@@ -50,6 +52,17 @@ export function Dashboard() {
 
   // Check if billing is enabled
   const isBillingEnabled = localStorage.getItem('timekeeper_enableBilling') === 'true'
+
+  // Check if idle detection is enabled
+  const isIdleDetectionEnabled = localStorage.getItem('timekeeper_enableIdleDetection') === 'true'
+
+  // Update detection method when idle detection initializes
+  useEffect(() => {
+    if (isIdleDetectionEnabled) {
+      const method = activityDetectionService.getDetectionMethod()
+      setDetectionMethod(method)
+    }
+  }, [isIdleDetectionEnabled])
 
   // Limit recent entries
   const limitedRecentEntries = useMemo(() => {
@@ -279,6 +292,27 @@ export function Dashboard() {
                 <p className="text-xs text-orange-600 dark:text-orange-400">
                   Idle for {Math.floor((idleState.idleDurationMs || 0) / 60000)} min
                 </p>
+              </div>
+            )}
+
+            {/* Detection Method Indicator */}
+            {isIdleDetectionEnabled && detectionMethod !== 'none' && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                {detectionMethod === 'system-level' ? (
+                  <>
+                    <Monitor className="h-3 w-3 text-green-600" />
+                    <span className="text-green-600 font-medium" title="Detects activity across all applications and monitors">
+                      System-level detection ✓
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Activity className="h-3 w-3 text-amber-600" />
+                    <span className="text-amber-600" title="Only detects activity within this browser tab">
+                      Browser-only detection
+                    </span>
+                  </>
+                )}
               </div>
             )}
             
