@@ -1,11 +1,27 @@
-import { Coffee, Clock } from 'lucide-react';
+import { Coffee, Clock, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { useTodayBreaks } from '../../hooks/useBreaks';
+import { Button } from '../ui/Button';
+import { useTodayBreaks, useDeleteBreak } from '../../hooks/useBreaks';
 import { formatTime } from '../../lib/dateUtils';
 
 export function BreaksList() {
   const { data: breaks = [], isLoading } = useTodayBreaks();
+  const deleteBreak = useDeleteBreak();
+
+  const handleDelete = async (breakId: number, startTime: string) => {
+    if (!confirm(`Are you sure you want to delete this break (${formatTime(startTime)})?`)) {
+      return;
+    }
+    
+    try {
+      await deleteBreak.mutateAsync(breakId);
+    } catch (error) {
+      console.error('Failed to delete break:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete break: ${errorMessage}`);
+    }
+  };
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -88,11 +104,23 @@ export function BreaksList() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-sm font-medium">
-                    {formatDuration(breakItem.durationMinutes)}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-sm font-medium">
+                      {formatDuration(breakItem.durationMinutes)}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDelete(breakItem.id, breakItem.startTime)}
+                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    disabled={breakItem.isActive || deleteBreak.isPending}
+                    title={breakItem.isActive ? 'Cannot delete active break' : 'Delete break'}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))}

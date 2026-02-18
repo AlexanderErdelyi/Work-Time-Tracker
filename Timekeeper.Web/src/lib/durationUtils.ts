@@ -56,6 +56,11 @@ export function roundDuration(
     return '00:00:00'
   }
   
+  // If less than 15 minutes but above threshold, always round up to 15 minutes (0.25h)
+  if (minutes < 15) {
+    return '00:15:00'
+  }
+  
   // Round to nearest billing increment
   const roundedMinutes = Math.ceil(minutes / billingIncrement) * billingIncrement
   const roundedSeconds = roundedMinutes * 60

@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = '/api/breaks';
+import { fetchApi } from './client';
 
 export interface Break {
   id: number;
@@ -19,27 +17,34 @@ export interface BreakStatus {
 
 export const breaksApi = {
   getActive: async () => {
-    const response = await axios.get<Break>(`${API_URL}/active`);
-    return response.data;
+    return fetchApi<Break>('/breaks/active');
   },
 
   getToday: async () => {
-    const response = await axios.get<Break[]>(`${API_URL}/today`);
-    return response.data;
+    return fetchApi<Break[]>('/breaks/today');
   },
 
   getStatus: async () => {
-    const response = await axios.get<BreakStatus>(`${API_URL}/status`);
-    return response.data;
+    return fetchApi<BreakStatus>('/breaks/status');
   },
 
   start: async (notes?: string) => {
-    const response = await axios.post<Break>(`${API_URL}/start`, { notes });
-    return response.data;
+    return fetchApi<Break>('/breaks/start', {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
   },
 
   end: async (notes?: string) => {
-    const response = await axios.post<Break>(`${API_URL}/end`, { notes });
-    return response.data;
+    return fetchApi<Break>('/breaks/end', {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+  },
+
+  delete: async (id: number) => {
+    return fetchApi<void>(`/breaks/${id}`, {
+      method: 'DELETE',
+    });
   }
 };

@@ -12,6 +12,7 @@ public interface IBreakService
     Task<Break> StartBreakAsync(string? notes = null);
     Task<Break> EndBreakAsync(string? notes = null);
     Task<bool> IsOnBreakAsync();
+    Task DeleteBreakAsync(int id);
 }
 
 public class BreakService : IBreakService
@@ -116,5 +117,17 @@ public class BreakService : IBreakService
     {
         return await _context.Breaks
             .AnyAsync(b => b.EndTime == null);
+    }
+
+    public async Task DeleteBreakAsync(int id)
+    {
+        var breakEntity = await _context.Breaks.FindAsync(id);
+        if (breakEntity == null)
+        {
+            throw new InvalidOperationException($"Break with ID {id} not found.");
+        }
+
+        _context.Breaks.Remove(breakEntity);
+        await _context.SaveChangesAsync();
     }
 }

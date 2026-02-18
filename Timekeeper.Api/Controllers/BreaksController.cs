@@ -117,6 +117,20 @@ public class BreaksController : ControllerBase
         }
     }
 
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteBreak(int id)
+    {
+        try
+        {
+            await _breakService.DeleteBreakAsync(id);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     private static BreakDto MapToDto(Core.Models.Break breakEntity)
     {
         return new BreakDto

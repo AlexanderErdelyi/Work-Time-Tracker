@@ -48,3 +48,17 @@ export const useEndBreak = () => {
     },
   });
 };
+
+export const useDeleteBreak = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: breaksApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todayBreaks'] });
+      queryClient.invalidateQueries({ queryKey: ['breakStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['workDays'] });
+      queryClient.invalidateQueries({ queryKey: ['workDayStatus'] });
+    },
+  });
+};

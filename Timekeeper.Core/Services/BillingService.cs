@@ -17,17 +17,22 @@ public class BillingService : IBillingService
             return 0;
         }
         
+        // If less than 15 minutes but above threshold, always round up to minimum billing increment (0.25h / 15 min)
+        if (totalMinutes < 15)
+        {
+            return 0.25m;
+        }
+        
         // Convert to hours
         var hours = (decimal)totalMinutes / 60m;
         
         // Round to nearest billing increment (standard rounding: 0.5 rounds up)
         // Examples with 0.25h (15 min) increment:
-        // - 14 min (0.233h) -> 0.25h (rounds to nearest)
         // - 17 min (0.283h) -> 0.25h (rounds to nearest)
         // - 23 min (0.383h) -> 0.5h (rounds to nearest)
         var roundedHours = Math.Round(hours / billingIncrementHours, MidpointRounding.AwayFromZero) * billingIncrementHours;
         
-        // Ensure minimum billing increment if above threshold
+        // Ensure minimum billing increment
         if (roundedHours < billingIncrementHours)
         {
             roundedHours = billingIncrementHours;
