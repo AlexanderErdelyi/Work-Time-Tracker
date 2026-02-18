@@ -213,19 +213,19 @@ export function ServiceManager() {
     
     if (type === 'api') {
       if (shell === 'powershell') {
-        text = `cd Timekeeper.Api; $env:ASPNETCORE_ENVIRONMENT="Development"; $env:ASPNETCORE_URLS="http://localhost:${selectedApiPort}"; dotnet run`
+        text = `$root = $PWD; while ($root -and !(Test-Path "$root\\Timekeeper.Api")) { $root = Split-Path $root -Parent }; if (!$root) { Write-Error "Project not found"; exit 1 }; $apiPath = "$root\\Timekeeper.Api"; cd $apiPath; Remove-Item bin\\Debug\\net8.0\\Timekeeper.Api.exe -Force -ErrorAction SilentlyContinue; $env:ASPNETCORE_ENVIRONMENT="Development"; $env:ASPNETCORE_URLS="http://localhost:${selectedApiPort}"; $dllPath = Join-Path $apiPath "bin\\Debug\\net8.0\\Timekeeper.Api.dll"; $process = Start-Process -FilePath "dotnet" -ArgumentList "\`"$dllPath\`"" -WorkingDirectory $apiPath -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $apiPath "api-output.log") -RedirectStandardError (Join-Path $apiPath "api-error.log"); Write-Host "API started in background (PID: $($process.Id)) - http://localhost:${selectedApiPort}" -ForegroundColor Green; $process.Id | Out-File (Join-Path $apiPath "api.pid") -Force`
       } else if (shell === 'cmd') {
-        text = `cd Timekeeper.Api && set ASPNETCORE_ENVIRONMENT=Development && set ASPNETCORE_URLS=http://localhost:${selectedApiPort} && dotnet run`
+        text = `for /f "delims=" %%i in ('cd') do set "START=%%i" && cd "%START%" && :LOOP && if exist "Timekeeper.Api" (cd Timekeeper.Api && del /F /Q bin\\Debug\\net8.0\\Timekeeper.Api.exe 2>nul && set ASPNETCORE_ENVIRONMENT=Development && set ASPNETCORE_URLS=http://localhost:${selectedApiPort} && dotnet bin\\Debug\\net8.0\\Timekeeper.Api.dll) else (cd .. && if "%cd%" neq "%START%" goto LOOP)`
       } else {
-        text = `cd Timekeeper.Api; export ASPNETCORE_ENVIRONMENT=Development; export ASPNETCORE_URLS=http://localhost:${selectedApiPort}; dotnet run`
+        text = `root=$(pwd); while [ "$root" != "/" ] && [ ! -d "$root/Timekeeper.Api" ]; do root=$(dirname "$root"); done; if [ ! -d "$root/Timekeeper.Api" ]; then echo "Project not found"; exit 1; fi; cd "$root/Timekeeper.Api"; rm -f bin/Debug/net8.0/Timekeeper.Api.exe; export ASPNETCORE_ENVIRONMENT=Development; export ASPNETCORE_URLS=http://localhost:${selectedApiPort}; dotnet bin/Debug/net8.0/Timekeeper.Api.dll`
       }
     } else {
       if (shell === 'powershell') {
-        text = `cd Timekeeper.Web; $env:PORT=${selectedFrontendPort}; npm run dev`
+        text = `$root = $PWD; while ($root -and !(Test-Path "$root\\Timekeeper.Web")) { $root = Split-Path $root -Parent }; if (!$root) { Write-Error "Project not found"; exit 1 }; $webPath = "$root\\Timekeeper.Web"; cd $webPath; $env:PORT=${selectedFrontendPort}; $process = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $webPath -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $webPath "frontend-output.log") -RedirectStandardError (Join-Path $webPath "frontend-error.log"); Write-Host "Frontend started in background (PID: $($process.Id)) - http://localhost:${selectedFrontendPort}" -ForegroundColor Green; $process.Id | Out-File (Join-Path $webPath "frontend.pid") -Force`
       } else if (shell === 'cmd') {
-        text = `cd Timekeeper.Web && set PORT=${selectedFrontendPort} && npm run dev`
+        text = `for /f "delims=" %%i in ('cd') do set "START=%%i" && cd "%START%" && :LOOP && if exist "Timekeeper.Web" (cd Timekeeper.Web && set PORT=${selectedFrontendPort} && npm run dev) else (cd .. && if "%cd%" neq "%START%" goto LOOP)`
       } else {
-        text = `cd Timekeeper.Web; export PORT=${selectedFrontendPort}; npm run dev`
+        text = `root=$(pwd); while [ "$root" != "/" ] && [ ! -d "$root/Timekeeper.Web" ]; do root=$(dirname "$root"); done; if [ ! -d "$root/Timekeeper.Web" ]; then echo "Project not found"; exit 1; fi; cd "$root/Timekeeper.Web"; export PORT=${selectedFrontendPort}; npm run dev`
       }
     }
 
@@ -244,10 +244,10 @@ export function ServiceManager() {
       
       if (type === 'api') {
         port = selectedApiPort
-        command = `cd Timekeeper.Api; $env:ASPNETCORE_ENVIRONMENT='Development'; $env:ASPNETCORE_URLS='http://localhost:${port}'; Write-Host 'Starting Timekeeper API on port ${port}...' -ForegroundColor Cyan; dotnet run`
+        command = `$root = $PWD; while ($root -and !(Test-Path "$root\\Timekeeper.Api")) { $root = Split-Path $root -Parent }; if (!$root) { Write-Error "Project not found"; exit 1 }; $apiPath = "$root\\Timekeeper.Api"; cd $apiPath; Remove-Item bin\\Debug\\net8.0\\Timekeeper.Api.exe -Force -ErrorAction SilentlyContinue; $env:ASPNETCORE_ENVIRONMENT='Development'; $env:ASPNETCORE_URLS='http://localhost:${port}'; $dllPath = Join-Path $apiPath "bin\\Debug\\net8.0\\Timekeeper.Api.dll"; Write-Host 'Starting Timekeeper API on port ${port}...' -ForegroundColor Cyan; $process = Start-Process -FilePath "dotnet" -ArgumentList "\`"$dllPath\`"" -WorkingDirectory $apiPath -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $apiPath "api-output.log") -RedirectStandardError (Join-Path $apiPath "api-error.log"); Write-Host "API started in background (PID: $($process.Id))" -ForegroundColor Green; $process.Id | Out-File (Join-Path $apiPath "api.pid") -Force`
       } else {
         port = selectedFrontendPort
-        command = `cd Timekeeper.Web; Write-Host 'Starting Timekeeper Frontend...' -ForegroundColor Cyan; npm run dev`
+        command = `$root = $PWD; while ($root -and !(Test-Path "$root\\Timekeeper.Web")) { $root = Split-Path $root -Parent }; if (!$root) { Write-Error "Project not found"; exit 1 }; $webPath = "$root\\Timekeeper.Web"; cd $webPath; $env:PORT=${port}; Write-Host 'Starting Timekeeper Frontend on port ${port}...' -ForegroundColor Cyan; $process = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $webPath -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $webPath "frontend-output.log") -RedirectStandardError (Join-Path $webPath "frontend-error.log"); Write-Host "Frontend started in background (PID: $($process.Id))" -ForegroundColor Green; $process.Id | Out-File (Join-Path $webPath "frontend.pid") -Force`
       }
       
       // Check if we can use the API automation (only works if API is already running)
@@ -285,13 +285,12 @@ export function ServiceManager() {
       const instructions = 
         `🚀 To start the ${serviceName} service:\n\n` +
         `OPTION 1: Quick Start\n` +
-        `  1. Open PowerShell in project root\n` +
+        `  1. Open PowerShell anywhere in the project\n` +
         `  2. Paste command (already copied! Press Ctrl+V)\n` +
         `  3. Press Enter\n\n` +
         `OPTION 2: Manual\n` +
-        `  ${type === 'api' 
-            ? `cd Timekeeper.Api && dotnet run` 
-            : `cd Timekeeper.Web && npm run dev`}\n\n` +
+        `  The script will automatically find the project root\n` +
+        `  and navigate to the correct folder\n\n` +
         `The terminal will open and stay active.`
       
       alert(instructions)
@@ -584,7 +583,7 @@ Write-Host "Starting Timekeeper API on port $apiPort..." -ForegroundColor Green
 Write-Host ""
 
 # Navigate to API folder and start
-cd Timekeeper.Api
+Set-Location -Path (Join-Path $projectRoot "Timekeeper.Api")
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:ASPNETCORE_URLS = "http://localhost:$apiPort"
 
@@ -594,8 +593,11 @@ Write-Host ""
 Write-Host "Press Ctrl+C to stop the API" -ForegroundColor Yellow
 Write-Host ""
 
-# Run the API (this will keep the window open)
-dotnet run
+# Remove .exe to avoid file locking issues
+Remove-Item "bin\\Debug\\net8.0\\Timekeeper.Api.exe" -Force -ErrorAction SilentlyContinue
+
+# Run the API using DLL (this will keep the window open)
+dotnet bin\\Debug\\net8.0\\Timekeeper.Api.dll
 `;
 
     // Create a Blob and download it
@@ -795,7 +797,7 @@ dotnet run
                 disabled={!apiStatus.running}
                 title="Check what process is using this port"
               >
-                🔍 Check
+                Check
               </Button>
             </div>
           </div>
@@ -861,15 +863,30 @@ dotnet run
                   disabled={!apiStatus.running}
                   title="Check what process is using this port"
                 >
-                  🔍 Check Port
+                  Check Port
                 </Button>
               </div>
             </div>
             <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <div>cd Timekeeper.Api</div>
+              <div className="text-gray-400"># Auto-locate project root</div>
+              <div>$root = $PWD; while ($root -and !(Test-Path "$root\Timekeeper.Api")) {'{'} $root = Split-Path $root -Parent {'}'}</div>
+              <div>if (!$root) {'{'} Write-Error "Project not found"; exit 1 {'}'}</div>
+              <div>$apiPath = "$root\Timekeeper.Api"</div>
+              <div>cd $apiPath</div>
+              <div className="mt-2 text-gray-400"># Remove .exe to avoid file locking</div>
+              <div>Remove-Item bin\Debug\net8.0\Timekeeper.Api.exe -Force -ErrorAction SilentlyContinue</div>
+              <div className="mt-2 text-gray-400"># Set environment variables</div>
               <div>$env:ASPNETCORE_ENVIRONMENT="Development"</div>
               <div>$env:ASPNETCORE_URLS="http://localhost:{selectedApiPort}"</div>
-              <div>dotnet run</div>
+              <div className="mt-2 text-gray-400"># Start process in background with log redirection</div>
+              <div>$dllPath = Join-Path $apiPath "bin\Debug\net8.0\Timekeeper.Api.dll"</div>
+              <div>$process = Start-Process -FilePath "dotnet" -ArgumentList "`"$dllPath`"" \</div>
+              <div className="pl-4">-WorkingDirectory $apiPath -PassThru -WindowStyle Hidden \</div>
+              <div className="pl-4">-RedirectStandardOutput (Join-Path $apiPath "api-output.log") \</div>
+              <div className="pl-4">-RedirectStandardError (Join-Path $apiPath "api-error.log")</div>
+              <div className="mt-2 text-gray-400"># Save PID for later management</div>
+              <div>Write-Host "API started in background (PID: $($process.Id)) - http://localhost:{selectedApiPort}"</div>
+              <div>$process.Id | Out-File (Join-Path $apiPath "api.pid") -Force</div>
             </div>
           </div>
         </CardContent>
@@ -950,7 +967,7 @@ dotnet run
                 disabled={!apiStatus.running}
                 title="Check what process is using this port"
               >
-                🔍 Check
+                Check
               </Button>
             </div>
           </div>
@@ -1016,13 +1033,26 @@ dotnet run
                   disabled={!apiStatus.running}
                   title="Check what process is using this port"
                 >
-                  🔍 Check Port
+                  Check Port
                 </Button>
               </div>
             </div>
             <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <div>cd Timekeeper.Web</div>
-              <div>npm run dev</div>
+              <div className="text-gray-400"># Auto-locate project root</div>
+              <div>$root = $PWD; while ($root -and !(Test-Path "$root\Timekeeper.Web")) {'{'} $root = Split-Path $root -Parent {'}'}</div>
+              <div>if (!$root) {'{'} Write-Error "Project not found"; exit 1 {'}'}</div>
+              <div>$webPath = "$root\Timekeeper.Web"</div>
+              <div>cd $webPath</div>
+              <div className="mt-2 text-gray-400"># Set PORT environment variable</div>
+              <div>$env:PORT={selectedFrontendPort}</div>
+              <div className="mt-2 text-gray-400"># Start npm in background with log redirection</div>
+              <div>$process = Start-Process -FilePath "npm" -ArgumentList "run", "dev" \</div>
+              <div className="pl-4">-WorkingDirectory $webPath -PassThru -WindowStyle Hidden \</div>
+              <div className="pl-4">-RedirectStandardOutput (Join-Path $webPath "frontend-output.log") \</div>
+              <div className="pl-4">-RedirectStandardError (Join-Path $webPath "frontend-error.log")</div>
+              <div className="mt-2 text-gray-400"># Save PID for later management</div>
+              <div>Write-Host "Frontend started in background (PID: $($process.Id)) - http://localhost:{selectedFrontendPort}"</div>
+              <div>$process.Id | Out-File (Join-Path $webPath "frontend.pid") -Force</div>
             </div>
           </div>
         </CardContent>
@@ -1042,7 +1072,7 @@ dotnet run
                   <Download className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-lg text-foreground mb-2">🚀 Easy Start (Recommended)</h3>
+                  <h3 className="font-bold text-lg text-foreground mb-2">Easy Start (Recommended)</h3>
                   <p className="text-sm text-muted-foreground mb-3">
                     Download a smart launcher script that automatically finds your project and starts the API. 
                     Save it anywhere (Desktop, Downloads, etc.) - it will locate your Timekeeper installation!
@@ -1056,7 +1086,7 @@ dotnet run
                     Download Smart Launcher Script
                   </Button>
                   <p className="text-xs text-muted-foreground mt-2">
-                    ✅ Auto-detects project location • ✅ One-click to start • ✅ No manual setup needed
+                    Auto-detects project location • One-click to start • No manual setup needed
                   </p>
                 </div>
               </div>
