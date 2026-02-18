@@ -143,6 +143,11 @@ public class TimeEntryService : ITimeEntryService
             return entry;
         }
 
+        // Calculate stopped duration and accumulate into TotalPausedSeconds
+        // This ensures the stopped time is excluded from the duration calculation
+        var stoppedDuration = DateTime.UtcNow - entry.EndTime.Value;
+        entry.TotalPausedSeconds += (int)Math.Round(stoppedDuration.TotalSeconds);
+        
         // Resume by clearing EndTime and BilledHours
         entry.EndTime = null;
         entry.BilledHours = null;

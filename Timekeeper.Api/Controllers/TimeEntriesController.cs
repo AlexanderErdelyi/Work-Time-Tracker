@@ -98,7 +98,7 @@ public class TimeEntriesController : ControllerBase
                 TotalPausedSeconds = e.TotalPausedSeconds,
                 IsPaused = e.PausedAt.HasValue && !e.EndTime.HasValue,
                 Notes = e.Notes,
-                DurationMinutes = e.EndTime.HasValue ? (e.EndTime.Value - e.StartTime).TotalMinutes : null,
+                DurationMinutes = e.EndTime.HasValue ? ((e.EndTime.Value - e.StartTime).TotalMinutes - (e.TotalPausedSeconds / 60.0)) : null,
                 BilledHours = e.BilledHours,
                 IsRunning = e.EndTime == null && !e.PausedAt.HasValue,
                 CreatedAt = e.CreatedAt,
@@ -640,8 +640,8 @@ public class TimeEntriesController : ControllerBase
             .Select(g => new TimeEntrySummary
             {
                 Date = g.Key,
-                TotalMinutes = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalMinutes),
-                TotalHours = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalHours),
+                TotalMinutes = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalMinutes - (e.TotalPausedSeconds / 60.0)),
+                TotalHours = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalHours - (e.TotalPausedSeconds / 3600.0)),
                 EntryCount = g.Count()
             })
             .OrderByDescending(s => s.Date)
@@ -701,8 +701,8 @@ public class TimeEntriesController : ControllerBase
             .Select(g => new TimeEntrySummary
             {
                 Date = g.Key,
-                TotalMinutes = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalMinutes),
-                TotalHours = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalHours),
+                TotalMinutes = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalMinutes - (e.TotalPausedSeconds / 60.0)),
+                TotalHours = g.Sum(e => (e.EndTime!.Value - e.StartTime).TotalHours - (e.TotalPausedSeconds / 3600.0)),
                 EntryCount = g.Count()
             })
             .OrderByDescending(s => s.Date)

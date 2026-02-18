@@ -134,4 +134,70 @@ public class CustomersController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPost("bulk-delete")]
+    public async Task<IActionResult> BulkDeleteCustomers([FromBody] int[] customerIds)
+    {
+        if (customerIds == null || customerIds.Length == 0)
+        {
+            return BadRequest("No customer IDs provided");
+        }
+
+        var deletedCount = 0;
+        var errors = new List<string>();
+
+        foreach (var customerId in customerIds)
+        {
+            try
+            {
+                var customer = await _context.Customers
+                    .Include(c => c.Projects)
+                        .ThenInclude(p => p.Tasks)
+                            .ThenInclude(t => t.TimeEntries)
+                    .FirstOrDefaultAsync(c => c.Id == customerId);
+
+                if (customer == null)
+                {
+                    errors.Add($"Customer with ID {customerId} not found");
+                    continue;
+                }
+
+                // Delete all time entries for all tasks in all projects
+                foreach (var project in customer.Projects)
+                {
+                    foreach (var task in project.Tasks)
+                    {
+                        _context.TimeEntries.RemoveRange(task.TimeEntries);
+                    }
+                    // Delete all tasks in the project
+                    _context.Tasks.RemoveRange(project.Tasks);
+                }
+
+                // Delete all projects for the customer
+                _context.Projects.RemoveRange(customer.Projects);
+
+                // Delete the customer
+                _context.Customers.Remove(customer);
+
+                deletedCount++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Error deleting customer {customerId}: {ex.Message}");
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        if (errors.Any())
+        {
+            return Ok(new
+            {
+                deletedCount,
+                errors
+            });
+        }
+
+        return Ok(new { deletedCount });
+    }
 }

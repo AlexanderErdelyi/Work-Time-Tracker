@@ -59,3 +59,15 @@ export function useDeleteCustomer() {
     },
   })
 }
+
+export function useBulkDeleteCustomers() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (ids: number[]) => customersApi.bulkDelete(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customersKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: customersKeys.details() })
+    },
+  })
+}

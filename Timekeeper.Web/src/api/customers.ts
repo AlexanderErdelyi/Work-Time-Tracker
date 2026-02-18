@@ -25,4 +25,10 @@ export const customersApi = {
     fetchApi<void>(`/customers/${id}`, {
       method: 'DELETE',
     }),
+
+  bulkDelete: (ids: number[]) =>
+    fetchApi<{ deletedCount: number; errors?: string[] }>('/customers/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify(ids),
+    }),
 }

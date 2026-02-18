@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { Plus, Search, Edit, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder, ListTree } from 'lucide-react'
-import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from '../hooks/useCustomers'
+import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer, useBulkDeleteCustomers } from '../hooks/useCustomers'
 import { useProjects } from '../hooks/useProjects'
 import { useTasks } from '../hooks/useTasks'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog'
@@ -20,11 +20,13 @@ export function Customers() {
   const [expandedCustomers, setExpandedCustomers] = useState<Set<number>>(new Set())
   const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set())
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set())
   
   const { data: customers = [], isLoading } = useCustomers({ search })
   const createCustomer = useCreateCustomer()
   const updateCustomer = useUpdateCustomer()
   const deleteCustomer = useDeleteCustomer()
+  const bulkDeleteCustomers = useBulkDeleteCustomers()
 
   const [formData, setFormData] = useState<CustomerDto>({
     name: '',
@@ -122,6 +124,47 @@ export function Customers() {
     })
   }
 
+  const toggleSelectCustomer = (customerId: number) => {
+    setSelectedCustomerIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(customerId)) {
+        newSet.delete(customerId)
+      } else {
+        newSet.add(customerId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedCustomerIds.size === customers.length) {
+      setSelectedCustomerIds(new Set())
+    } else {
+      setSelectedCustomerIds(new Set(customers.map(c => c.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const count = selectedCustomerIds.size
+    if (count === 0) return
+
+    if (confirm(`Are you sure you want to delete ${count} customer${count > 1 ? 's' : ''}? This will also delete all associated projects, tasks, and time entries.`)) {
+      try {
+        const result = await bulkDeleteCustomers.mutateAsync(Array.from(selectedCustomerIds))
+        setSelectedCustomerIds(new Set())
+        
+        if (result.errors && result.errors.length > 0) {
+          alert(`Deleted ${result.deletedCount} customers.\n\nErrors:\n${result.errors.join('\n')}`)
+        } else {
+          // Success message is handled by the mutation
+        }
+      } catch (error) {
+        console.error('Failed to delete customers:', error)
+        alert('Failed to delete customers. Please try again.')
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -162,9 +205,25 @@ export function Customers() {
               <CardTitle>All Customers</CardTitle>
               <CardDescription>
                 {customers.length} customer{customers.length !== 1 ? 's' : ''} total
+                {selectedCustomerIds.size > 0 && (
+                  <span className="ml-2 text-primary">
+                    ({selectedCustomerIds.size} selected)
+                  </span>
+                )}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              {selectedCustomerIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteCustomers.isPending}
+                  className="gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Selected ({selectedCustomerIds.size})
+                </Button>
+              )}
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -186,33 +245,53 @@ export function Customers() {
             </p>
           ) : viewMode === 'list' ? (
             <div className="space-y-2">
+              {customers.length > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b">
+                  <input
+                    type="checkbox"
+                    checked={selectedCustomerIds.size === customers.length && customers.length > 0}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm text-muted-foreground">Select All</span>
+                </div>
+              )}
               {customers.map((customer) => (
                 <div
                   key={customer.id}
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{customer.name}</h3>
-                      {customer.no && (
-                        <span className="text-sm text-muted-foreground">({customer.no})</span>
+                  <div className="flex items-center gap-3 flex-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedCustomerIds.has(customer.id)}
+                      onChange={() => toggleSelectCustomer(customer.id)}
+                      className="h-4 w-4 rounded border-gray-300"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{customer.name}</h3>
+                        {customer.no && (
+                          <span className="text-sm text-muted-foreground">({customer.no})</span>
+                        )}
+                        <Badge
+                          variant={customer.isActive ? 'success' : 'secondary'}
+                          className="cursor-pointer"
+                          onClick={() => toggleActive(customer)}
+                        >
+                          {customer.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      {customer.description && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {customer.description}
+                        </p>
                       )}
-                      <Badge
-                        variant={customer.isActive ? 'success' : 'secondary'}
-                        className="cursor-pointer"
-                        onClick={() => toggleActive(customer)}
-                      >
-                        {customer.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-                    {customer.description && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {customer.description}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Created {formatDate(customer.createdAt, 'MMM d, yyyy')}
                       </p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Created {formatDate(customer.createdAt, 'MMM d, yyyy')}
-                    </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -235,6 +314,17 @@ export function Customers() {
             </div>
           ) : (
             <div className="space-y-2">
+              {customers.length > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b">
+                  <input
+                    type="checkbox"
+                    checked={selectedCustomerIds.size === customers.length && customers.length > 0}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm text-muted-foreground">Select All</span>
+                </div>
+              )}
               {customers.map((customer) => (
                 <CustomerTreeItem
                   key={customer.id}
@@ -246,6 +336,8 @@ export function Customers() {
                   onEditCustomer={openEditDialog}
                   onDeleteCustomer={handleDelete}
                   onToggleActive={toggleActive}
+                  isSelected={selectedCustomerIds.has(customer.id)}
+                  onToggleSelect={() => toggleSelectCustomer(customer.id)}
                 />
               ))}
             </div>
@@ -339,6 +431,8 @@ interface CustomerTreeItemProps {
   onEditCustomer: (customer: Customer) => void
   onDeleteCustomer: (id: number) => void
   onToggleActive: (customer: Customer) => void
+  isSelected: boolean
+  onToggleSelect: () => void
 }
 
 function CustomerTreeItem({
@@ -350,6 +444,8 @@ function CustomerTreeItem({
   onEditCustomer,
   onDeleteCustomer,
   onToggleActive,
+  isSelected,
+  onToggleSelect,
 }: CustomerTreeItemProps) {
   const { data: projects = [] } = useProjects({ customerId: customer.id })
 
@@ -358,6 +454,13 @@ function CustomerTreeItem({
       {/* Customer Header */}
       <div className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors">
         <div className="flex items-center gap-2 flex-1">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            className="h-4 w-4 rounded border-gray-300"
+            onClick={(e) => e.stopPropagation()}
+          />
           <Button
             variant="ghost"
             size="sm"
