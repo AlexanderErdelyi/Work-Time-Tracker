@@ -14,6 +14,9 @@ public class TimeEntryDto
     public string? CustomerNo { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime? EndTime { get; set; }
+    public DateTime? PausedAt { get; set; }
+    public int TotalPausedSeconds { get; set; }
+    public bool IsPaused { get; set; }
     public string? Notes { get; set; }
     public double? DurationMinutes { get; set; }
     public decimal? BilledHours { get; set; }

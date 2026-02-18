@@ -66,7 +66,7 @@ export const useDeleteWorkDay = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) => workDaysApi.delete(id),
+    mutationFn: ({ id, cascade }: { id: number; cascade: boolean }) => workDaysApi.delete(id, cascade),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workDays'] });
       queryClient.invalidateQueries({ queryKey: ['workDayStatus'] });

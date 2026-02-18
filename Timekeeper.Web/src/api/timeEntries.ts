@@ -38,7 +38,7 @@ export const timeEntriesApi = {
   bulkDelete: (ids: number[]) =>
     fetchApi<void>('/timeentries/bulk-delete', {
       method: 'POST',
-      body: JSON.stringify(ids),
+      body: JSON.stringify({ Ids: ids }),
     }),
 
   start: (data: StartTimerDto) =>
@@ -54,6 +54,16 @@ export const timeEntriesApi = {
 
   resume: (id: number) =>
     fetchApi<TimeEntry>(`/timeentries/${id}/resume`, {
+      method: 'POST',
+    }),
+
+  pause: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/pause`, {
+      method: 'POST',
+    }),
+
+  resumeFromPause: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/resume-from-pause`, {
       method: 'POST',
     }),
 

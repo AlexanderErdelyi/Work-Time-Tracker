@@ -64,7 +64,7 @@ class NotificationService {
   /**
    * Show a browser notification with sound
    */
-  private showNotification(title: string, body: string, tag: string): void {
+  showNotification(title: string, body: string, tag: string): void {
     console.log('[Notifications] showNotification called', { 
       title, 
       body, 
@@ -88,7 +88,6 @@ class NotificationService {
         badge: '/vite.svg',
         requireInteraction: true,
         silent: true, // We'll play our own custom sound
-        timestamp: Date.now(),
         // Don't use tag - it can suppress notifications if one with same tag exists
       });
 
@@ -119,7 +118,6 @@ class NotificationService {
       setTimeout(() => {
         console.log('[Notifications] Notification check - state:', {
           tag: notification.tag,
-          timestamp: notification.timestamp,
           data: notification.data
         });
       }, 500);

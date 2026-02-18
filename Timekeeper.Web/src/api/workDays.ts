@@ -1,6 +1,13 @@
-﻿import axios from 'axios';
+﻿import { fetchApi, buildQueryString } from './client';
 
-const API_URL = '/api/workdays';
+export interface BreakSummary {
+  id: number;
+  startTime: string;
+  endTime?: string;
+  durationMinutes?: number;
+  isActive: boolean;
+  notes?: string;
+}
 
 export interface WorkDay {
   id: number;
@@ -9,7 +16,9 @@ export interface WorkDay {
   checkOutTime?: string;
   notes?: string;
   totalWorkedMinutes: number;
+  totalBreakMinutes: number;
   isCheckedIn: boolean;
+  breaks: BreakSummary[];
 }
 
 export interface WorkDayStatus {
@@ -19,40 +28,46 @@ export interface WorkDayStatus {
 
 export const workDaysApi = {
   getAll: async (startDate?: string, endDate?: string) => {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    const queryString = params.toString();
-    const response = await axios.get<WorkDay[]>(`${API_URL}${queryString ? `?${queryString}` : ''}`);
-    return response.data;
+    const params: Record<string, string> = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    const queryString = buildQueryString(params);
+    return fetchApi<WorkDay[]>(`/workdays${queryString}`);
   },
 
   getToday: async () => {
-    const response = await axios.get<WorkDay>(`${API_URL}/today`);
-    return response.data;
+    return fetchApi<WorkDay>(`/workdays/today`);
   },
 
   getStatus: async () => {
-    const response = await axios.get<WorkDayStatus>(`${API_URL}/status`);
-    return response.data;
+    return fetchApi<WorkDayStatus>(`/workdays/status`);
   },
 
   checkIn: async (notes?: string) => {
-    const response = await axios.post<WorkDay>(`${API_URL}/checkin`, { notes });
-    return response.data;
+    return fetchApi<WorkDay>('/workdays/checkin', {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
   },
 
   checkOut: async (notes?: string) => {
-    const response = await axios.post<WorkDay>(`${API_URL}/checkout`, { notes });
-    return response.data;
+    return fetchApi<WorkDay>('/workdays/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
   },
 
   update: async (id: number, data: { checkInTime?: string; checkOutTime?: string; notes?: string }) => {
-    const response = await axios.put<WorkDay>(`${API_URL}/${id}`, data);
-    return response.data;
+    return fetchApi<WorkDay>(`/workdays/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
-  delete: async (id: number) => {
-    await axios.delete(`${API_URL}/${id}`);
+  delete: async (id: number, cascade: boolean = false) => {
+    const queryString = cascade ? '?cascade=true' : '';
+    return fetchApi<void>(`/workdays/${id}${queryString}`, {
+      method: 'DELETE',
+    });
   }
 };

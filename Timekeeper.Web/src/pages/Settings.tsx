@@ -5,6 +5,7 @@ import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import SoundSelectionModal from '../components/SoundSelectionModal'
+import { useTasks } from '../hooks/useTasks'
 import { 
   User,
   Clock, 
@@ -15,6 +16,9 @@ import {
   Save,
   RefreshCw,
   Volume2,
+  Activity,
+  Zap,
+  X,
 } from 'lucide-react'
 
 export function Settings() {
@@ -85,6 +89,24 @@ export function Settings() {
   )
   const [isSoundModalOpen, setIsSoundModalOpen] = useState(false)
 
+  // Idle Detection Settings
+  const [enableIdleDetection, setEnableIdleDetection] = useState(
+    localStorage.getItem('timekeeper_enableIdleDetection') === 'true'
+  )
+  const [idleThresholdMinutes, setIdleThresholdMinutes] = useState(
+    localStorage.getItem('timekeeper_idleThresholdMinutes') || '5'
+  )
+  const [autoResumeOnActivity, setAutoResumeOnActivity] = useState(
+    localStorage.getItem('timekeeper_autoResumeOnActivity') === 'true'
+  )
+
+  // Quick Tasks Settings
+  const [quickTaskIds, setQuickTaskIds] = useState<number[]>(
+    JSON.parse(localStorage.getItem('timekeeper_quickTasks') || '[]')
+  )
+  const { data: allTasks = [] } = useTasks({ isActive: true })
+  const [selectedTaskForQuick, setSelectedTaskForQuick] = useState<string>('')
+
   const handleSaveUserSettings = () => {
     localStorage.setItem('timekeeper_userName', userName)
     localStorage.setItem('timekeeper_userEmail', userEmail)
@@ -136,6 +158,28 @@ export function Settings() {
     localStorage.setItem('timekeeper_notificationSound', soundFileName);
   }
 
+  const handleSaveIdleDetectionSettings = () => {
+    localStorage.setItem('timekeeper_enableIdleDetection', enableIdleDetection.toString())
+    localStorage.setItem('timekeeper_idleThresholdMinutes', idleThresholdMinutes)
+    localStorage.setItem('timekeeper_autoResumeOnActivity', autoResumeOnActivity.toString())
+    alert('Idle detection settings saved! Refresh the page to apply changes.')
+  }
+  const handleAddQuickTask = () => {
+    if (!selectedTaskForQuick) return
+    const taskId = parseInt(selectedTaskForQuick)
+    if (!quickTaskIds.includes(taskId)) {
+      const newQuickTaskIds = [...quickTaskIds, taskId]
+      setQuickTaskIds(newQuickTaskIds)
+      localStorage.setItem('timekeeper_quickTasks', JSON.stringify(newQuickTaskIds))
+      setSelectedTaskForQuick('')
+    }
+  }
+
+  const handleRemoveQuickTask = (taskId: number) => {
+    const newQuickTaskIds = quickTaskIds.filter(id => id !== taskId)
+    setQuickTaskIds(newQuickTaskIds)
+    localStorage.setItem('timekeeper_quickTasks', JSON.stringify(newQuickTaskIds))
+  }
   const handleExportData = async () => {
     try {
       const response = await fetch('/api/export/csv')
@@ -267,6 +311,88 @@ export function Settings() {
             <Save className="h-4 w-4" />
             Save Tracking Settings
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Quick Tasks Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5" />
+            <CardTitle>Quick Tasks</CardTitle>
+          </div>
+          <CardDescription>Configure tasks for one-click timer start from Quick Actions</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Label htmlFor="quickTaskSelect">Add Task to Quick Actions</Label>
+                <Select
+                  value={selectedTaskForQuick}
+                  onValueChange={setSelectedTaskForQuick}
+                >
+                  <SelectTrigger id="quickTaskSelect">
+                    <SelectValue placeholder="Select a task..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allTasks
+                      .filter(task => !quickTaskIds.includes(task.id))
+                      .map(task => (
+                        <SelectItem key={task.id} value={task.id.toString()}>
+                          {task.name} ({task.customerName} / {task.projectName})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleAddQuickTask}
+                disabled={!selectedTaskForQuick}
+                className="mt-6"
+              >
+                Add
+              </Button>
+            </div>
+
+            {quickTaskIds.length > 0 && (
+              <div className="space-y-2">
+                <Label>Quick Tasks ({quickTaskIds.length})</Label>
+                <div className="space-y-2">
+                  {quickTaskIds.map(taskId => {
+                    const task = allTasks.find(t => t.id === taskId)
+                    if (!task) return null
+                    return (
+                      <div
+                        key={taskId}
+                        className="flex items-center justify-between p-3 border rounded-lg bg-muted/50"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">{task.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {task.customerName} / {task.projectName}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveQuickTask(taskId)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {quickTaskIds.length === 0 && (
+              <div className="text-sm text-muted-foreground p-4 border rounded-lg bg-muted/30">
+                No quick tasks configured. Add tasks above to enable one-click timer start from the Quick Actions menu in the top bar.
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -614,6 +740,98 @@ export function Settings() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Idle Detection Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            <CardTitle>Idle Detection</CardTitle>
+          </div>
+          <CardDescription>Automatically pause timers when you're away</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-4">
+            {/* Enable Idle Detection */}
+            <div className="flex items-center justify-between p-4 bg-accent/50 rounded-lg">
+              <div className="flex-1">
+                <Label htmlFor="enableIdleDetection" className="text-base font-medium cursor-pointer">
+                  Enable Idle Detection
+                </Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Automatically pause running timers when no activity is detected
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                id="enableIdleDetection"
+                checked={enableIdleDetection}
+                onChange={(e) => setEnableIdleDetection(e.target.checked)}
+                className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+              />
+            </div>
+
+            {enableIdleDetection && (
+              <>
+                {/* Idle Threshold */}
+                <div className="space-y-2">
+                  <Label htmlFor="idleThresholdMinutes">Idle Threshold (minutes)</Label>
+                  <Input
+                    id="idleThresholdMinutes"
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={idleThresholdMinutes}
+                    onChange={(e) => setIdleThresholdMinutes(e.target.value)}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Pause timer after {idleThresholdMinutes} minute{idleThresholdMinutes === '1' ? '' : 's'} of inactivity
+                  </p>
+                </div>
+
+                {/* Auto Resume */}
+                <div className="flex items-center justify-between p-4 bg-accent/50 rounded-lg">
+                  <div className="flex-1">
+                    <Label htmlFor="autoResumeOnActivity" className="text-base font-medium cursor-pointer">
+                      Auto Resume on Activity
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Automatically resume timer when activity is detected (without confirmation)
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="autoResumeOnActivity"
+                    checked={autoResumeOnActivity}
+                    onChange={(e) => setAutoResumeOnActivity(e.target.checked)}
+                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                  />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex gap-2">
+                    <Activity className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-900">
+                      <p className="font-medium mb-1">How it works:</p>
+                      <ul className="list-disc list-inside space-y-1 text-blue-800">
+                        <li>Tracks mouse, keyboard, and window activity</li>
+                        <li>Pauses timer after {idleThresholdMinutes} minute{idleThresholdMinutes === '1' ? '' : 's'} of no activity</li>
+                        <li>Shows notification when idle detected</li>
+                        <li>{autoResumeOnActivity ? 'Automatically resumes' : 'Prompts to resume'} when you return</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Button onClick={handleSaveIdleDetectionSettings} className="gap-2">
+            <Save className="h-4 w-4" />
+            Save Idle Detection Settings
+          </Button>
         </CardContent>
       </Card>
 

@@ -74,6 +74,30 @@ export function useResumeTimer() {
   })
 }
 
+export function usePauseTimer() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.pause(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+    },
+  })
+}
+
+export function useResumeFromPause() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.resumeFromPause(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+    },
+  })
+}
+
 export function useUpdateTimeEntry() {
   const queryClient = useQueryClient()
   

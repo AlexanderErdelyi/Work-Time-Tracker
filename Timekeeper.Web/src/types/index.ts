@@ -75,6 +75,9 @@ export interface TimeEntry {
   customerNo?: string
   startTime: string
   endTime?: string
+  pausedAt?: string
+  totalPausedSeconds: number
+  isPaused: boolean
   notes?: string
   durationMinutes?: number
   billedHours?: number

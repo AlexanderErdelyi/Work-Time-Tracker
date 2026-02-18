@@ -88,11 +88,11 @@ public class WorkDaysController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteWorkDay(int id)
+    public async Task<ActionResult> DeleteWorkDay(int id, [FromQuery] bool cascade = false)
     {
         try
         {
-            await _workDayService.DeleteWorkDayAsync(id);
+            await _workDayService.DeleteWorkDayAsync(id, cascade);
             return NoContent();
         }
         catch (InvalidOperationException ex)
@@ -103,6 +103,23 @@ public class WorkDaysController : ControllerBase
 
     private static WorkDayDto MapToDto(Core.Models.WorkDay workDay)
     {
+        var breaks = workDay.Breaks?
+            .OrderBy(b => b.StartTime)
+            .Select(b => new BreakSummaryDto
+            {
+                Id = b.Id,
+                StartTime = b.StartTime,
+                EndTime = b.EndTime,
+                DurationMinutes = (int)b.Duration.TotalMinutes,
+                IsActive = b.IsActive,
+                Notes = b.Notes
+            })
+            .ToList() ?? new List<BreakSummaryDto>();
+
+        var totalBreakMinutes = breaks
+            .Where(b => b.DurationMinutes.HasValue)
+            .Sum(b => b.DurationMinutes!.Value);
+
         return new WorkDayDto
         {
             Id = workDay.Id,
@@ -111,7 +128,9 @@ public class WorkDaysController : ControllerBase
             CheckOutTime = workDay.CheckOutTime,
             Notes = workDay.Notes,
             TotalWorkedMinutes = workDay.TotalWorkedMinutes,
-            IsCheckedIn = workDay.IsCheckedIn
+            TotalBreakMinutes = totalBreakMinutes,
+            IsCheckedIn = workDay.IsCheckedIn,
+            Breaks = breaks
         };
     }
 }

@@ -13,7 +13,7 @@ public interface IWorkDayService
     Task<WorkDay> CheckOutAsync(DateTime? time = null, string? notes = null);
     Task<bool> IsCheckedInAsync();
     Task<WorkDay?> UpdateWorkDayAsync(int id, DateTime? checkInTime, DateTime? checkOutTime, string? notes);
-    Task DeleteWorkDayAsync(int id);
+    Task DeleteWorkDayAsync(int id, bool cascade = false);
 }
 
 public class WorkDayService : IWorkDayService
@@ -85,7 +85,8 @@ public class WorkDayService : IWorkDayService
         }
         else
         {
-            workDay.CheckInTime = checkInTime;
+            // Preserve original check-in time, only clear checkout to allow re-check-in
+            workDay.CheckOutTime = null;
             if (!string.IsNullOrEmpty(notes))
             {
                 workDay.Notes = notes;
@@ -151,7 +152,7 @@ public class WorkDayService : IWorkDayService
         return workDay;
     }
 
-    public async Task DeleteWorkDayAsync(int id)
+    public async Task DeleteWorkDayAsync(int id, bool cascade = false)
     {
         var workDay = await _context.WorkDays
             .Include(w => w.TimeEntries)
@@ -166,7 +167,19 @@ public class WorkDayService : IWorkDayService
         // Check if work day has time entries or breaks
         if (workDay.TimeEntries.Any() || workDay.Breaks.Any())
         {
-            throw new InvalidOperationException("Cannot delete work day with associated time entries or breaks. Delete them first.");
+            if (!cascade)
+            {
+                var timeEntriesCount = workDay.TimeEntries.Count;
+                var breaksCount = workDay.Breaks.Count;
+                var details = new List<string>();
+                if (timeEntriesCount > 0) details.Add($"{timeEntriesCount} time {(timeEntriesCount == 1 ? "entry" : "entries")}");
+                if (breaksCount > 0) details.Add($"{breaksCount} {(breaksCount == 1 ? "break" : "breaks")}");
+                throw new InvalidOperationException($"Cannot delete work day with {string.Join(" and ", details)}. Delete them first or use force delete.");
+            }
+            
+            // Cascade delete: remove associated records first
+            _context.Breaks.RemoveRange(workDay.Breaks);
+            _context.TimeEntries.RemoveRange(workDay.TimeEntries);
         }
 
         _context.WorkDays.Remove(workDay);

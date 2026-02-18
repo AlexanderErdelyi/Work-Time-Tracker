@@ -1,14 +1,12 @@
-import { Moon, Sun, Command } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
 import { useRunningTimer } from '../../hooks/useTimeEntries'
-import { calculateDuration } from '../../lib/durationUtils'
-import { CommandPalette } from '../CommandPalette'
+import { QuickActionsDropdown } from '../QuickActionsDropdown'
 
 export function TopBar() {
   const [darkMode, setDarkMode] = useState(false)
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const { data: runningTimer } = useRunningTimer()
   const [elapsed, setElapsed] = useState('00:00:00')
 
@@ -27,32 +25,47 @@ export function TopBar() {
   }, [])
 
   useEffect(() => {
-    // Global keyboard shortcut for Command Palette
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        setCommandPaletteOpen((open) => !open)
-      }
-    }
-
-    document.addEventListener('keydown', down)
-    return () => document.removeEventListener('keydown', down)
-  }, [])
-
-  useEffect(() => {
     if (!runningTimer) {
       setElapsed('00:00:00')
       return
     }
 
     const updateElapsed = () => {
-      const duration = calculateDuration(runningTimer.startTime)
-      setElapsed(duration)
+      // Calculate elapsed time for paused and running timers
+      let totalSeconds = 0
+      
+      if (runningTimer.isPaused && runningTimer.pausedAt) {
+        // When paused: Calculate from start to pause time
+        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
+        const pause = new Date(runningTimer.pausedAt + (runningTimer.pausedAt.endsWith('Z') ? '' : 'Z'))
+        totalSeconds = Math.floor((pause.getTime() - start.getTime()) / 1000)
+      } else {
+        // When running: Calculate from start to now
+        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
+        const now = new Date()
+        totalSeconds = Math.floor((now.getTime() - start.getTime()) / 1000)
+      }
+      
+      // Subtract total paused time
+      totalSeconds -= (runningTimer.totalPausedSeconds || 0)
+      totalSeconds = Math.max(0, totalSeconds)
+      
+      // Format as HH:MM:SS
+      const hours = Math.floor(totalSeconds / 3600)
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+      const seconds = totalSeconds % 60
+      const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      
+      setElapsed(formatted)
     }
 
     updateElapsed()
-    const interval = setInterval(updateElapsed, 1000)
-    return () => clearInterval(interval)
+    
+    // Only set interval if not paused
+    if (!runningTimer.isPaused) {
+      const interval = setInterval(updateElapsed, 1000)
+      return () => clearInterval(interval)
+    }
   }, [runningTimer])
 
   const toggleDarkMode = () => {
@@ -114,22 +127,8 @@ export function TopBar() {
           )}
         </Button>
         
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          title="Command Palette (Ctrl+K)"
-          onClick={() => setCommandPaletteOpen(true)}
-        >
-          <Command className="h-4 w-4" />
-          <span className="hidden sm:inline">Quick Actions</span>
-        </Button>
+        <QuickActionsDropdown />
       </div>
-
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-      />
     </div>
   )
 }

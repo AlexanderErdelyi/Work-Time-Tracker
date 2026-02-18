@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Badge } from '../components/ui/Badge'
-import { Play, Square, Clock, Search, Edit, RefreshCw } from 'lucide-react'
-import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, useUpdateTimeEntry, useTimeEntries } from '../hooks/useTimeEntries'
+import { Play, Square, Clock, Search, Edit, RefreshCw, Pause } from 'lucide-react'
+import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries } from '../hooks/useTimeEntries'
 import { useTasks } from '../hooks/useTasks'
 import { useState, useEffect, useMemo } from 'react'
 import { calculateDuration, formatDurationHours } from '../lib/durationUtils'
@@ -13,6 +13,8 @@ import { formatDate } from '../lib/dateUtils'
 import { CheckInCard } from '../components/Dashboard/CheckInCard'
 import { BreakCard } from '../components/Dashboard/BreakCard'
 import { BreaksList } from '../components/Dashboard/BreaksList'
+import { IdleResumeDialog } from '../components/IdleResumeDialog'
+import { useIdleDetection } from '../hooks/useIdleDetection'
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -25,6 +27,8 @@ export function Dashboard() {
   const startTimer = useStartTimer()
   const stopTimer = useStopTimer()
   const resumeTimer = useResumeTimer()
+  const pauseTimer = usePauseTimer()
+  const resumeFromPause = useResumeFromPause()
   const updateTimer = useUpdateTimeEntry()
   const [elapsed, setElapsed] = useState('00:00:00')
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>()
@@ -33,6 +37,16 @@ export function Dashboard() {
   const [notes, setNotes] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
   const [runningNotes, setRunningNotes] = useState('')
+
+  // Idle detection
+  const {
+    dialogState,
+    handleKeepIdleTime,
+    handleDiscardIdleTime,
+    handleCancelResume,
+    isIdle,
+    idleState,
+  } = useIdleDetection()
 
   // Check if billing is enabled
   const isBillingEnabled = localStorage.getItem('timekeeper_enableBilling') === 'true'
@@ -53,13 +67,41 @@ export function Dashboard() {
     setRunningNotes(runningTimer.notes || '')
 
     const updateElapsed = () => {
-      const duration = calculateDuration(runningTimer.startTime)
-      setElapsed(duration)
+      // Calculate elapsed time
+      let totalSeconds = 0
+      
+      if (runningTimer.isPaused && runningTimer.pausedAt) {
+        // When paused: Calculate from start to pause time
+        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
+        const pause = new Date(runningTimer.pausedAt + (runningTimer.pausedAt.endsWith('Z') ? '' : 'Z'))
+        totalSeconds = Math.floor((pause.getTime() - start.getTime()) / 1000)
+      } else {
+        // When running: Calculate from start to now
+        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
+        const now = new Date()
+        totalSeconds = Math.floor((now.getTime() - start.getTime()) / 1000)
+      }
+      
+      // Subtract total paused time
+      totalSeconds -= (runningTimer.totalPausedSeconds || 0)
+      totalSeconds = Math.max(0, totalSeconds)
+      
+      // Format as HH:MM:SS
+      const hours = Math.floor(totalSeconds / 3600)
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+      const seconds = totalSeconds % 60
+      const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      
+      setElapsed(formatted)
     }
 
     updateElapsed()
-    const interval = setInterval(updateElapsed, 1000)
-    return () => clearInterval(interval)
+    
+    // Only set interval if not paused
+    if (!runningTimer.isPaused) {
+      const interval = setInterval(updateElapsed, 1000)
+      return () => clearInterval(interval)
+    }
   }, [runningTimer])
 
   // Populate dialog when opening for running timer
@@ -226,6 +268,20 @@ export function Dashboard() {
             <div className="text-6xl font-mono font-bold tracking-wider">
               {elapsed}
             </div>
+            
+            {/* Idle Indicator */}
+            {isIdle && runningTimer && (
+              <div className="mt-3 flex flex-col items-center gap-1">
+                <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Idle Detected
+                </Badge>
+                <p className="text-xs text-orange-600 dark:text-orange-400">
+                  Idle for {Math.floor((idleState.idleDurationMs || 0) / 60000)} min
+                </p>
+              </div>
+            )}
+            
             {runningTimer && runningTimer.taskName && (
               <div className="mt-4 text-center">
                 <p className="text-sm text-muted-foreground">
@@ -285,23 +341,46 @@ export function Dashboard() {
                   </div>
                 )}
 
-                <div className="flex gap-4">
+                <div className="flex flex-wrap justify-center gap-3">
+                  {runningTimer.isPaused ? (
+                    <Button
+                      size="lg"
+                      onClick={() => resumeFromPause.mutate(runningTimer.id)}
+                      disabled={resumeFromPause.isPending}
+                      className="gap-2 flex-1 min-w-[120px]"
+                    >
+                      <Play className="h-5 w-5" />
+                      Resume
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={() => pauseTimer.mutate(runningTimer.id)}
+                      disabled={pauseTimer.isPending}
+                      className="gap-2 flex-1 min-w-[120px]"
+                    >
+                      <Pause className="h-5 w-5" />
+                      Pause
+                    </Button>
+                  )}
+                  
                   <Button
                     size="lg"
                     variant="destructive"
                     onClick={handleStopTimer}
                     disabled={stopTimer.isPending}
-                    className="gap-2"
+                    className="gap-2 flex-1 min-w-[120px]"
                   >
                     <Square className="h-5 w-5" />
-                    Stop Timer
+                    Stop
                   </Button>
                   
                   <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button size="lg" variant="outline" className="gap-2">
+                      <Button size="lg" variant="outline" className="gap-2 flex-1 min-w-[120px]">
                         <Clock className="h-5 w-5" />
-                        {runningTimer.taskId ? 'Change Task' : 'Assign Task'}
+                        {runningTimer.taskId ? 'Change' : 'Assign'}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl max-h-[700px]">
@@ -643,6 +722,18 @@ export function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Idle Resume Dialog */}
+      {dialogState.idleStartTime && (
+        <IdleResumeDialog
+          isOpen={dialogState.isOpen}
+          idleStartTime={dialogState.idleStartTime}
+          idleDurationMs={dialogState.idleDurationMs}
+          onKeepIdleTime={handleKeepIdleTime}
+          onDiscardIdleTime={handleDiscardIdleTime}
+          onCancel={handleCancelResume}
+        />
+      )}
     </div>
   )
 }

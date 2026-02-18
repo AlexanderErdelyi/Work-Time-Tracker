@@ -21,6 +21,16 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.EndTime == null && e.PausedAt == null);
+    }
+
+    public async Task<TimeEntry?> GetActiveEntryAsync()
+    {
+        // Returns any timer that hasn't ended (running or paused)
+        return await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
             .FirstOrDefaultAsync(e => e.EndTime == null);
     }
 
@@ -136,6 +146,69 @@ public class TimeEntryService : ITimeEntryService
         // Resume by clearing EndTime and BilledHours
         entry.EndTime = null;
         entry.BilledHours = null;
+        entry.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return entry;
+    }
+
+    public async Task<TimeEntry> PauseTimerAsync(int entryId)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == entryId);
+
+        if (entry == null)
+        {
+            throw new ArgumentException($"Time entry with ID {entryId} not found.", nameof(entryId));
+        }
+
+        if (entry.EndTime.HasValue)
+        {
+            throw new InvalidOperationException("Cannot pause a stopped time entry.");
+        }
+
+        if (entry.PausedAt.HasValue)
+        {
+            throw new InvalidOperationException("This time entry is already paused.");
+        }
+
+        entry.PausedAt = DateTime.UtcNow;
+        entry.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return entry;
+    }
+
+    public async Task<TimeEntry> ResumeFromPauseAsync(int entryId)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == entryId);
+
+        if (entry == null)
+        {
+            throw new ArgumentException($"Time entry with ID {entryId} not found.", nameof(entryId));
+        }
+
+        if (entry.EndTime.HasValue)
+        {
+            throw new InvalidOperationException("Cannot resume a stopped time entry. Use resume to restart it.");
+        }
+
+        if (!entry.PausedAt.HasValue)
+        {
+            throw new InvalidOperationException("This time entry is not paused.");
+        }
+
+        // Calculate pause duration and accumulate
+        var pauseDuration = DateTime.UtcNow - entry.PausedAt.Value;
+        entry.TotalPausedSeconds += (int)pauseDuration.TotalSeconds;
+        entry.PausedAt = null;
         entry.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 

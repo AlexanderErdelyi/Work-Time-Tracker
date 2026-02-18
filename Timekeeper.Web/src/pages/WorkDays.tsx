@@ -69,16 +69,42 @@ export function WorkDays() {
   };
 
   const handleDelete = async (workDay: WorkDay) => {
-    if (!confirm(`Are you sure you want to delete the work day for ${formatDate(workDay.date, 'MMMM d, yyyy')}?`)) {
+    const hasAssociatedData = workDay.breaks.length > 0;
+    
+    let confirmMessage = `Are you sure you want to delete the work day for ${formatDate(workDay.date, 'MMMM d, yyyy')}?`;
+    if (hasAssociatedData) {
+      confirmMessage += `\n\nThis work day has ${workDay.breaks.length} break(s) that will also be deleted.`;
+    }
+    
+    if (!confirm(confirmMessage)) {
       return;
     }
     
     try {
-      await deleteWorkDay.mutateAsync(workDay.id);
+      // Try normal delete first
+      await deleteWorkDay.mutateAsync({ id: workDay.id, cascade: false });
     } catch (error) {
       console.error('Failed to delete work day:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to delete work day: ${errorMessage}`);
+      
+      // If it failed due to associated records, offer force delete
+      if (errorMessage.includes('time entries') || errorMessage.includes('breaks')) {
+        const forceDelete = confirm(
+          `${errorMessage}\n\nDo you want to FORCE DELETE this work day and all associated records?\n\nWARNING: This will permanently delete all time entries and breaks for this day. This action cannot be undone.`
+        );
+        
+        if (forceDelete) {
+          try {
+            await deleteWorkDay.mutateAsync({ id: workDay.id, cascade: true });
+          } catch (cascadeError) {
+            console.error('Failed to force delete:', cascadeError);
+            const cascadeErrorMessage = cascadeError instanceof Error ? cascadeError.message : 'Unknown error';
+            alert(`Failed to force delete work day: ${cascadeErrorMessage}`);
+          }
+        }
+      } else {
+        alert(`Failed to delete work day: ${errorMessage}`);
+      }
     }
   };
 
@@ -223,6 +249,18 @@ export function WorkDays() {
                       {workDay.notes && (
                         <div className="text-sm text-muted-foreground italic">
                           {workDay.notes}
+                        </div>
+                      )}
+                      
+                      {/* Associated Data */}
+                      {workDay.breaks.length > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline" className="text-xs">
+                            {workDay.breaks.length} {workDay.breaks.length === 1 ? 'break' : 'breaks'}
+                          </Badge>
+                          {workDay.totalBreakMinutes > 0 && (
+                            <span>({formatDuration(workDay.totalBreakMinutes)} break time)</span>
+                          )}
                         </div>
                       )}
                     </div>

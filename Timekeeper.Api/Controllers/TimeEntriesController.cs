@@ -94,10 +94,13 @@ public class TimeEntriesController : ControllerBase
                 CustomerNo = e.Task != null ? e.Task.Project.Customer.No : null,
                 StartTime = e.StartTime,
                 EndTime = e.EndTime,
+                PausedAt = e.PausedAt,
+                TotalPausedSeconds = e.TotalPausedSeconds,
+                IsPaused = e.PausedAt.HasValue && !e.EndTime.HasValue,
                 Notes = e.Notes,
                 DurationMinutes = e.EndTime.HasValue ? (e.EndTime.Value - e.StartTime).TotalMinutes : null,
                 BilledHours = e.BilledHours,
-                IsRunning = e.EndTime == null,
+                IsRunning = e.EndTime == null && !e.PausedAt.HasValue,
                 CreatedAt = e.CreatedAt,
                 UpdatedAt = e.UpdatedAt
             })
@@ -134,10 +137,13 @@ public class TimeEntriesController : ControllerBase
             CustomerNo = entry.Task?.Project?.Customer?.No,
             StartTime = entry.StartTime,
             EndTime = entry.EndTime,
+            PausedAt = entry.PausedAt,
+            TotalPausedSeconds = entry.TotalPausedSeconds,
+            IsPaused = entry.IsPaused,
             Notes = entry.Notes,
             DurationMinutes = entry.EndTime.HasValue ? (entry.EndTime.Value - entry.StartTime).TotalMinutes : null,
             BilledHours = entry.BilledHours,
-            IsRunning = entry.EndTime == null,
+            IsRunning = entry.IsRunning,
             CreatedAt = entry.CreatedAt,
             UpdatedAt = entry.UpdatedAt
         });
@@ -146,7 +152,7 @@ public class TimeEntriesController : ControllerBase
     [HttpGet("running")]
     public async Task<ActionResult<TimeEntryDto?>> GetRunningEntry()
     {
-        var entry = await _timeEntryService.GetRunningEntryAsync();
+        var entry = await _timeEntryService.GetActiveEntryAsync();
 
         if (entry == null)
         {
@@ -167,10 +173,13 @@ public class TimeEntriesController : ControllerBase
             CustomerNo = entry.Task?.Project?.Customer?.No,
             StartTime = entry.StartTime,
             EndTime = entry.EndTime,
+            PausedAt = entry.PausedAt,
+            TotalPausedSeconds = entry.TotalPausedSeconds,
+            IsPaused = entry.IsPaused,
             Notes = entry.Notes,
             DurationMinutes = null,
             BilledHours = entry.BilledHours,
-            IsRunning = true,
+            IsRunning = entry.IsRunning,
             CreatedAt = entry.CreatedAt,
             UpdatedAt = entry.UpdatedAt
         });
@@ -246,10 +255,13 @@ public class TimeEntriesController : ControllerBase
                 CustomerNo = entry.Task?.Project?.Customer?.No,
                 StartTime = entry.StartTime,
                 EndTime = entry.EndTime,
+                PausedAt = entry.PausedAt,
+                TotalPausedSeconds = entry.TotalPausedSeconds,
+                IsPaused = entry.IsPaused,
                 Notes = entry.Notes,
                 DurationMinutes = entry.Duration?.TotalMinutes,
                 BilledHours = entry.BilledHours,
-                IsRunning = false,
+                IsRunning = entry.IsRunning,
                 CreatedAt = entry.CreatedAt,
                 UpdatedAt = entry.UpdatedAt
             });
@@ -285,10 +297,97 @@ public class TimeEntriesController : ControllerBase
                 CustomerNo = entry.Task?.Project?.Customer?.No,
                 StartTime = entry.StartTime,
                 EndTime = entry.EndTime,
+                PausedAt = entry.PausedAt,
+                TotalPausedSeconds = entry.TotalPausedSeconds,
+                IsPaused = entry.IsPaused,
+                Notes = entry.Notes,
+                DurationMinutes = null,
+                BilledHours = entry.BilledHours,
+                IsRunning = entry.IsRunning,
+                CreatedAt = entry.CreatedAt,
+                UpdatedAt = entry.UpdatedAt
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpPost("{id}/pause")]
+    public async Task<ActionResult<TimeEntryDto>> PauseTimer(int id)
+    {
+        try
+        {
+            var entry = await _timeEntryService.PauseTimerAsync(id);
+
+            return Ok(new TimeEntryDto
+            {
+                Id = entry.Id,
+                TaskId = entry.TaskId,
+                TaskName = entry.Task?.Name,
+                TaskDescription = entry.Task?.Description,
+                TaskPosition = entry.Task?.Position,
+                TaskProcurementNumber = entry.Task?.ProcurementNumber,
+                ProjectName = entry.Task?.Project?.Name,
+                ProjectNo = entry.Task?.Project?.No,
+                CustomerName = entry.Task?.Project?.Customer?.Name,
+                CustomerNo = entry.Task?.Project?.Customer?.No,
+                StartTime = entry.StartTime,
+                EndTime = entry.EndTime,
+                PausedAt = entry.PausedAt,
+                TotalPausedSeconds = entry.TotalPausedSeconds,
+                Notes = entry.Notes,
+                DurationMinutes = null,
+                BilledHours = entry.BilledHours,
+                IsRunning = false,
+                IsPaused = true,
+                CreatedAt = entry.CreatedAt,
+                UpdatedAt = entry.UpdatedAt
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpPost("{id}/resume-from-pause")]
+    public async Task<ActionResult<TimeEntryDto>> ResumeFromPause(int id)
+    {
+        try
+        {
+            var entry = await _timeEntryService.ResumeFromPauseAsync(id);
+
+            return Ok(new TimeEntryDto
+            {
+                Id = entry.Id,
+                TaskId = entry.TaskId,
+                TaskName = entry.Task?.Name,
+                TaskDescription = entry.Task?.Description,
+                TaskPosition = entry.Task?.Position,
+                TaskProcurementNumber = entry.Task?.ProcurementNumber,
+                ProjectName = entry.Task?.Project?.Name,
+                ProjectNo = entry.Task?.Project?.No,
+                CustomerName = entry.Task?.Project?.Customer?.Name,
+                CustomerNo = entry.Task?.Project?.Customer?.No,
+                StartTime = entry.StartTime,
+                EndTime = entry.EndTime,
+                PausedAt = entry.PausedAt,
+                TotalPausedSeconds = entry.TotalPausedSeconds,
                 Notes = entry.Notes,
                 DurationMinutes = null,
                 BilledHours = entry.BilledHours,
                 IsRunning = true,
+                IsPaused = false,
                 CreatedAt = entry.CreatedAt,
                 UpdatedAt = entry.UpdatedAt
             });
@@ -356,6 +455,9 @@ public class TimeEntriesController : ControllerBase
             CustomerNo = result.Task?.Project?.Customer?.No,
             StartTime = result.StartTime,
             EndTime = result.EndTime,
+            PausedAt = result.PausedAt,
+            TotalPausedSeconds = result.TotalPausedSeconds,
+            IsPaused = result.IsPaused,
             Notes = result.Notes,
             DurationMinutes = result.Duration?.TotalMinutes,
             BilledHours = result.BilledHours,
@@ -439,6 +541,9 @@ public class TimeEntriesController : ControllerBase
             CustomerNo = entry.Task?.Project?.Customer?.No,
             StartTime = entry.StartTime,
             EndTime = entry.EndTime,
+            PausedAt = entry.PausedAt,
+            TotalPausedSeconds = entry.TotalPausedSeconds,
+            IsPaused = entry.IsPaused,
             Notes = entry.Notes,
             DurationMinutes = entry.Duration?.TotalMinutes,
             BilledHours = entry.BilledHours,
