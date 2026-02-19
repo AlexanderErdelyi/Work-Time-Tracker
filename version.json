@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "releaseDate": "2026-02-05",
+  "version": "1.0.0-final-test",
+  "releaseDate": "2026-02-07",
   "features": [
     "Time tracking with start/stop timer",
     "Customer, Project, and Task management",
