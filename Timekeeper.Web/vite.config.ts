@@ -22,5 +22,34 @@ export default defineConfig({
   build: {
     outDir: '../Timekeeper.Api/wwwroot',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return
+          }
+
+          if (id.includes('react-router')) {
+            return 'router-vendor'
+          }
+
+          if (id.includes('@tanstack')) {
+            return 'query-vendor'
+          }
+
+          if (
+            id.includes('recharts') ||
+            id.includes('/d3-') ||
+            id.includes('/victory-vendor/')
+          ) {
+            return 'charts-vendor'
+          }
+
+          if (id.includes('@radix-ui') || id.includes('cmdk') || id.includes('lucide-react')) {
+            return 'ui-vendor'
+          }
+        },
+      },
+    },
   },
 })
