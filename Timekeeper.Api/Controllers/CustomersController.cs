@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
@@ -72,6 +74,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<CustomerDto>> CreateCustomer(CreateCustomerDto dto)
     {
         var customer = new Customer
@@ -99,6 +102,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> UpdateCustomer(int id, UpdateCustomerDto dto)
     {
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
@@ -120,6 +124,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> DeleteCustomer(int id)
     {
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
@@ -136,6 +141,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPost("bulk-delete")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> BulkDeleteCustomers([FromBody] int[] customerIds)
     {
         if (customerIds == null || customerIds.Length == 0)

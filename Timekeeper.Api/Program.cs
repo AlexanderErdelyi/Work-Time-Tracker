@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Timekeeper.Api.Auth;
 using Timekeeper.Api.Services;
 using Timekeeper.Core.Data;
+using Timekeeper.Core.Models;
 using Timekeeper.Core.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,7 +36,11 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .Build());
+        .Build())
+    .AddPolicy(AuthorizationPolicies.AdminOnly, policy =>
+        policy.RequireRole(UserRole.Admin.ToString()))
+    .AddPolicy(AuthorizationPolicies.ManagerOrAdmin, policy =>
+        policy.RequireRole(UserRole.Admin.ToString(), UserRole.Manager.ToString()));
 
 // Configure Database
 builder.Services.AddDbContext<TimekeeperContext>(options =>

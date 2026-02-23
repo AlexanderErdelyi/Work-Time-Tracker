@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
 using Timekeeper.Api.DTOs;
@@ -46,6 +48,7 @@ public class QuickActionsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<QuickActionDto>> CreateQuickAction(QuickActionDto dto)
     {
         var action = new QuickAction
@@ -70,6 +73,7 @@ public class QuickActionsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> UpdateQuickAction(int id, QuickActionDto dto)
     {
         var action = await _context.QuickActions.FirstOrDefaultAsync(qa => qa.Id == id);
@@ -87,6 +91,7 @@ public class QuickActionsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> DeleteQuickAction(int id)
     {
         var action = await _context.QuickActions.FirstOrDefaultAsync(qa => qa.Id == id);
@@ -99,6 +104,7 @@ public class QuickActionsController : ControllerBase
     }
 
     [HttpPost("reorder")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> ReorderQuickActions([FromBody] List<int> ids)
     {
         for (int i = 0; i < ids.Count; i++)

@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
 
 namespace Timekeeper.Api.Auth;
@@ -11,6 +13,7 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
     public const string SchemeName = "TimekeeperHeader";
     private const string UserHeader = "X-Timekeeper-User";
     private const string WorkspaceHeader = "X-Timekeeper-Workspace";
+    private const string RoleHeader = "X-Timekeeper-Role";
 
     public HeaderAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -20,7 +23,7 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
     {
     }
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var userEmail = Request.Headers.TryGetValue(UserHeader, out var userHeaderValue)
             ? userHeaderValue.ToString().Trim()
@@ -39,23 +42,43 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
             workspaceId = parsedWorkspaceId;
         }
 
-        var role = userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase)
-            ? UserRole.Admin.ToString()
-            : UserRole.Member.ToString();
+        string? requestedRole = null;
+        if (Request.Headers.TryGetValue(RoleHeader, out var roleHeaderValue)
+            && !string.IsNullOrWhiteSpace(roleHeaderValue))
+        {
+            var normalized = roleHeaderValue.ToString().Trim();
+            if (Enum.TryParse<UserRole>(normalized, true, out var parsedRole))
+            {
+                requestedRole = parsedRole.ToString();
+            }
+        }
+
+        var context = Context.RequestServices.GetRequiredService<TimekeeperContext>();
+        var user = await context.Users
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Email == userEmail && u.IsActive);
+
+        var userId = user?.Id ?? (userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
+
+        var role = user?.Role.ToString()
+            ?? requestedRole
+            ?? (userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase)
+                ? UserRole.Admin.ToString()
+                : UserRole.Member.ToString());
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, "1"),
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, userEmail),
             new(ClaimTypes.Email, userEmail),
             new(ClaimTypes.Role, role),
-            new(AuthClaimTypes.UserId, "1"),
+            new(AuthClaimTypes.UserId, userId.ToString()),
             new(AuthClaimTypes.WorkspaceId, workspaceId.ToString())
         };
 
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return AuthenticateResult.Success(ticket);
     }
 }

@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Api.Services;
 
@@ -16,6 +18,7 @@ public class ImportController : ControllerBase
     }
 
     [HttpPost("tasks")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<TaskImportResultDto>> ImportTasks(IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -43,6 +46,7 @@ public class ImportController : ControllerBase
     }
 
     [HttpGet("tasks/template")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public IActionResult GetTaskImportTemplate()
     {
         var template = _importService.GenerateTaskImportTemplate();

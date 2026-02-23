@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
@@ -86,6 +88,7 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<ProjectDto>> CreateProject(CreateProjectDto dto)
     {
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == dto.CustomerId);
@@ -126,6 +129,7 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> UpdateProject(int id, UpdateProjectDto dto)
     {
         var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
@@ -157,6 +161,7 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> DeleteProject(int id)
     {
         var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
