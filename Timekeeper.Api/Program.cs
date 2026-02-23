@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.Services;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Services;
@@ -16,6 +19,23 @@ builder.Services.AddControllers()
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IWorkspaceContext, HttpWorkspaceContext>();
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = HeaderAuthenticationHandler.SchemeName;
+    options.DefaultChallengeScheme = HeaderAuthenticationHandler.SchemeName;
+})
+.AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(
+    HeaderAuthenticationHandler.SchemeName,
+    _ => { });
+
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build());
 
 // Configure Database
 builder.Services.AddDbContext<TimekeeperContext>(options =>
@@ -72,6 +92,9 @@ else
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

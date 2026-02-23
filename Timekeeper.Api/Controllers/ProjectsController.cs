@@ -88,7 +88,7 @@ public class ProjectsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProjectDto>> CreateProject(CreateProjectDto dto)
     {
-        var customer = await _context.Customers.FindAsync(dto.CustomerId);
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == dto.CustomerId);
         if (customer == null)
         {
             return BadRequest("Customer not found");
@@ -128,7 +128,7 @@ public class ProjectsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateProject(int id, UpdateProjectDto dto)
     {
-        var project = await _context.Projects.FindAsync(id);
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
 
         if (project == null)
         {
@@ -137,7 +137,7 @@ public class ProjectsController : ControllerBase
 
         if (dto.CustomerId.HasValue)
         {
-            var customer = await _context.Customers.FindAsync(dto.CustomerId.Value);
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == dto.CustomerId.Value);
             if (customer == null)
             {
                 return BadRequest("Customer not found");
@@ -159,7 +159,7 @@ public class ProjectsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteProject(int id)
     {
-        var project = await _context.Projects.FindAsync(id);
+        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
 
         if (project == null)
         {

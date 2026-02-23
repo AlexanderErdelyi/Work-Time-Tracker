@@ -121,7 +121,7 @@ public class BreakService : IBreakService
 
     public async Task DeleteBreakAsync(int id)
     {
-        var breakEntity = await _context.Breaks.FindAsync(id);
+        var breakEntity = await _context.Breaks.FirstOrDefaultAsync(b => b.Id == id);
         if (breakEntity == null)
         {
             throw new InvalidOperationException($"Break with ID {id} not found.");

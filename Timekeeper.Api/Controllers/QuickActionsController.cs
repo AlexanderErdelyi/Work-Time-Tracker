@@ -72,7 +72,7 @@ public class QuickActionsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateQuickAction(int id, QuickActionDto dto)
     {
-        var action = await _context.QuickActions.FindAsync(id);
+        var action = await _context.QuickActions.FirstOrDefaultAsync(qa => qa.Id == id);
         if (action == null)
             return NotFound();
 
@@ -89,7 +89,7 @@ public class QuickActionsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteQuickAction(int id)
     {
-        var action = await _context.QuickActions.FindAsync(id);
+        var action = await _context.QuickActions.FirstOrDefaultAsync(qa => qa.Id == id);
         if (action == null)
             return NotFound();
 
@@ -103,7 +103,7 @@ public class QuickActionsController : ControllerBase
     {
         for (int i = 0; i < ids.Count; i++)
         {
-            var action = await _context.QuickActions.FindAsync(ids[i]);
+            var action = await _context.QuickActions.FirstOrDefaultAsync(qa => qa.Id == ids[i]);
             if (action != null)
             {
                 action.SortOrder = i;

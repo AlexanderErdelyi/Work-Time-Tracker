@@ -10,8 +10,10 @@ public enum QuickActionType
 }
 
 public class QuickAction
+    : IWorkspaceOwned
 {
     public int Id { get; set; }
+    public int WorkspaceId { get; set; } = 1;
     
     public string Name { get; set; } = string.Empty;
     

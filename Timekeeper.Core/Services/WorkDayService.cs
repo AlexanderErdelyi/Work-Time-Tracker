@@ -127,7 +127,7 @@ public class WorkDayService : IWorkDayService
 
     public async Task<WorkDay?> UpdateWorkDayAsync(int id, DateTime? checkInTime, DateTime? checkOutTime, string? notes)
     {
-        var workDay = await _context.WorkDays.FindAsync(id);
+        var workDay = await _context.WorkDays.FirstOrDefaultAsync(w => w.Id == id);
         if (workDay == null)
         {
             return null;

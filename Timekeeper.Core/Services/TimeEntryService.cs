@@ -45,7 +45,7 @@ public class TimeEntryService : ITimeEntryService
         // Task is now optional - only validate if taskId is provided and > 0
         if (taskId.HasValue && taskId.Value > 0)
         {
-            var task = await _context.Tasks.FindAsync(taskId.Value);
+            var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId.Value);
             if (task == null)
             {
                 throw new ArgumentException($"Task with ID {taskId} not found.", nameof(taskId));

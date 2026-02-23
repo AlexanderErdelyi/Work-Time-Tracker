@@ -1,8 +1,10 @@
 namespace Timekeeper.Core.Models;
 
 public class TimeEntry
+    : IWorkspaceOwned
 {
     public int Id { get; set; }
+    public int WorkspaceId { get; set; } = 1;
     public int? TaskId { get; set; }
     public int? WorkDayId { get; set; }
     public DateTime StartTime { get; set; }

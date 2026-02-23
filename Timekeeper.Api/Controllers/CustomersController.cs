@@ -52,7 +52,7 @@ public class CustomersController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<CustomerDto>> GetCustomer(int id)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
 
         if (customer == null)
         {
@@ -101,7 +101,7 @@ public class CustomersController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateCustomer(int id, UpdateCustomerDto dto)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
 
         if (customer == null)
         {
@@ -122,7 +122,7 @@ public class CustomersController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCustomer(int id)
     {
-        var customer = await _context.Customers.FindAsync(id);
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == id);
 
         if (customer == null)
         {

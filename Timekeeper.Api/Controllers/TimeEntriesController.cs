@@ -558,7 +558,7 @@ public class TimeEntriesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteTimeEntry(int id)
     {
-        var entry = await _context.TimeEntries.FindAsync(id);
+        var entry = await _context.TimeEntries.FirstOrDefaultAsync(e => e.Id == id);
 
         if (entry == null)
         {
