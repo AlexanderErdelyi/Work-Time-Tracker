@@ -96,6 +96,8 @@ public class TimeEntryService : ITimeEntryService
             throw new InvalidOperationException("This time entry has already been stopped.");
         }
 
+        EnsureTimerMutable(entry);
+
         entry.EndTime = DateTime.UtcNow;
         entry.UpdatedAt = DateTime.UtcNow;
         
@@ -137,6 +139,8 @@ public class TimeEntryService : ITimeEntryService
             throw new ArgumentException($"Time entry with ID {entryId} not found.");
         }
 
+        EnsureTimerMutable(entry);
+
         if (!entry.EndTime.HasValue)
         {
             // Already running, just return it
@@ -175,6 +179,8 @@ public class TimeEntryService : ITimeEntryService
             throw new InvalidOperationException("Cannot pause a stopped time entry.");
         }
 
+        EnsureTimerMutable(entry);
+
         if (entry.PausedAt.HasValue)
         {
             throw new InvalidOperationException("This time entry is already paused.");
@@ -205,6 +211,8 @@ public class TimeEntryService : ITimeEntryService
             throw new InvalidOperationException("Cannot resume a stopped time entry. Use resume to restart it.");
         }
 
+        EnsureTimerMutable(entry);
+
         if (!entry.PausedAt.HasValue)
         {
             throw new InvalidOperationException("This time entry is not paused.");
@@ -223,5 +231,13 @@ public class TimeEntryService : ITimeEntryService
     public async Task<bool> HasRunningTimerAsync()
     {
         return await _context.TimeEntries.AnyAsync(e => e.EndTime == null);
+    }
+
+    private static void EnsureTimerMutable(TimeEntry entry)
+    {
+        if (entry.Status is TimeEntryStatus.Submitted or TimeEntryStatus.Approved or TimeEntryStatus.Locked)
+        {
+            throw new InvalidOperationException($"Cannot change timer state when entry status is {entry.Status}.");
+        }
     }
 }

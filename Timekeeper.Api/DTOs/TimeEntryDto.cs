@@ -16,6 +16,16 @@ public class TimeEntryDto
     public DateTime? EndTime { get; set; }
     public DateTime? PausedAt { get; set; }
     public int TotalPausedSeconds { get; set; }
+    public string Status { get; set; } = "Draft";
+    public DateTime? SubmittedAt { get; set; }
+    public int? SubmittedByUserId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public int? ApprovedByUserId { get; set; }
+    public DateTime? RejectedAt { get; set; }
+    public int? RejectedByUserId { get; set; }
+    public string? RejectionReason { get; set; }
+    public DateTime? LockedAt { get; set; }
+    public int? LockedByUserId { get; set; }
     public bool IsPaused { get; set; }
     public string? Notes { get; set; }
     public double? DurationMinutes { get; set; }
@@ -60,3 +70,9 @@ public class BulkDeleteDto
 {
     public List<int> Ids { get; set; } = new();
 }
+
+public class RejectTimeEntryDto
+{
+    public string? Reason { get; set; }
+}
+

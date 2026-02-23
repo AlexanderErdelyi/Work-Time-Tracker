@@ -121,6 +121,8 @@ public class TimekeeperContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
             entity.Property(e => e.Notes).HasMaxLength(2000);
+            entity.Property(e => e.RejectionReason).HasMaxLength(1000);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TimeEntryStatus.Draft);
             entity.HasIndex(e => e.StartTime);
             entity.HasIndex(e => e.EndTime);
             entity.HasIndex(e => new { e.WorkspaceId, e.StartTime });

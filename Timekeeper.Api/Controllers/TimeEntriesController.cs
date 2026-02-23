@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
@@ -13,11 +15,13 @@ public class TimeEntriesController : ControllerBase
 {
     private readonly TimekeeperContext _context;
     private readonly ITimeEntryService _timeEntryService;
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public TimeEntriesController(TimekeeperContext context, ITimeEntryService timeEntryService)
+    public TimeEntriesController(TimekeeperContext context, ITimeEntryService timeEntryService, IWorkspaceContext workspaceContext)
     {
         _context = context;
         _timeEntryService = timeEntryService;
+        _workspaceContext = workspaceContext;
     }
 
     [HttpGet]
@@ -28,7 +32,8 @@ public class TimeEntriesController : ControllerBase
         [FromQuery] int? projectId = null,
         [FromQuery] int? taskId = null,
         [FromQuery] string? search = null,
-        [FromQuery] bool? isRunning = null)
+        [FromQuery] bool? isRunning = null,
+        [FromQuery] string? status = null)
     {
         var query = _context.TimeEntries
             .Include(e => e.Task)
@@ -68,6 +73,16 @@ public class TimeEntriesController : ControllerBase
                 : query.Where(e => e.EndTime != null);
         }
 
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<TimeEntryStatus>(status, true, out var parsedStatus))
+            {
+                return BadRequest("Invalid status. Use Draft, Submitted, Approved, Rejected, or Locked.");
+            }
+
+            query = query.Where(e => e.Status == parsedStatus);
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchLower = search.ToLower();
@@ -96,6 +111,16 @@ public class TimeEntriesController : ControllerBase
                 EndTime = e.EndTime,
                 PausedAt = e.PausedAt,
                 TotalPausedSeconds = e.TotalPausedSeconds,
+                Status = e.Status.ToString(),
+                SubmittedAt = e.SubmittedAt,
+                SubmittedByUserId = e.SubmittedByUserId,
+                ApprovedAt = e.ApprovedAt,
+                ApprovedByUserId = e.ApprovedByUserId,
+                RejectedAt = e.RejectedAt,
+                RejectedByUserId = e.RejectedByUserId,
+                RejectionReason = e.RejectionReason,
+                LockedAt = e.LockedAt,
+                LockedByUserId = e.LockedByUserId,
                 IsPaused = e.PausedAt.HasValue && !e.EndTime.HasValue,
                 Notes = e.Notes,
                 DurationMinutes = e.EndTime.HasValue ? ((e.EndTime.Value - e.StartTime).TotalMinutes - (e.TotalPausedSeconds / 60.0)) : null,
@@ -123,30 +148,7 @@ public class TimeEntriesController : ControllerBase
             return NotFound();
         }
 
-        return Ok(new TimeEntryDto
-        {
-            Id = entry.Id,
-            TaskId = entry.TaskId,
-            TaskName = entry.Task?.Name,
-            TaskDescription = entry.Task?.Description,
-            TaskPosition = entry.Task?.Position,
-            TaskProcurementNumber = entry.Task?.ProcurementNumber,
-            ProjectName = entry.Task?.Project?.Name,
-            ProjectNo = entry.Task?.Project?.No,
-            CustomerName = entry.Task?.Project?.Customer?.Name,
-            CustomerNo = entry.Task?.Project?.Customer?.No,
-            StartTime = entry.StartTime,
-            EndTime = entry.EndTime,
-            PausedAt = entry.PausedAt,
-            TotalPausedSeconds = entry.TotalPausedSeconds,
-            IsPaused = entry.IsPaused,
-            Notes = entry.Notes,
-            DurationMinutes = entry.EndTime.HasValue ? (entry.EndTime.Value - entry.StartTime).TotalMinutes : null,
-            BilledHours = entry.BilledHours,
-            IsRunning = entry.IsRunning,
-            CreatedAt = entry.CreatedAt,
-            UpdatedAt = entry.UpdatedAt
-        });
+        return Ok(MapToDto(entry));
     }
 
     [HttpGet("running")]
@@ -159,30 +161,7 @@ public class TimeEntriesController : ControllerBase
             return Ok(null);
         }
 
-        return Ok(new TimeEntryDto
-        {
-            Id = entry.Id,
-            TaskId = entry.TaskId,
-            TaskName = entry.Task?.Name,
-            TaskDescription = entry.Task?.Description,
-            TaskPosition = entry.Task?.Position,
-            TaskProcurementNumber = entry.Task?.ProcurementNumber,
-            ProjectName = entry.Task?.Project?.Name,
-            ProjectNo = entry.Task?.Project?.No,
-            CustomerName = entry.Task?.Project?.Customer?.Name,
-            CustomerNo = entry.Task?.Project?.Customer?.No,
-            StartTime = entry.StartTime,
-            EndTime = entry.EndTime,
-            PausedAt = entry.PausedAt,
-            TotalPausedSeconds = entry.TotalPausedSeconds,
-            IsPaused = entry.IsPaused,
-            Notes = entry.Notes,
-            DurationMinutes = null,
-            BilledHours = entry.BilledHours,
-            IsRunning = entry.IsRunning,
-            CreatedAt = entry.CreatedAt,
-            UpdatedAt = entry.UpdatedAt
-        });
+        return Ok(MapToDto(entry));
     }
 
     [HttpPost("start")]
@@ -202,27 +181,7 @@ public class TimeEntriesController : ControllerBase
         {
             var entry = await _timeEntryService.StartTimerAsync(dto.TaskId, dto.Notes);
 
-            return Ok(new TimeEntryDto
-            {
-                Id = entry.Id,
-                TaskId = entry.TaskId,
-                TaskName = entry.Task?.Name,
-                TaskDescription = entry.Task?.Description,
-                TaskPosition = entry.Task?.Position,
-                TaskProcurementNumber = entry.Task?.ProcurementNumber,
-                ProjectName = entry.Task?.Project?.Name,
-                ProjectNo = entry.Task?.Project?.No,
-                CustomerName = entry.Task?.Project?.Customer?.Name,
-                CustomerNo = entry.Task?.Project?.Customer?.No,
-                StartTime = entry.StartTime,
-                EndTime = entry.EndTime,
-                Notes = entry.Notes,
-                DurationMinutes = null,
-                BilledHours = entry.BilledHours,
-                IsRunning = true,
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt
-            });
+            return Ok(MapToDto(entry));
         }
         catch (InvalidOperationException ex)
         {
@@ -241,30 +200,7 @@ public class TimeEntriesController : ControllerBase
         {
             var entry = await _timeEntryService.StopTimerAsync(id);
 
-            return Ok(new TimeEntryDto
-            {
-                Id = entry.Id,
-                TaskId = entry.TaskId,
-                TaskName = entry.Task?.Name,
-                TaskDescription = entry.Task?.Description,
-                TaskPosition = entry.Task?.Position,
-                TaskProcurementNumber = entry.Task?.ProcurementNumber,
-                ProjectName = entry.Task?.Project?.Name,
-                ProjectNo = entry.Task?.Project?.No,
-                CustomerName = entry.Task?.Project?.Customer?.Name,
-                CustomerNo = entry.Task?.Project?.Customer?.No,
-                StartTime = entry.StartTime,
-                EndTime = entry.EndTime,
-                PausedAt = entry.PausedAt,
-                TotalPausedSeconds = entry.TotalPausedSeconds,
-                IsPaused = entry.IsPaused,
-                Notes = entry.Notes,
-                DurationMinutes = entry.Duration?.TotalMinutes,
-                BilledHours = entry.BilledHours,
-                IsRunning = entry.IsRunning,
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt
-            });
+            return Ok(MapToDto(entry));
         }
         catch (InvalidOperationException ex)
         {
@@ -283,30 +219,7 @@ public class TimeEntriesController : ControllerBase
         {
             var entry = await _timeEntryService.ResumeTimerAsync(id);
 
-            return Ok(new TimeEntryDto
-            {
-                Id = entry.Id,
-                TaskId = entry.TaskId,
-                TaskName = entry.Task?.Name,
-                TaskDescription = entry.Task?.Description,
-                TaskPosition = entry.Task?.Position,
-                TaskProcurementNumber = entry.Task?.ProcurementNumber,
-                ProjectName = entry.Task?.Project?.Name,
-                ProjectNo = entry.Task?.Project?.No,
-                CustomerName = entry.Task?.Project?.Customer?.Name,
-                CustomerNo = entry.Task?.Project?.Customer?.No,
-                StartTime = entry.StartTime,
-                EndTime = entry.EndTime,
-                PausedAt = entry.PausedAt,
-                TotalPausedSeconds = entry.TotalPausedSeconds,
-                IsPaused = entry.IsPaused,
-                Notes = entry.Notes,
-                DurationMinutes = null,
-                BilledHours = entry.BilledHours,
-                IsRunning = entry.IsRunning,
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt
-            });
+            return Ok(MapToDto(entry));
         }
         catch (InvalidOperationException ex)
         {
@@ -325,30 +238,7 @@ public class TimeEntriesController : ControllerBase
         {
             var entry = await _timeEntryService.PauseTimerAsync(id);
 
-            return Ok(new TimeEntryDto
-            {
-                Id = entry.Id,
-                TaskId = entry.TaskId,
-                TaskName = entry.Task?.Name,
-                TaskDescription = entry.Task?.Description,
-                TaskPosition = entry.Task?.Position,
-                TaskProcurementNumber = entry.Task?.ProcurementNumber,
-                ProjectName = entry.Task?.Project?.Name,
-                ProjectNo = entry.Task?.Project?.No,
-                CustomerName = entry.Task?.Project?.Customer?.Name,
-                CustomerNo = entry.Task?.Project?.Customer?.No,
-                StartTime = entry.StartTime,
-                EndTime = entry.EndTime,
-                PausedAt = entry.PausedAt,
-                TotalPausedSeconds = entry.TotalPausedSeconds,
-                Notes = entry.Notes,
-                DurationMinutes = null,
-                BilledHours = entry.BilledHours,
-                IsRunning = false,
-                IsPaused = true,
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt
-            });
+            return Ok(MapToDto(entry));
         }
         catch (InvalidOperationException ex)
         {
@@ -367,30 +257,7 @@ public class TimeEntriesController : ControllerBase
         {
             var entry = await _timeEntryService.ResumeFromPauseAsync(id);
 
-            return Ok(new TimeEntryDto
-            {
-                Id = entry.Id,
-                TaskId = entry.TaskId,
-                TaskName = entry.Task?.Name,
-                TaskDescription = entry.Task?.Description,
-                TaskPosition = entry.Task?.Position,
-                TaskProcurementNumber = entry.Task?.ProcurementNumber,
-                ProjectName = entry.Task?.Project?.Name,
-                ProjectNo = entry.Task?.Project?.No,
-                CustomerName = entry.Task?.Project?.Customer?.Name,
-                CustomerNo = entry.Task?.Project?.Customer?.No,
-                StartTime = entry.StartTime,
-                EndTime = entry.EndTime,
-                PausedAt = entry.PausedAt,
-                TotalPausedSeconds = entry.TotalPausedSeconds,
-                Notes = entry.Notes,
-                DurationMinutes = null,
-                BilledHours = entry.BilledHours,
-                IsRunning = true,
-                IsPaused = false,
-                CreatedAt = entry.CreatedAt,
-                UpdatedAt = entry.UpdatedAt
-            });
+            return Ok(MapToDto(entry));
         }
         catch (InvalidOperationException ex)
         {
@@ -441,32 +308,7 @@ public class TimeEntriesController : ControllerBase
                     .ThenInclude(p => p.Customer)
             .FirstAsync(e => e.Id == entry.Id);
 
-        var entryDto = new TimeEntryDto
-        {
-            Id = result.Id,
-            TaskId = result.TaskId,
-            TaskName = result.Task?.Name,
-            TaskDescription = result.Task?.Description,
-            TaskPosition = result.Task?.Position,
-            TaskProcurementNumber = result.Task?.ProcurementNumber,
-            ProjectName = result.Task?.Project?.Name,
-            ProjectNo = result.Task?.Project?.No,
-            CustomerName = result.Task?.Project?.Customer?.Name,
-            CustomerNo = result.Task?.Project?.Customer?.No,
-            StartTime = result.StartTime,
-            EndTime = result.EndTime,
-            PausedAt = result.PausedAt,
-            TotalPausedSeconds = result.TotalPausedSeconds,
-            IsPaused = result.IsPaused,
-            Notes = result.Notes,
-            DurationMinutes = result.Duration?.TotalMinutes,
-            BilledHours = result.BilledHours,
-            IsRunning = result.IsRunning,
-            CreatedAt = result.CreatedAt,
-            UpdatedAt = result.UpdatedAt
-        };
-
-        return CreatedAtAction(nameof(GetTimeEntry), new { id = entry.Id }, entryDto);
+        return CreatedAtAction(nameof(GetTimeEntry), new { id = entry.Id }, MapToDto(result));
     }
 
     [HttpPut("{id}")]
@@ -481,6 +323,11 @@ public class TimeEntriesController : ControllerBase
         if (entry == null)
         {
             return NotFound();
+        }
+
+        if (entry.Status is TimeEntryStatus.Submitted or TimeEntryStatus.Approved or TimeEntryStatus.Locked)
+        {
+            return BadRequest($"Entry is {entry.Status} and cannot be edited.");
         }
 
         // Allow updating TaskId
@@ -526,33 +373,7 @@ public class TimeEntriesController : ControllerBase
         entry.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        // Return the updated entry
-        var result = new TimeEntryDto
-        {
-            Id = entry.Id,
-            TaskId = entry.TaskId,
-            TaskName = entry.Task?.Name,
-            TaskDescription = entry.Task?.Description,
-            TaskPosition = entry.Task?.Position,
-            TaskProcurementNumber = entry.Task?.ProcurementNumber,
-            ProjectName = entry.Task?.Project?.Name,
-            ProjectNo = entry.Task?.Project?.No,
-            CustomerName = entry.Task?.Project?.Customer?.Name,
-            CustomerNo = entry.Task?.Project?.Customer?.No,
-            StartTime = entry.StartTime,
-            EndTime = entry.EndTime,
-            PausedAt = entry.PausedAt,
-            TotalPausedSeconds = entry.TotalPausedSeconds,
-            IsPaused = entry.IsPaused,
-            Notes = entry.Notes,
-            DurationMinutes = entry.Duration?.TotalMinutes,
-            BilledHours = entry.BilledHours,
-            IsRunning = entry.IsRunning,
-            CreatedAt = entry.CreatedAt,
-            UpdatedAt = entry.UpdatedAt
-        };
-
-        return Ok(result);
+        return Ok(MapToDto(entry));
     }
 
     [HttpDelete("{id}")]
@@ -563,6 +384,11 @@ public class TimeEntriesController : ControllerBase
         if (entry == null)
         {
             return NotFound();
+        }
+
+        if (entry.Status is TimeEntryStatus.Submitted or TimeEntryStatus.Approved or TimeEntryStatus.Locked)
+        {
+            return BadRequest($"Entry is {entry.Status} and cannot be deleted.");
         }
 
         _context.TimeEntries.Remove(entry);
@@ -588,10 +414,192 @@ public class TimeEntriesController : ControllerBase
             return NotFound("No matching entries found");
         }
 
+        var deletableStatuses = new[] { TimeEntryStatus.Draft, TimeEntryStatus.Rejected };
+        var protectedEntries = entries.Where(e => !deletableStatuses.Contains(e.Status)).ToList();
+        if (protectedEntries.Count > 0)
+        {
+            return BadRequest(new
+            {
+                message = "Some entries cannot be deleted because they are submitted, approved, or locked.",
+                protectedIds = protectedEntries.Select(e => e.Id).ToList()
+            });
+        }
+
         _context.TimeEntries.RemoveRange(entries);
         await _context.SaveChangesAsync();
 
         return Ok(new { deletedCount = entries.Count });
+    }
+
+    [HttpPost("{id}/submit")]
+    public async Task<ActionResult<TimeEntryDto>> SubmitEntry(int id)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (entry == null)
+        {
+            return NotFound();
+        }
+
+        if (entry.Status is not (TimeEntryStatus.Draft or TimeEntryStatus.Rejected))
+        {
+            return BadRequest($"Only draft or rejected entries can be submitted. Current status: {entry.Status}.");
+        }
+
+        if (!entry.EndTime.HasValue)
+        {
+            return BadRequest("Only stopped entries can be submitted.");
+        }
+
+        entry.Status = TimeEntryStatus.Submitted;
+        entry.SubmittedAt = DateTime.UtcNow;
+        entry.SubmittedByUserId = _workspaceContext.UserId;
+        entry.ApprovedAt = null;
+        entry.ApprovedByUserId = null;
+        entry.RejectedAt = null;
+        entry.RejectedByUserId = null;
+        entry.RejectionReason = null;
+        entry.LockedAt = null;
+        entry.LockedByUserId = null;
+        entry.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return Ok(MapToDto(entry));
+    }
+
+    [HttpPost("{id}/approve")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    public async Task<ActionResult<TimeEntryDto>> ApproveEntry(int id)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (entry == null)
+        {
+            return NotFound();
+        }
+
+        if (entry.Status != TimeEntryStatus.Submitted)
+        {
+            return BadRequest($"Only submitted entries can be approved. Current status: {entry.Status}.");
+        }
+
+        entry.Status = TimeEntryStatus.Approved;
+        entry.ApprovedAt = DateTime.UtcNow;
+        entry.ApprovedByUserId = _workspaceContext.UserId;
+        entry.RejectedAt = null;
+        entry.RejectedByUserId = null;
+        entry.RejectionReason = null;
+        entry.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return Ok(MapToDto(entry));
+    }
+
+    [HttpPost("{id}/reject")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    public async Task<ActionResult<TimeEntryDto>> RejectEntry(int id, [FromBody] RejectTimeEntryDto? dto)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (entry == null)
+        {
+            return NotFound();
+        }
+
+        if (entry.Status != TimeEntryStatus.Submitted)
+        {
+            return BadRequest($"Only submitted entries can be rejected. Current status: {entry.Status}.");
+        }
+
+        entry.Status = TimeEntryStatus.Rejected;
+        entry.RejectedAt = DateTime.UtcNow;
+        entry.RejectedByUserId = _workspaceContext.UserId;
+        entry.RejectionReason = string.IsNullOrWhiteSpace(dto?.Reason) ? null : dto!.Reason!.Trim();
+        entry.ApprovedAt = null;
+        entry.ApprovedByUserId = null;
+        entry.LockedAt = null;
+        entry.LockedByUserId = null;
+        entry.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return Ok(MapToDto(entry));
+    }
+
+    [HttpPost("{id}/lock")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    public async Task<ActionResult<TimeEntryDto>> LockEntry(int id)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (entry == null)
+        {
+            return NotFound();
+        }
+
+        if (entry.Status != TimeEntryStatus.Approved)
+        {
+            return BadRequest($"Only approved entries can be locked. Current status: {entry.Status}.");
+        }
+
+        entry.Status = TimeEntryStatus.Locked;
+        entry.LockedAt = DateTime.UtcNow;
+        entry.LockedByUserId = _workspaceContext.UserId;
+        entry.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return Ok(MapToDto(entry));
+    }
+
+    [HttpPost("{id}/reopen")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    public async Task<ActionResult<TimeEntryDto>> ReopenEntry(int id)
+    {
+        var entry = await _context.TimeEntries
+            .Include(e => e.Task)
+                .ThenInclude(t => t.Project)
+                    .ThenInclude(p => p.Customer)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (entry == null)
+        {
+            return NotFound();
+        }
+
+        if (entry.Status == TimeEntryStatus.Draft)
+        {
+            return BadRequest("Entry is already in draft status.");
+        }
+
+        entry.Status = TimeEntryStatus.Draft;
+        entry.SubmittedAt = null;
+        entry.SubmittedByUserId = null;
+        entry.ApprovedAt = null;
+        entry.ApprovedByUserId = null;
+        entry.RejectedAt = null;
+        entry.RejectedByUserId = null;
+        entry.RejectionReason = null;
+        entry.LockedAt = null;
+        entry.LockedByUserId = null;
+        entry.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return Ok(MapToDto(entry));
     }
 
     [HttpGet("daily-totals")]
@@ -709,5 +717,43 @@ public class TimeEntriesController : ControllerBase
             .ToList();
 
         return Ok(weeklyTotals);
+    }
+
+    private static TimeEntryDto MapToDto(TimeEntry entry)
+    {
+        return new TimeEntryDto
+        {
+            Id = entry.Id,
+            TaskId = entry.TaskId,
+            TaskName = entry.Task?.Name,
+            TaskDescription = entry.Task?.Description,
+            TaskPosition = entry.Task?.Position,
+            TaskProcurementNumber = entry.Task?.ProcurementNumber,
+            ProjectName = entry.Task?.Project?.Name,
+            ProjectNo = entry.Task?.Project?.No,
+            CustomerName = entry.Task?.Project?.Customer?.Name,
+            CustomerNo = entry.Task?.Project?.Customer?.No,
+            StartTime = entry.StartTime,
+            EndTime = entry.EndTime,
+            PausedAt = entry.PausedAt,
+            TotalPausedSeconds = entry.TotalPausedSeconds,
+            Status = entry.Status.ToString(),
+            SubmittedAt = entry.SubmittedAt,
+            SubmittedByUserId = entry.SubmittedByUserId,
+            ApprovedAt = entry.ApprovedAt,
+            ApprovedByUserId = entry.ApprovedByUserId,
+            RejectedAt = entry.RejectedAt,
+            RejectedByUserId = entry.RejectedByUserId,
+            RejectionReason = entry.RejectionReason,
+            LockedAt = entry.LockedAt,
+            LockedByUserId = entry.LockedByUserId,
+            IsPaused = entry.IsPaused,
+            Notes = entry.Notes,
+            DurationMinutes = entry.Duration?.TotalMinutes,
+            BilledHours = entry.BilledHours,
+            IsRunning = entry.IsRunning,
+            CreatedAt = entry.CreatedAt,
+            UpdatedAt = entry.UpdatedAt
+        };
     }
 }
