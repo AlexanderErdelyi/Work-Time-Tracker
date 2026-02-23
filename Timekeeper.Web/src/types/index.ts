@@ -77,6 +77,16 @@ export interface TimeEntry {
   endTime?: string
   pausedAt?: string
   totalPausedSeconds: number
+  status: 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'Locked'
+  submittedAt?: string
+  submittedByUserId?: number
+  approvedAt?: string
+  approvedByUserId?: number
+  rejectedAt?: string
+  rejectedByUserId?: number
+  rejectionReason?: string
+  lockedAt?: string
+  lockedByUserId?: number
   isPaused: boolean
   notes?: string
   durationMinutes?: number
@@ -91,6 +101,10 @@ export interface TimeEntryDto {
   startTime?: string
   endTime?: string
   notes?: string
+}
+
+export interface RejectTimeEntryDto {
+  reason?: string
 }
 
 export interface StartTimerDto {
@@ -130,4 +144,29 @@ export interface FilterParams {
   search?: string
   isRunning?: boolean
   isActive?: boolean
+  status?: 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'Locked'
+}
+
+export type UserRole = 'Admin' | 'Manager' | 'Member'
+
+export interface WorkspaceInfo {
+  id: number
+  name: string
+  isActive: boolean
+  createdAt: string
+}
+
+export interface WorkspaceUser {
+  id: number
+  displayName: string
+  email: string
+  role: UserRole
+  isActive: boolean
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface CurrentWorkspaceContext {
+  workspace: WorkspaceInfo
+  currentUser: WorkspaceUser
 }

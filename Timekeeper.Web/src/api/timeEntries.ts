@@ -2,6 +2,7 @@ import { fetchApi, buildQueryString } from './client'
 import type { 
   TimeEntry, 
   TimeEntryDto, 
+  RejectTimeEntryDto,
   StartTimerDto, 
   DailyTotal, 
   WeeklyTotal,
@@ -64,6 +65,32 @@ export const timeEntriesApi = {
 
   resumeFromPause: (id: number) =>
     fetchApi<TimeEntry>(`/timeentries/${id}/resume-from-pause`, {
+      method: 'POST',
+    }),
+
+  submit: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/submit`, {
+      method: 'POST',
+    }),
+
+  approve: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/approve`, {
+      method: 'POST',
+    }),
+
+  reject: (id: number, data?: RejectTimeEntryDto) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
+    }),
+
+  lock: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/lock`, {
+      method: 'POST',
+    }),
+
+  reopen: (id: number) =>
+    fetchApi<TimeEntry>(`/timeentries/${id}/reopen`, {
       method: 'POST',
     }),
 

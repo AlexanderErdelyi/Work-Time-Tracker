@@ -24,7 +24,7 @@ export const quickActionsApi = {
   },
 
   getById: async (id: number) => {
-    const response = await axios.get<QuickAction>(`/`);
+    const response = await axios.get<QuickAction>(`${API_URL}/${id}`);
     return response.data;
   },
 
@@ -34,14 +34,14 @@ export const quickActionsApi = {
   },
 
   update: async (id: number, action: Partial<QuickAction>) => {
-    await axios.put(`/`, { ...action, id });
+    await axios.put(`${API_URL}/${id}`, action);
   },
 
   delete: async (id: number) => {
-    await axios.delete(`/`);
+    await axios.delete(`${API_URL}/${id}`);
   },
 
   reorder: async (ids: number[]) => {
-    await axios.post(`/reorder`, ids);
+    await axios.post(`${API_URL}/reorder`, ids);
   }
 };

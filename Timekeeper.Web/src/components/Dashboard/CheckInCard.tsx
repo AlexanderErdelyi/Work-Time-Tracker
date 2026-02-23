@@ -10,11 +10,11 @@ export function CheckInCard() {
   const checkOut = useCheckOut();
 
   const handleCheckIn = () => {
-    checkIn.mutate();
+    checkIn.mutate(undefined);
   };
 
   const handleCheckOut = () => {
-    checkOut.mutate();
+    checkOut.mutate(undefined);
   };
 
   if (isLoading) {

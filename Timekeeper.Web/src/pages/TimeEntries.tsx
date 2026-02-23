@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import { 
   Trash2, 
   ChevronUp, 
@@ -33,12 +34,23 @@ import {
   Settings,
   GripVertical,
   RotateCcw,
+  Send,
+  Check,
+  XCircle,
+  Lock,
+  Unlock,
 } from 'lucide-react'
 import { 
   useTimeEntries, 
   useDeleteTimeEntry,
-  useBulkDeleteTimeEntries 
+  useBulkDeleteTimeEntries,
+  useSubmitTimeEntry,
+  useApproveTimeEntry,
+  useRejectTimeEntry,
+  useLockTimeEntry,
+  useReopenTimeEntry,
 } from '../hooks/useTimeEntries'
+import { useWorkspaceContext } from '../hooks/useWorkspaceContext'
 import { exportApi } from '../api'
 import type { TimeEntry } from '../types'
 import { formatDate } from '../lib/dateUtils'
@@ -72,12 +84,13 @@ export function TimeEntries() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'startTime', desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([ ])
   const [globalFilter, setGlobalFilter] = useState('')
-  const [rowSelection, setRowSelection] = useState({})
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [showColumnSettings, setShowColumnSettings] = useState(false)
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // Load column visibility and order from localStorage
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
@@ -101,16 +114,20 @@ export function TimeEntries() {
   }, [columnOrder])
 
   const { data: entries = [], isLoading } = useTimeEntries({})
+  const { data: workspaceContext } = useWorkspaceContext()
   const deleteEntry = useDeleteTimeEntry()
   const bulkDelete = useBulkDeleteTimeEntries()
+  const submitEntry = useSubmitTimeEntry()
+  const approveEntry = useApproveTimeEntry()
+  const rejectEntry = useRejectTimeEntry()
+  const lockEntry = useLockTimeEntry()
+  const reopenEntry = useReopenTimeEntry()
 
-  // Check if billing is enabled
-  const isBillingEnabled = localStorage.getItem('timekeeper_enableBilling') === 'true'
+  const currentUserRole = workspaceContext?.currentUser.role ?? 'Member'
+  const isManagerOrAdmin = currentUserRole === 'Admin' || currentUserRole === 'Manager'
 
   // Filter entries by date range
   const filteredEntries = useMemo(() => {
-    if (!startDate && !endDate) return entries
-    
     return entries.filter(entry => {
       const entryDate = new Date(entry.startTime)
       const start = startDate ? new Date(startDate) : null
@@ -118,9 +135,15 @@ export function TimeEntries() {
       
       if (start && entryDate < start) return false
       if (end && entryDate > end) return false
+      if (statusFilter !== 'all' && entry.status !== statusFilter) return false
       return true
     })
-  }, [entries, startDate, endDate])
+  }, [entries, startDate, endDate, statusFilter])
+
+  const submittedCount = useMemo(
+    () => entries.filter(entry => entry.status === 'Submitted').length,
+    [entries]
+  )
 
   const columns = useMemo<ColumnDef<TimeEntry>[]>(
     () => [
@@ -173,6 +196,32 @@ export function TimeEntries() {
             )}
           </div>
         ),
+      },
+      {
+        id: 'status',
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => {
+          const status = row.original.status
+
+          if (status === 'Draft') {
+            return <Badge variant="outline">Draft</Badge>
+          }
+
+          if (status === 'Submitted') {
+            return <Badge variant="secondary">Submitted</Badge>
+          }
+
+          if (status === 'Approved') {
+            return <Badge variant="success">Approved</Badge>
+          }
+
+          if (status === 'Rejected') {
+            return <Badge variant="destructive">Rejected</Badge>
+          }
+
+          return <Badge variant="default">Locked</Badge>
+        },
       },
       {
         id: 'customerName',
@@ -249,21 +298,101 @@ export function TimeEntries() {
       },
       {
         id: 'actions',
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDelete(row.original.id)}
-              disabled={row.original.isRunning}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const entry = row.original
+
+          const isMutationBusy =
+            submitEntry.isPending ||
+            approveEntry.isPending ||
+            rejectEntry.isPending ||
+            lockEntry.isPending ||
+            reopenEntry.isPending ||
+            deleteEntry.isPending
+
+          return (
+            <div className="flex items-center gap-1">
+              {entry.status === 'Draft' || entry.status === 'Rejected' ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Submit"
+                  onClick={() => handleSubmit(entry.id)}
+                  disabled={entry.isRunning || isMutationBusy}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              ) : null}
+
+              {entry.status === 'Submitted' && isManagerOrAdmin ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Approve"
+                    onClick={() => handleApprove(entry.id)}
+                    disabled={isMutationBusy}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Reject"
+                    onClick={() => handleReject(entry.id)}
+                    disabled={isMutationBusy}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : null}
+
+              {entry.status === 'Approved' && isManagerOrAdmin ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Lock"
+                  onClick={() => handleLock(entry.id)}
+                  disabled={isMutationBusy}
+                >
+                  <Lock className="h-4 w-4" />
+                </Button>
+              ) : null}
+
+              {entry.status !== 'Draft' && isManagerOrAdmin ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Reopen"
+                  onClick={() => handleReopen(entry.id)}
+                  disabled={isMutationBusy}
+                >
+                  <Unlock className="h-4 w-4" />
+                </Button>
+              ) : null}
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDelete(entry.id)}
+                disabled={entry.isRunning || entry.status === 'Submitted' || entry.status === 'Approved' || entry.status === 'Locked' || isMutationBusy}
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )
+        },
       },
     ],
-    []
+    [
+      approveEntry.isPending,
+      deleteEntry.isPending,
+      isManagerOrAdmin,
+      lockEntry.isPending,
+      rejectEntry.isPending,
+      reopenEntry.isPending,
+      submitEntry.isPending,
+    ]
   )
 
   const table = useReactTable({
@@ -340,6 +469,53 @@ export function TimeEntries() {
       } catch (error) {
         console.error('Failed to delete time entry:', error)
       }
+    }
+  }
+
+  const handleSubmit = async (id: number) => {
+    try {
+      await submitEntry.mutateAsync(id)
+    } catch (error) {
+      console.error('Failed to submit time entry:', error)
+      alert(error instanceof Error ? error.message : 'Failed to submit entry')
+    }
+  }
+
+  const handleApprove = async (id: number) => {
+    try {
+      await approveEntry.mutateAsync(id)
+    } catch (error) {
+      console.error('Failed to approve time entry:', error)
+      alert(error instanceof Error ? error.message : 'Failed to approve entry')
+    }
+  }
+
+  const handleReject = async (id: number) => {
+    const reason = prompt('Reason for rejection (optional):')?.trim() || undefined
+
+    try {
+      await rejectEntry.mutateAsync({ id, reason })
+    } catch (error) {
+      console.error('Failed to reject time entry:', error)
+      alert(error instanceof Error ? error.message : 'Failed to reject entry')
+    }
+  }
+
+  const handleLock = async (id: number) => {
+    try {
+      await lockEntry.mutateAsync(id)
+    } catch (error) {
+      console.error('Failed to lock time entry:', error)
+      alert(error instanceof Error ? error.message : 'Failed to lock entry')
+    }
+  }
+
+  const handleReopen = async (id: number) => {
+    try {
+      await reopenEntry.mutateAsync(id)
+    } catch (error) {
+      console.error('Failed to reopen time entry:', error)
+      alert(error instanceof Error ? error.message : 'Failed to reopen entry')
     }
   }
 
@@ -438,6 +614,27 @@ export function TimeEntries() {
         </CardContent>
       </Card>
 
+      {isManagerOrAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Approval Queue</CardTitle>
+            <CardDescription>
+              Submitted entries waiting for review
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between">
+            <Badge variant="secondary">{submittedCount} Submitted</Badge>
+            <Button
+              variant="outline"
+              onClick={() => setStatusFilter('Submitted')}
+              disabled={submittedCount === 0}
+            >
+              Review Queue
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Date Filters */}
       {showFilters && (
         <Card>
@@ -480,8 +677,26 @@ export function TimeEntries() {
                   Clear
                 </Button>
               )}
+              <div className="flex-1">
+                <label htmlFor="statusFilter" className="text-sm font-medium mb-2 block">
+                  Status
+                </label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger id="statusFilter">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="Draft">Draft</SelectItem>
+                    <SelectItem value="Submitted">Submitted</SelectItem>
+                    <SelectItem value="Approved">Approved</SelectItem>
+                    <SelectItem value="Rejected">Rejected</SelectItem>
+                    <SelectItem value="Locked">Locked</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            {(startDate || endDate) && (
+            {(startDate || endDate || statusFilter !== 'all') && (
               <p className="text-sm text-muted-foreground mt-3">
                 Showing {filteredEntries.length} of {entries.length} entries
               </p>
@@ -534,6 +749,7 @@ export function TimeEntries() {
                         {column.id === 'projectName' && 'Project'}
                         {column.id === 'taskName' && 'Task'}
                         {column.id === 'taskProcurementNumber' && 'Procurement'}
+                        {column.id === 'status' && 'Status'}
                         {column.id === 'notes' && 'Notes'}
                         {column.id === 'billedHours' && 'Billed Hours'}
                       </span>
@@ -572,6 +788,7 @@ export function TimeEntries() {
                         {columnId === 'projectName' && 'Project'}
                         {columnId === 'taskName' && 'Task'}
                         {columnId === 'taskProcurementNumber' && 'Procurement'}
+                        {columnId === 'status' && 'Status'}
                         {columnId === 'notes' && 'Notes'}
                         {columnId === 'billedHours' && 'Billed Hours'}
                       </span>
