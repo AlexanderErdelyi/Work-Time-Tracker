@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Api.Services;
 using Timekeeper.Core.Data;
@@ -20,6 +22,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("csv")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> ExportCsv(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
@@ -34,6 +37,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("xlsx")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> ExportXlsx(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
@@ -49,6 +53,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("today/csv")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> ExportTodayCsv()
     {
         var today = DateTime.Today;
@@ -60,6 +65,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("today/xlsx")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> ExportTodayXlsx()
     {
         var today = DateTime.Today;

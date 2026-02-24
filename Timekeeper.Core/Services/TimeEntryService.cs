@@ -8,11 +8,15 @@ public class TimeEntryService : ITimeEntryService
 {
     private readonly TimekeeperContext _context;
     private readonly IBillingService _billingService;
+    private readonly IWorkspaceContext? _workspaceContext;
 
-    public TimeEntryService(TimekeeperContext context, IBillingService billingService)
+    private int CurrentUserId => _workspaceContext?.UserId ?? 1;
+
+    public TimeEntryService(TimekeeperContext context, IBillingService billingService, IWorkspaceContext? workspaceContext = null)
     {
         _context = context;
         _billingService = billingService;
+        _workspaceContext = workspaceContext;
     }
 
     public async Task<TimeEntry?> GetRunningEntryAsync()
@@ -21,7 +25,7 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.EndTime == null && e.PausedAt == null);
+            .FirstOrDefaultAsync(e => e.UserId == CurrentUserId && e.EndTime == null && e.PausedAt == null);
     }
 
     public async Task<TimeEntry?> GetActiveEntryAsync()
@@ -31,7 +35,7 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.EndTime == null);
+            .FirstOrDefaultAsync(e => e.UserId == CurrentUserId && e.EndTime == null);
     }
 
     public async Task<TimeEntry> StartTimerAsync(int? taskId, string? notes = null)
@@ -45,7 +49,7 @@ public class TimeEntryService : ITimeEntryService
         // Task is now optional - only validate if taskId is provided and > 0
         if (taskId.HasValue && taskId.Value > 0)
         {
-            var task = await _context.Tasks.FindAsync(taskId.Value);
+            var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId.Value);
             if (task == null)
             {
                 throw new ArgumentException($"Task with ID {taskId} not found.", nameof(taskId));
@@ -57,6 +61,7 @@ public class TimeEntryService : ITimeEntryService
 
         var entry = new TimeEntry
         {
+            UserId = CurrentUserId,
             TaskId = validTaskId,
             StartTime = DateTime.UtcNow,
             Notes = notes
@@ -84,7 +89,7 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == entryId);
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -95,6 +100,8 @@ public class TimeEntryService : ITimeEntryService
         {
             throw new InvalidOperationException("This time entry has already been stopped.");
         }
+
+        EnsureTimerMutable(entry);
 
         entry.EndTime = DateTime.UtcNow;
         entry.UpdatedAt = DateTime.UtcNow;
@@ -130,12 +137,14 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == entryId);
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
             throw new ArgumentException($"Time entry with ID {entryId} not found.");
         }
+
+        EnsureTimerMutable(entry);
 
         if (!entry.EndTime.HasValue)
         {
@@ -146,7 +155,7 @@ public class TimeEntryService : ITimeEntryService
         // Calculate stopped duration and accumulate into TotalPausedSeconds
         // This ensures the stopped time is excluded from the duration calculation
         var stoppedDuration = DateTime.UtcNow - entry.EndTime.Value;
-        entry.TotalPausedSeconds += (int)Math.Round(stoppedDuration.TotalSeconds);
+        entry.TotalPausedSeconds += (int)Math.Round(stoppedDuration.TotalSeconds, MidpointRounding.AwayFromZero);
         
         // Resume by clearing EndTime and BilledHours
         entry.EndTime = null;
@@ -163,7 +172,7 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == entryId);
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -174,6 +183,8 @@ public class TimeEntryService : ITimeEntryService
         {
             throw new InvalidOperationException("Cannot pause a stopped time entry.");
         }
+
+        EnsureTimerMutable(entry);
 
         if (entry.PausedAt.HasValue)
         {
@@ -193,7 +204,7 @@ public class TimeEntryService : ITimeEntryService
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == entryId);
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -205,6 +216,8 @@ public class TimeEntryService : ITimeEntryService
             throw new InvalidOperationException("Cannot resume a stopped time entry. Use resume to restart it.");
         }
 
+        EnsureTimerMutable(entry);
+
         if (!entry.PausedAt.HasValue)
         {
             throw new InvalidOperationException("This time entry is not paused.");
@@ -212,7 +225,7 @@ public class TimeEntryService : ITimeEntryService
 
         // Calculate pause duration and accumulate
         var pauseDuration = DateTime.UtcNow - entry.PausedAt.Value;
-        entry.TotalPausedSeconds += (int)pauseDuration.TotalSeconds;
+        entry.TotalPausedSeconds += (int)Math.Round(pauseDuration.TotalSeconds, MidpointRounding.AwayFromZero);
         entry.PausedAt = null;
         entry.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
@@ -222,6 +235,14 @@ public class TimeEntryService : ITimeEntryService
 
     public async Task<bool> HasRunningTimerAsync()
     {
-        return await _context.TimeEntries.AnyAsync(e => e.EndTime == null);
+        return await _context.TimeEntries.AnyAsync(e => e.UserId == CurrentUserId && e.EndTime == null);
+    }
+
+    private static void EnsureTimerMutable(TimeEntry entry)
+    {
+        if (entry.Status is TimeEntryStatus.Submitted or TimeEntryStatus.Approved or TimeEntryStatus.Locked)
+        {
+            throw new InvalidOperationException($"Cannot change timer state when entry status is {entry.Status}.");
+        }
     }
 }

@@ -13,6 +13,10 @@ export interface Break {
 export interface BreakStatus {
   isOnBreak: boolean;
   activeBreak?: Break;
+  breakStartTime?: string;
+  totalBreakMinutesToday?: number;
+  continuousWorkMinutes?: number;
+  timeSinceLastBreakMinutes?: number;
 }
 
 export const breaksApi = {

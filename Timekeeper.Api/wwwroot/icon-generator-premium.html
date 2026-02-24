@@ -1,0 +1,1200 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Icon Generator - Timekeeper</title>
+    <script src="/libs/gif.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            color: #fff;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+        
+        .style-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .style-btn {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .style-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .style-btn.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
+            font-weight: 600;
+        }
+        
+        .canvas-container {
+            background: rgba(255,255,255,0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+        
+        .canvas-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .canvas-item {
+            text-align: center;
+        }
+        
+        .canvas-item h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        canvas {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .download-all {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .download-all:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .info {
+            background: rgba(255,255,255,0.95);
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 800px;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .info h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .info ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        
+        .info li {
+            margin-bottom: 8px;
+        }
+        
+        .gif-section {
+            background: rgba(255,255,255,0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .gif-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+        
+        .gif-preview {
+            margin: 20px 0;
+            display: inline-block;
+        }
+        
+        .gif-preview img {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 100%;
+        }
+        
+        .generating {
+            color: #667eea;
+            font-size: 1.1rem;
+            margin: 20px 0;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            max-width: 400px;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px auto;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .canvas-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1> Premium Icon Generator</h1>
+    <p class="subtitle">Choose your favorite style and download all icon sizes</p>
+    
+    <div class="style-selector">
+        <button class="style-btn active" onclick="switchStyle('gradient')">Gradient 3D</button>
+        <button class="style-btn" onclick="switchStyle('glass')">Glassmorphic</button>
+        <button class="style-btn" onclick="switchStyle('neon')">Neon Glow</button>
+        <button class="style-btn" onclick="switchStyle('minimal')">Minimal Flat</button>
+        <button class="style-btn" onclick="switchStyle('lucide')">Lucide Timer</button>
+    </div>
+    
+    <div class="gif-section">
+        <h2>🎬 Animated GIF Icon</h2>
+        <p style="color: #666; margin-bottom: 20px;">Generate an animated clock icon showing time passing</p>
+        <div class="button-group">
+            <button class="download-all" onclick="generateAnimatedGIF()">🎥 Generate Animated GIF</button>
+        </div>
+        <div id="gifStatus" style="margin-top: 20px;"></div>
+        <div id="gifProgress" style="display: none;">
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+        </div>
+        <div id="gifPreview" class="gif-preview"></div>
+    </div>
+    
+    <div class="canvas-container">
+        <div class="canvas-grid">
+            <div class="canvas-item">
+                <h3>192192 (Standard)</h3>
+                <canvas id="icon192"></canvas>
+            </div>
+            <div class="canvas-item">
+                <h3>512512 (Standard)</h3>
+                <canvas id="icon512"></canvas>
+            </div>
+            <div class="canvas-item">
+                <h3>192192 (Maskable)</h3>
+                <canvas id="maskable192"></canvas>
+            </div>
+            <div class="canvas-item">
+                <h3>512512 (Maskable)</h3>
+                <canvas id="maskable512"></canvas>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button class="download-all" onclick="downloadAll()"> Download All Icons</button>
+        </div>
+    </div>
+    
+    <div class="info">
+        <h2> Instructions</h2>
+        <ul>
+            <li><strong>Choose a Style:</strong> Click the style buttons above to preview different icon designs</li>
+            <li><strong>Download:</strong> Click "Download All Icons" to get all 4 required PNG files</li>
+            <li><strong>Save Location:</strong> Save all files to <code>Timekeeper.Web/public/icons/</code></li>
+            <li><strong>File Names:</strong> icon-192.png, icon-512.png, icon-192-maskable.png, icon-512-maskable.png</li>
+            <li><strong>Maskable Icons:</strong> Have 10% padding for Android adaptive icons</li>
+            <li><strong>Animated GIF:</strong> Generate a smooth 512x512 animated icon (optional, for fun!)</li>
+        </ul>
+    </div>
+
+    <script>
+        let currentStyle = 'gradient';
+        
+        // Polyfill for roundRect if not available
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                this.beginPath();
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                this.lineTo(x + width, y + height - radius);
+                this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                this.lineTo(x + radius, y + height);
+                this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                this.lineTo(x, y + radius);
+                this.quadraticCurveTo(x, y, x + radius, y);
+                this.closePath();
+            };
+        }
+        
+        function switchStyle(style) {
+            currentStyle = style;
+            
+            // Update active button
+            document.querySelectorAll('.style-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Redraw all icons
+            drawAllIcons();
+        }
+        
+        function drawAllIcons() {
+            const styles = {
+                gradient: drawGradient3D,
+                glass: drawGlassmorphic,
+                neon: drawNeon,
+                minimal: drawMinimal,
+                lucide: drawLucide
+            };
+            
+            const drawFunction = styles[currentStyle];
+            
+            drawFunction('icon192', 192, false);
+            drawFunction('icon512', 512, false);
+            drawFunction('maskable192', 192, true);
+            drawFunction('maskable512', 512, true);
+        }
+        
+        // Style 1: Gradient 3D (Enhanced original)
+        function drawGradient3D(canvasId, size, maskable) {
+            const canvas = document.getElementById(canvasId);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            const padding = maskable ? size * 0.1 : 0;
+            const actualSize = size - (padding * 2);
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = actualSize / 2;
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(padding, padding, size - padding, size - padding);
+            gradient.addColorStop(0, '#6366f1');
+            gradient.addColorStop(1, '#3b82f6');
+            
+            ctx.fillStyle = gradient;
+            ctx.roundRect(padding, padding, actualSize, actualSize, actualSize * 0.2);
+            ctx.fill();
+            
+            // Clock face
+            const clockRadius = radius * 0.6;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, clockRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Tick marks
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = size * 0.01;
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x1 = centerX + Math.cos(angle) * clockRadius * 0.85;
+                const y1 = centerY + Math.sin(angle) * clockRadius * 0.85;
+                const x2 = centerX + Math.cos(angle) * clockRadius * 0.75;
+                const y2 = centerY + Math.sin(angle) * clockRadius * 0.75;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            // Hour hand (10:10)
+            ctx.strokeStyle = '#1e40af';
+            ctx.lineWidth = size * 0.015;
+            ctx.lineCap = 'round';
+            const hourAngle = (10 * 30 + 5 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * clockRadius * 0.4,
+                centerY + Math.sin(hourAngle) * clockRadius * 0.4
+            );
+            ctx.stroke();
+            
+            // Minute hand (10:10)
+            ctx.lineWidth = size * 0.012;
+            const minuteAngle = (10 * 6 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * clockRadius * 0.6,
+                centerY + Math.sin(minuteAngle) * clockRadius * 0.6
+            );
+            ctx.stroke();
+            
+            // Center dot
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.02, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Style 2: Glassmorphic
+        function drawGlassmorphic(canvasId, size, maskable) {
+            const canvas = document.getElementById(canvasId);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            const padding = maskable ? size * 0.1 : 0;
+            const actualSize = size - (padding * 2);
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = actualSize / 2;
+            
+            // Gradient background
+            const bgGradient = ctx.createLinearGradient(0, 0, size, size);
+            bgGradient.addColorStop(0, '#a78bfa');
+            bgGradient.addColorStop(1, '#ec4899');
+            
+            ctx.fillStyle = bgGradient;
+            ctx.roundRect(padding, padding, actualSize, actualSize, actualSize * 0.25);
+            ctx.fill();
+            
+            // Glass effect circle
+            const glassRadius = radius * 0.7;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+            ctx.shadowBlur = size * 0.03;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, glassRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Inner frosted circle
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = size * 0.008;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, glassRadius * 0.85, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Clock segments (12 dots)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x = centerX + Math.cos(angle) * glassRadius * 0.7;
+                const y = centerY + Math.sin(angle) * glassRadius * 0.7;
+                ctx.beginPath();
+                ctx.arc(x, y, size * 0.012, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Stylized hands
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineCap = 'round';
+            ctx.lineWidth = size * 0.018;
+            
+            // Hour hand
+            const hourAngle = (10 * 30 + 5 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * glassRadius * 0.45,
+                centerY + Math.sin(hourAngle) * glassRadius * 0.45
+            );
+            ctx.stroke();
+            
+            // Minute hand
+            ctx.lineWidth = size * 0.014;
+            const minuteAngle = (10 * 6 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * glassRadius * 0.65,
+                centerY + Math.sin(minuteAngle) * glassRadius * 0.65
+            );
+            ctx.stroke();
+            
+            // Center glow
+            const glowGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size * 0.05);
+            glowGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.05, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Style 3: Neon Glow
+        function drawNeon(canvasId, size, maskable) {
+            const canvas = document.getElementById(canvasId);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            const padding = maskable ? size * 0.1 : 0;
+            const actualSize = size - (padding * 2);
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = actualSize / 2;
+            
+            // Dark background
+            ctx.fillStyle = '#0a0a1f';
+            ctx.roundRect(padding, padding, actualSize, actualSize, actualSize * 0.2);
+            ctx.fill();
+            
+            // Neon circle outer glow
+            const neonRadius = radius * 0.6;
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = size * 0.025;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = size * 0.08;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, neonRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Inner glow
+            ctx.strokeStyle = '#ec4899';
+            ctx.lineWidth = size * 0.015;
+            ctx.shadowColor = '#ec4899';
+            ctx.shadowBlur = size * 0.06;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, neonRadius * 0.75, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.shadowBlur = 0;
+            
+            // Neon tick marks
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = size * 0.012;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = size * 0.04;
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x1 = centerX + Math.cos(angle) * neonRadius * 0.9;
+                const y1 = centerY + Math.sin(angle) * neonRadius * 0.9;
+                const x2 = centerX + Math.cos(angle) * neonRadius * 0.75;
+                const y2 = centerY + Math.sin(angle) * neonRadius * 0.75;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            // Neon hands
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#ec4899';
+            ctx.lineWidth = size * 0.02;
+            ctx.shadowColor = '#ec4899';
+            ctx.shadowBlur = size * 0.05;
+            
+            // Hour hand
+            const hourAngle = (10 * 30 + 5 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * neonRadius * 0.4,
+                centerY + Math.sin(hourAngle) * neonRadius * 0.4
+            );
+            ctx.stroke();
+            
+            // Minute hand
+            ctx.strokeStyle = '#06b6d4';
+            ctx.shadowColor = '#06b6d4';
+            ctx.lineWidth = size * 0.016;
+            const minuteAngle = (10 * 6 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * neonRadius * 0.6,
+                centerY + Math.sin(minuteAngle) * neonRadius * 0.6
+            );
+            ctx.stroke();
+            
+            // Center glow
+            const centerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size * 0.06);
+            centerGradient.addColorStop(0, '#ffffff');
+            centerGradient.addColorStop(0.3, '#ec4899');
+            centerGradient.addColorStop(1, 'rgba(236, 72, 153, 0)');
+            ctx.fillStyle = centerGradient;
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.06, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Style 4: Minimal Flat
+        function drawMinimal(canvasId, size, maskable) {
+            const canvas = document.getElementById(canvasId);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            const padding = maskable ? size * 0.1 : 0;
+            const actualSize = size - (padding * 2);
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = actualSize / 2;
+            
+            // Solid background
+            ctx.fillStyle = '#3b82f6';
+            ctx.roundRect(padding, padding, actualSize, actualSize, actualSize * 0.18);
+            ctx.fill();
+            
+            // White clock circle
+            const clockRadius = radius * 0.65;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, clockRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Bold tick marks (only 12, 3, 6, 9)
+            ctx.fillStyle = '#3b82f6';
+            const majorTicks = [0, 3, 6, 9];
+            majorTicks.forEach(hour => {
+                const angle = (hour * 30 - 90) * Math.PI / 180;
+                const x = centerX + Math.cos(angle) * clockRadius * 0.75;
+                const y = centerY + Math.sin(angle) * clockRadius * 0.75;
+                ctx.beginPath();
+                ctx.arc(x, y, size * 0.025, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Minimal hands
+            ctx.strokeStyle = '#1e40af';
+            ctx.lineCap = 'round';
+            ctx.lineWidth = size * 0.022;
+            
+            // Hour hand
+            const hourAngle = (10 * 30 + 5 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * clockRadius * 0.4,
+                centerY + Math.sin(hourAngle) * clockRadius * 0.4
+            );
+            ctx.stroke();
+            
+            // Minute hand
+            ctx.lineWidth = size * 0.018;
+            const minuteAngle = (10 * 6 - 90) * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * clockRadius * 0.6,
+                centerY + Math.sin(minuteAngle) * clockRadius * 0.6
+            );
+            ctx.stroke();
+            
+            // Center dot
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.03, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Style 5: Lucide Timer Style
+        function drawLucide(canvasId, size, maskable) {
+            const canvas = document.getElementById(canvasId);
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            const padding = maskable ? size * 0.1 : 0;
+            const actualSize = size - (padding * 2);
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = actualSize / 2;
+            
+            // Modern gradient background
+            const gradient = ctx.createLinearGradient(padding, padding, size - padding, size - padding);
+            gradient.addColorStop(0, '#8b5cf6');
+            gradient.addColorStop(1, '#6366f1');
+            
+            ctx.fillStyle = gradient;
+            ctx.roundRect(padding, padding, actualSize, actualSize, actualSize * 0.22);
+            ctx.fill();
+            
+            // Timer circle (like Lucide timer icon)
+            const timerRadius = radius * 0.6;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineWidth = size * 0.025;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, timerRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Progress arc (showing time passing)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = size * 0.035;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, timerRadius, -Math.PI / 2, Math.PI * 0.5, false);
+            ctx.stroke();
+            
+            // Timer hand (single hand pointing up-right)
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = size * 0.022;
+            ctx.lineCap = 'round';
+            const handAngle = -Math.PI / 4; // 45 degrees
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(handAngle) * timerRadius * 0.75,
+                centerY + Math.sin(handAngle) * timerRadius * 0.75
+            );
+            ctx.stroke();
+            
+            // Center dot
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.025, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Top indicator (like start button)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.beginPath();
+            ctx.arc(centerX, padding + actualSize * 0.12, size * 0.02, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function downloadImage(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const url = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = url;
+            link.click();
+        }
+        
+        function downloadAll() {
+            const files = [
+                { id: 'icon192', name: 'icon-192.png' },
+                { id: 'icon512', name: 'icon-512.png' },
+                { id: 'maskable192', name: 'icon-192-maskable.png' },
+                { id: 'maskable512', name: 'icon-512-maskable.png' }
+            ];
+            
+            files.forEach((file, index) => {
+                setTimeout(() => {
+                    downloadImage(file.id, file.name);
+                }, index * 300);
+            });
+        }
+        
+        // Animated GIF Generation
+        function generateAnimatedGIF() {
+            const statusDiv = document.getElementById('gifStatus');
+            const progressDiv = document.getElementById('gifProgress');
+            const progressFill = document.getElementById('progressFill');
+            const previewDiv = document.getElementById('gifPreview');
+            
+            const styleNames = {
+                gradient: 'Gradient 3D',
+                glass: 'Glassmorphic',
+                neon: 'Neon Glow',
+                minimal: 'Minimal Flat',
+                lucide: 'Lucide Timer'
+            };
+            
+            statusDiv.innerHTML = '<p class="generating">⏳ Generating animated GIF (' + styleNames[currentStyle] + ')...</p>';
+            progressDiv.style.display = 'block';
+            previewDiv.innerHTML = '';
+            
+            const size = 512;
+            const frames = 30; // 30 frames for very smooth animation
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Initialize gif.js
+            const gif = new GIF({
+                workers: 2,
+                quality: 1, // Better quality (lower number = better)
+                width: size,
+                height: size,
+                repeat: 0, // Loop forever
+                workerScript: '/libs/gif.worker.js'
+            });
+            
+            // Generate frames using the current selected style
+            const animationFunctions = {
+                gradient: drawAnimatedFrameGradient,
+                glass: drawAnimatedFrameGlass,
+                neon: drawAnimatedFrameNeon,
+                minimal: drawAnimatedFrameMinimal,
+                lucide: drawAnimatedFrameLucide
+            };
+            
+            const drawFunc = animationFunctions[currentStyle];
+            
+            for (let frame = 0; frame < frames; frame++) {
+                const angle = (frame / frames) * Math.PI * 2;
+                drawFunc(ctx, size, angle);
+                gif.addFrame(ctx, {copy: true, delay: 83}); // 83ms per frame ≈ 12fps
+                
+                // Update progress
+                const progress = ((frame + 1) / frames) * 50; // First 50% for frame generation
+                progressFill.style.width = progress + '%';
+            }
+            
+            // Render GIF
+            gif.on('progress', function(p) {
+                const progress = 50 + (p * 50); // Last 50% for encoding
+                progressFill.style.width = progress + '%';
+            });
+            
+            gif.on('finished', function(blob) {
+                const url = URL.createObjectURL(blob);
+                
+                statusDiv.innerHTML = '<p class="generating">✅ GIF Generated Successfully!</p><p style="color: #666; font-size: 0.9rem; margin-top: 10px;">💡 Tip: Open the downloaded GIF in a <strong>web browser</strong> to see it animate. Windows Photos may not show animation.</p>';
+                progressDiv.style.display = 'none';
+                progressFill.style.width = '0%';
+                
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = 'Animated Icon Preview';
+                img.title = 'This should be animating - refresh if it\'s not moving';
+                
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'download-all';
+                downloadBtn.style.marginTop = '20px';
+                downloadBtn.textContent = '📥 Download Animated GIF';
+                downloadBtn.onclick = function() {
+                    const link = document.createElement('a');
+                    const styleName = currentStyle.charAt(0).toUpperCase() + currentStyle.slice(1);
+                    link.download = 'icon-512-animated-' + currentStyle + '.gif';
+                    link.href = url;
+                    link.click();
+                };
+                
+                const openBtn = document.createElement('button');
+                openBtn.className = 'download-all';
+                openBtn.style.marginTop = '20px';
+                openBtn.style.marginLeft = '10px';
+                openBtn.textContent = '🔍 Open in New Tab';
+                openBtn.onclick = function() {
+                    window.open(url, '_blank');
+                };
+                
+                const viewerNote = document.createElement('p');
+                viewerNote.style.cssText = 'color: #666; font-size: 0.85rem; margin-top: 15px; max-width: 500px;';
+                viewerNote.innerHTML = '<strong>To view animation:</strong> Click "Open in New Tab" to see it animate in browser, or drag the downloaded file into your browser. Windows Photos app does NOT show GIF animations.';
+                
+                previewDiv.innerHTML = '';
+                previewDiv.appendChild(img);
+                previewDiv.appendChild(document.createElement('br'));
+                previewDiv.appendChild(downloadBtn);
+                previewDiv.appendChild(openBtn);
+                previewDiv.appendChild(viewerNote);
+            });
+            
+            gif.render();
+        }
+        
+        // Animated frame for Gradient 3D style
+        function drawAnimatedFrameGradient(ctx, size, rotationAngle) {
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size / 2;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Background gradient (matching gradient style)
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#6366f1');
+            gradient.addColorStop(1, '#3b82f6');
+            
+            ctx.fillStyle = gradient;
+            ctx.roundRect(0, 0, size, size, size * 0.2);
+            ctx.fill();
+            
+            // Clock face
+            const clockRadius = radius * 0.6;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, clockRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Tick marks
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = size * 0.01;
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x1 = centerX + Math.cos(angle) * clockRadius * 0.85;
+                const y1 = centerY + Math.sin(angle) * clockRadius * 0.85;
+                const x2 = centerX + Math.cos(angle) * clockRadius * 0.75;
+                const y2 = centerY + Math.sin(angle) * clockRadius * 0.75;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            // Animated minute hand (completes full rotation)
+            ctx.strokeStyle = '#1e40af';
+            ctx.lineWidth = size * 0.012;
+            ctx.lineCap = 'round';
+            const minuteAngle = rotationAngle - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * clockRadius * 0.6,
+                centerY + Math.sin(minuteAngle) * clockRadius * 0.6
+            );
+            ctx.stroke();
+            
+            // Hour hand (moves slower - 1/12 of minute hand speed)
+            ctx.lineWidth = size * 0.015;
+            const hourAngle = (rotationAngle / 12) - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * clockRadius * 0.4,
+                centerY + Math.sin(hourAngle) * clockRadius * 0.4
+            );
+            ctx.stroke();
+            
+            // Center dot
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.02, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Animated frame for Glassmorphic style
+        function drawAnimatedFrameGlass(ctx, size, rotationAngle) {
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size / 2;
+            
+            ctx.clearRect(0, 0, size, size);
+            
+            const bgGradient = ctx.createLinearGradient(0, 0, size, size);
+            bgGradient.addColorStop(0, '#a78bfa');
+            bgGradient.addColorStop(1, '#ec4899');
+            
+            ctx.fillStyle = bgGradient;
+            ctx.roundRect(0, 0, size, size, size * 0.25);
+            ctx.fill();
+            
+            const glassRadius = radius * 0.7;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+            ctx.shadowBlur = size * 0.03;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, glassRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = size * 0.008;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, glassRadius * 0.85, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x = centerX + Math.cos(angle) * glassRadius * 0.7;
+                const y = centerY + Math.sin(angle) * glassRadius * 0.7;
+                ctx.beginPath();
+                ctx.arc(x, y, size * 0.012, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineCap = 'round';
+            ctx.lineWidth = size * 0.014;
+            
+            const minuteAngle = rotationAngle - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * glassRadius * 0.65,
+                centerY + Math.sin(minuteAngle) * glassRadius * 0.65
+            );
+            ctx.stroke();
+            
+            ctx.lineWidth = size * 0.018;
+            const hourAngle = (rotationAngle / 12) - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * glassRadius * 0.45,
+                centerY + Math.sin(hourAngle) * glassRadius * 0.45
+            );
+            ctx.stroke();
+            
+            const glowGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size * 0.05);
+            glowGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            glowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = glowGradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.05, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Animated frame for Neon Glow style
+        function drawAnimatedFrameNeon(ctx, size, rotationAngle) {
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size / 2;
+            
+            ctx.clearRect(0, 0, size, size);
+            
+            ctx.fillStyle = '#0a0a1f';
+            ctx.roundRect(0, 0, size, size, size * 0.2);
+            ctx.fill();
+            
+            const neonRadius = radius * 0.6;
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = size * 0.025;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = size * 0.08;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, neonRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#ec4899';
+            ctx.lineWidth = size * 0.015;
+            ctx.shadowColor = '#ec4899';
+            ctx.shadowBlur = size * 0.06;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, neonRadius * 0.75, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = size * 0.012;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = size * 0.04;
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x1 = centerX + Math.cos(angle) * neonRadius * 0.9;
+                const y1 = centerY + Math.sin(angle) * neonRadius * 0.9;
+                const x2 = centerX + Math.cos(angle) * neonRadius * 0.75;
+                const y2 = centerY + Math.sin(angle) * neonRadius * 0.75;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = size * 0.016;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = size * 0.05;
+            
+            const minuteAngle = rotationAngle - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * neonRadius * 0.6,
+                centerY + Math.sin(minuteAngle) * neonRadius * 0.6
+            );
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#ec4899';
+            ctx.shadowColor = '#ec4899';
+            ctx.lineWidth = size * 0.02;
+            const hourAngle = (rotationAngle / 12) - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * neonRadius * 0.4,
+                centerY + Math.sin(hourAngle) * neonRadius * 0.4
+            );
+            ctx.stroke();
+            
+            const centerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size * 0.06);
+            centerGradient.addColorStop(0, '#ffffff');
+            centerGradient.addColorStop(0.3, '#ec4899');
+            centerGradient.addColorStop(1, 'rgba(236, 72, 153, 0)');
+            ctx.fillStyle = centerGradient;
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.06, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Animated frame for Minimal Flat style
+        function drawAnimatedFrameMinimal(ctx, size, rotationAngle) {
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size / 2;
+            
+            ctx.clearRect(0, 0, size, size);
+            
+            ctx.fillStyle = '#3b82f6';
+            ctx.roundRect(0, 0, size, size, size * 0.18);
+            ctx.fill();
+            
+            const clockRadius = radius * 0.65;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, clockRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#3b82f6';
+            const majorTicks = [0, 3, 6, 9];
+            majorTicks.forEach(hour => {
+                const angle = (hour * 30 - 90) * Math.PI / 180;
+                const x = centerX + Math.cos(angle) * clockRadius * 0.75;
+                const y = centerY + Math.sin(angle) * clockRadius * 0.75;
+                ctx.beginPath();
+                ctx.arc(x, y, size * 0.025, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            ctx.strokeStyle = '#1e40af';
+            ctx.lineCap = 'round';
+            ctx.lineWidth = size * 0.018;
+            
+            const minuteAngle = rotationAngle - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(minuteAngle) * clockRadius * 0.6,
+                centerY + Math.sin(minuteAngle) * clockRadius * 0.6
+            );
+            ctx.stroke();
+            
+            ctx.lineWidth = size * 0.022;
+            const hourAngle = (rotationAngle / 12) - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(hourAngle) * clockRadius * 0.4,
+                centerY + Math.sin(hourAngle) * clockRadius * 0.4
+            );
+            ctx.stroke();
+            
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.03, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Animated frame for Lucide Timer style
+        function drawAnimatedFrameLucide(ctx, size, rotationAngle) {
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size / 2;
+            
+            ctx.clearRect(0, 0, size, size);
+            
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#8b5cf6');
+            gradient.addColorStop(1, '#6366f1');
+            
+            ctx.fillStyle = gradient;
+            ctx.roundRect(0, 0, size, size, size * 0.22);
+            ctx.fill();
+            
+            const timerRadius = radius * 0.6;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineWidth = size * 0.025;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, timerRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Animated progress arc (follows rotation)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = size * 0.035;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, timerRadius, -Math.PI / 2, rotationAngle - Math.PI / 2, false);
+            ctx.stroke();
+            
+            // Animated hand
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = size * 0.022;
+            ctx.lineCap = 'round';
+            const handAngle = rotationAngle - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(handAngle) * timerRadius * 0.75,
+                centerY + Math.sin(handAngle) * timerRadius * 0.75
+            );
+            ctx.stroke();
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size * 0.025, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.beginPath();
+            ctx.arc(centerX, size * 0.12, size * 0.02, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Initial draw
+        drawAllIcons();
+    </script>
+</body>
+</html>

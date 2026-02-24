@@ -11,13 +11,23 @@ namespace Timekeeper.Api.Controllers;
 public class BreaksController : ControllerBase
 {
     private readonly IBreakService _breakService;
+    private readonly ITimeEntryService _timeEntryService;
     private readonly TimekeeperContext _context;
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public BreaksController(IBreakService breakService, TimekeeperContext context)
+    public BreaksController(
+        IBreakService breakService,
+        ITimeEntryService timeEntryService,
+        TimekeeperContext context,
+        IWorkspaceContext workspaceContext)
     {
         _breakService = breakService;
+        _timeEntryService = timeEntryService;
         _context = context;
+        _workspaceContext = workspaceContext;
     }
+
+    private int CurrentUserId => _workspaceContext.UserId ?? 1;
 
     [HttpGet("active")]
     public async Task<ActionResult<BreakDto>> GetActiveBreak()
@@ -54,7 +64,7 @@ public class BreaksController : ControllerBase
         
         // Get the work day to find check-in time
         var workDay = await _context.WorkDays
-            .Where(w => w.CheckInTime.HasValue && w.CheckInTime.Value.Date == DateTime.Today)
+            .Where(w => w.UserId == CurrentUserId && w.CheckInTime.HasValue && w.CheckInTime.Value.Date == DateTime.Today)
             .OrderByDescending(w => w.CheckInTime)
             .FirstOrDefaultAsync();
         
@@ -94,6 +104,12 @@ public class BreaksController : ControllerBase
     {
         try
         {
+            var runningEntry = await _timeEntryService.GetRunningEntryAsync();
+            if (runningEntry != null)
+            {
+                await _timeEntryService.PauseTimerAsync(runningEntry.Id);
+            }
+
             var breakEntity = await _breakService.StartBreakAsync(dto?.Notes);
             return Ok(MapToDto(breakEntity));
         }
@@ -109,6 +125,13 @@ public class BreaksController : ControllerBase
         try
         {
             var breakEntity = await _breakService.EndBreakAsync(dto?.Notes);
+
+            var activeEntry = await _timeEntryService.GetActiveEntryAsync();
+            if (activeEntry?.PausedAt.HasValue == true && !activeEntry.EndTime.HasValue)
+            {
+                await _timeEntryService.ResumeFromPauseAsync(activeEntry.Id);
+            }
+
             return Ok(MapToDto(breakEntity));
         }
         catch (InvalidOperationException ex)

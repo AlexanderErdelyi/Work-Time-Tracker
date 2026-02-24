@@ -1,35 +1,48 @@
+import { Suspense, lazy, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './components/Layout/AppShell'
-import { Dashboard } from './pages/Dashboard'
-import { TimeEntries } from './pages/TimeEntries'
-import { Customers } from './pages/Customers'
-import { Projects } from './pages/Projects'
-import { Tasks } from './pages/Tasks'
-import { Reports } from './pages/Reports'
-import { Settings } from './pages/Settings'
-import { WorkDays } from './pages/WorkDays'
-import { ServiceManager } from './pages/ServiceManager'
 import { useNotifications } from './hooks/useNotifications'
+import { Login } from './pages/Login'
+
+const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+const TimeEntries = lazy(() => import('./pages/TimeEntries').then(module => ({ default: module.TimeEntries })))
+const Customers = lazy(() => import('./pages/Customers').then(module => ({ default: module.Customers })))
+const Projects = lazy(() => import('./pages/Projects').then(module => ({ default: module.Projects })))
+const Tasks = lazy(() => import('./pages/Tasks').then(module => ({ default: module.Tasks })))
+const Reports = lazy(() => import('./pages/Reports').then(module => ({ default: module.Reports })))
+const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
+const Users = lazy(() => import('./pages/Users').then(module => ({ default: module.Users })))
+const WorkDays = lazy(() => import('./pages/WorkDays').then(module => ({ default: module.WorkDays })))
+const ServiceManager = lazy(() => import('./pages/ServiceManager').then(module => ({ default: module.ServiceManager })))
 
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('timekeeper_loggedIn') === 'true')
+
   // Initialize notification system
   useNotifications();
+
+  if (!isLoggedIn) {
+    return <Login onLogin={() => setIsLoggedIn(true)} />
+  }
 
   return (
     <BrowserRouter>
       <AppShell>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/entries" element={<TimeEntries />} />
-          <Route path="/workdays" element={<WorkDays />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/service" element={<ServiceManager />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+        <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading...</div>}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/entries" element={<TimeEntries />} />
+            <Route path="/workdays" element={<WorkDays />} />
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/service" element={<ServiceManager />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/users" element={<Users />} />
+          </Routes>
+        </Suspense>
       </AppShell>
     </BrowserRouter>
   )

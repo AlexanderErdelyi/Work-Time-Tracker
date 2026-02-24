@@ -19,18 +19,22 @@ public class BreakService : IBreakService
 {
     private readonly TimekeeperContext _context;
     private readonly IWorkDayService _workDayService;
+    private readonly IWorkspaceContext? _workspaceContext;
 
-    public BreakService(TimekeeperContext context, IWorkDayService workDayService)
+    private int CurrentUserId => _workspaceContext?.UserId ?? 1;
+
+    public BreakService(TimekeeperContext context, IWorkDayService workDayService, IWorkspaceContext? workspaceContext = null)
     {
         _context = context;
         _workDayService = workDayService;
+        _workspaceContext = workspaceContext;
     }
 
     public async Task<Break?> GetActiveBreakAsync()
     {
         return await _context.Breaks
             .Include(b => b.WorkDay)
-            .FirstOrDefaultAsync(b => b.EndTime == null);
+            .FirstOrDefaultAsync(b => b.EndTime == null && b.WorkDay != null && b.WorkDay.UserId == CurrentUserId);
     }
 
     public async Task<List<Break>> GetTodayBreaksAsync()
@@ -50,7 +54,7 @@ public class BreakService : IBreakService
     public async Task<List<Break>> GetBreaksByWorkDayIdAsync(int workDayId)
     {
         return await _context.Breaks
-            .Where(b => b.WorkDayId == workDayId)
+            .Where(b => b.WorkDayId == workDayId && b.WorkDay != null && b.WorkDay.UserId == CurrentUserId)
             .OrderByDescending(b => b.StartTime)
             .ToListAsync();
     }
@@ -116,12 +120,14 @@ public class BreakService : IBreakService
     public async Task<bool> IsOnBreakAsync()
     {
         return await _context.Breaks
-            .AnyAsync(b => b.EndTime == null);
+            .AnyAsync(b => b.EndTime == null && b.WorkDay != null && b.WorkDay.UserId == CurrentUserId);
     }
 
     public async Task DeleteBreakAsync(int id)
     {
-        var breakEntity = await _context.Breaks.FindAsync(id);
+        var breakEntity = await _context.Breaks
+            .Include(b => b.WorkDay)
+            .FirstOrDefaultAsync(b => b.Id == id && b.WorkDay != null && b.WorkDay.UserId == CurrentUserId);
         if (breakEntity == null)
         {
             throw new InvalidOperationException($"Break with ID {id} not found.");

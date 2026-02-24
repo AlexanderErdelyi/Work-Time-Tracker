@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -7,8 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import SoundSelectionModal from '../components/SoundSelectionModal'
 import { useTasks } from '../hooks/useTasks'
 import { usePWA } from '../hooks/usePWA'
+import { useWorkspaceContext } from '../hooks/useWorkspaceContext'
 import { SystemIdleDetectionService } from '../services/systemIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
+import { workspacesApi } from '../api'
+import type { UserRole } from '../types'
 import { 
   User,
   Clock, 
@@ -29,9 +33,70 @@ import {
 } from 'lucide-react'
 
 export function Settings() {
+  const queryClient = useQueryClient()
+  const { data: workspaceContext } = useWorkspaceContext()
+  const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
+
+  const [newUserName, setNewUserName] = useState('')
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserRole, setNewUserRole] = useState<UserRole>('Member')
+
+  const { data: workspaceUsers = [] } = useQuery({
+    queryKey: ['workspace-users'],
+    queryFn: () => workspacesApi.getCurrentUsers(),
+    enabled: isAdminUser,
+  })
+
+  const createUserMutation = useMutation({
+    mutationFn: () =>
+      workspacesApi.createUser({
+        displayName: newUserName.trim(),
+        email: newUserEmail.trim(),
+        role: newUserRole,
+      }),
+    onSuccess: () => {
+      setNewUserName('')
+      setNewUserEmail('')
+      setNewUserRole('Member')
+      queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+      alert('User created.')
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Could not create user.'
+      alert(message)
+    },
+  })
+
+  const updateUserRoleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: number; role: UserRole }) =>
+      workspacesApi.updateUserRole(id, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Could not update role.'
+      alert(message)
+    },
+  })
+
+  const updateUserStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      workspacesApi.updateUserStatus(id, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Could not update status.'
+      alert(message)
+    },
+  })
+
   // User Settings
   const [userName, setUserName] = useState(localStorage.getItem('timekeeper_userName') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('timekeeper_userEmail') || '')
+  const [authUserEmail, setAuthUserEmail] = useState(localStorage.getItem('timekeeper_authUserEmail') || '')
+  const [authRole, setAuthRole] = useState(localStorage.getItem('timekeeper_authRole') || 'Member')
+  const [authWorkspaceId, setAuthWorkspaceId] = useState(localStorage.getItem('timekeeper_authWorkspaceId') || '1')
 
   // Time Tracking Settings
   const [defaultBreakDuration, setDefaultBreakDuration] = useState(
@@ -146,6 +211,23 @@ export function Settings() {
     localStorage.setItem('timekeeper_userName', userName)
     localStorage.setItem('timekeeper_userEmail', userEmail)
     alert('User settings saved!')
+  }
+
+  const handleSaveDevelopmentIdentity = () => {
+    const normalizedEmail = authUserEmail.trim() || userEmail.trim() || 'admin@local.timekeeper'
+    const parsedWorkspaceId = parseInt(authWorkspaceId, 10)
+    const normalizedWorkspaceId = Number.isFinite(parsedWorkspaceId) && parsedWorkspaceId > 0
+      ? String(parsedWorkspaceId)
+      : '1'
+
+    localStorage.setItem('timekeeper_authUserEmail', normalizedEmail)
+    localStorage.setItem('timekeeper_authRole', authRole)
+    localStorage.setItem('timekeeper_authWorkspaceId', normalizedWorkspaceId)
+
+    setAuthUserEmail(normalizedEmail)
+    setAuthWorkspaceId(normalizedWorkspaceId)
+
+    alert('Development identity saved! Refresh pages to apply across open tabs.')
   }
 
   const handleSaveTrackingSettings = () => {
@@ -328,6 +410,178 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      {isAdminUser && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              <CardTitle>Workspace Users</CardTitle>
+            </div>
+            <CardDescription>
+              Admin area for creating users and managing roles/status
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="newUserName">Display Name</Label>
+                <Input
+                  id="newUserName"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  placeholder="Colleague Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newUserEmail">Email</Label>
+                <Input
+                  id="newUserEmail"
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="colleague@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newUserRole">Role</Label>
+                <Select value={newUserRole} onValueChange={(value) => setNewUserRole(value as UserRole)}>
+                  <SelectTrigger id="newUserRole">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Admin">Admin</SelectItem>
+                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="Member">Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => {
+                if (!newUserName.trim() || !newUserEmail.trim()) {
+                  alert('Display name and email are required.')
+                  return
+                }
+                createUserMutation.mutate()
+              }}
+              disabled={createUserMutation.isPending}
+            >
+              {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+            </Button>
+
+            <div className="space-y-3">
+              {workspaceUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No users found in current workspace.</p>
+              ) : (
+                workspaceUsers.map((workspaceUser) => (
+                  <div key={workspaceUser.id} className="flex flex-wrap items-center gap-3 border rounded-md p-3">
+                    <div className="min-w-[220px] flex-1">
+                      <p className="font-medium text-sm">{workspaceUser.displayName}</p>
+                      <p className="text-xs text-muted-foreground">{workspaceUser.email}</p>
+                    </div>
+                    <Select
+                      value={workspaceUser.role}
+                      onValueChange={(value) =>
+                        updateUserRoleMutation.mutate({ id: workspaceUser.id, role: value as UserRole })
+                      }
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Admin">Admin</SelectItem>
+                        <SelectItem value="Manager">Manager</SelectItem>
+                        <SelectItem value="Member">Member</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        updateUserStatusMutation.mutate({
+                          id: workspaceUser.id,
+                          isActive: !workspaceUser.isActive,
+                        })
+                      }
+                    >
+                      {workspaceUser.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Monitor className="h-5 w-5" />
+            <CardTitle>Development Identity</CardTitle>
+          </div>
+          <CardDescription>
+            Used for multi-user development testing via request headers
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="authUserEmail">Auth Email</Label>
+              <Input
+                id="authUserEmail"
+                type="email"
+                value={authUserEmail}
+                onChange={(e) => setAuthUserEmail(e.target.value)}
+                placeholder="colleague@company.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="authRole">Role</Label>
+              <Select value={authRole} onValueChange={setAuthRole}>
+                <SelectTrigger id="authRole">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Admin">Admin</SelectItem>
+                  <SelectItem value="Manager">Manager</SelectItem>
+                  <SelectItem value="Member">Member</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="authWorkspaceId">Workspace ID</Label>
+              <Input
+                id="authWorkspaceId"
+                type="number"
+                min="1"
+                value={authWorkspaceId}
+                onChange={(e) => setAuthWorkspaceId(e.target.value)}
+                placeholder="1"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleSaveDevelopmentIdentity} className="gap-2">
+              <Save className="h-4 w-4" />
+              Save Development Identity
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!userEmail.trim()) {
+                  alert('Set a User Profile email first.')
+                  return
+                }
+                setAuthUserEmail(userEmail.trim())
+              }}
+            >
+              Use Profile Email
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Time Tracking Settings */}
       <Card>
         <CardHeader>
@@ -500,16 +754,16 @@ export function Settings() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="billingIncrement">Billing Increment (hours)</Label>
-                <select
-                  id="billingIncrement"
-                  value={billingIncrement}
-                  onChange={(e) => setBillingIncrement(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="0.25">0.25 (15 minutes)</option>
-                  <option value="0.5">0.5 (30 minutes)</option>
-                  <option value="1.0">1.0 (60 minutes)</option>
-                </select>
+                <Select value={billingIncrement} onValueChange={setBillingIncrement}>
+                  <SelectTrigger id="billingIncrement">
+                    <SelectValue placeholder="Select billing increment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0.25">0.25 (15 minutes)</SelectItem>
+                    <SelectItem value="0.5">0.5 (30 minutes)</SelectItem>
+                    <SelectItem value="1.0">1.0 (60 minutes)</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
                   Round to nearest increment
                 </p>

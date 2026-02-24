@@ -2,6 +2,23 @@
 
 A comprehensive C# .NET 8 time tracking application with a **modern React UI** for managing time entries, customers, projects, and tasks.
 
+## 🆕 v3.0.0-rc1 Highlights
+
+- **Workspace + multi-user foundation** with tenant-aware data scoping
+- **RBAC policies** (`Admin`, `Manager`, `User`) on sensitive API operations
+- **Timesheet lifecycle**: Draft → Submitted → Approved/Rejected → Locked
+- **Lifecycle actions in UI** with role-aware controls and status filters
+- **Reports performance optimization** with route/chart lazy loading and improved empty states
+
+Release candidate tagging command:
+
+```bash
+git tag -a v3.0.0-rc1 -m "Release candidate v3.0.0-rc1"
+git push origin v3.0.0-rc1
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+
 ## ✨ Modern React UI (NEW!)
 
 Timekeeper now features a completely redesigned, futuristic user interface built with:
@@ -106,6 +123,7 @@ GitHub will automatically build:
 - **[🚀 HOW TO RELEASE](HOW_TO_RELEASE.md)** - **START HERE** - Create your first release in minutes!
 - **[⚡ Quick Release Guide](QUICK_RELEASE_GUIDE.md)** - Quick reference card for releasing
 - **[Distribution Guide](DISTRIBUTION_GUIDE.md)** - Advanced distribution strategies
+- **[Shared Dataset Setup](SHARED_DATASET_SETUP.md)** - Host one shared instance for your team
 - **[GitHub Setup](GITHUB_SETUP_SUMMARY.md)** - GitHub configuration details
 
 ### For End Users 👥
@@ -129,6 +147,33 @@ Timekeeper/
 ```
 
 ## Getting Started
+
+### Shared Dataset for Teams (Single Host) 🏢
+
+If multiple colleagues should use the **same data**, run one shared host instance:
+
+```powershell
+.\run-api-shared.ps1 -Port 5000 -Environment Production -BindAddress 0.0.0.0
+```
+
+Then colleagues open:
+
+```
+http://<HOSTNAME>:5000
+```
+
+For complete setup (firewall, backups, updates):
+- [SHARED_DATASET_SETUP.md](SHARED_DATASET_SETUP.md)
+
+To prepare a host deployment bundle (ZIP) in one command:
+
+```powershell
+.\package-shared-host.ps1
+```
+
+This generates a host-ready package under `Release/` with startup scripts and required binaries.
+
+---
 
 ### For End Users (No Technical Knowledge Required) 🌟
 

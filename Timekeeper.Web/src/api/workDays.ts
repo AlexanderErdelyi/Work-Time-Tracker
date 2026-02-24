@@ -23,6 +23,8 @@ export interface WorkDay {
 
 export interface WorkDayStatus {
   isCheckedIn: boolean;
+  checkInTime?: string;
+  totalMinutesToday?: number;
   workDay?: WorkDay;
 }
 

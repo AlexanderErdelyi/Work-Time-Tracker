@@ -37,15 +37,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const handleAction = async (actionType: string, taskId?: number) => {
     switch (actionType) {
       case 'StartTimer':
-        startTimer.mutate({ taskId: null, notes: null });
+        startTimer.mutate({ taskId: undefined, notes: undefined });
         break;
       case 'StartTimerWithTask':
         if (taskId) {
-          startTimer.mutate({ taskId, notes: null });
+          startTimer.mutate({ taskId, notes: undefined });
         }
         break;
       case 'CheckIn':
-        checkIn.mutate();
+        checkIn.mutate(undefined);
         break;
       case 'StartBreak':
         startBreak.mutate(undefined);

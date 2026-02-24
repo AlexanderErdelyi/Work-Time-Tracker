@@ -157,3 +157,63 @@ export function useStopTimer() {
     },
   })
 }
+
+export function useSubmitTimeEntry() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.submit(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+    },
+  })
+}
+
+export function useApproveTimeEntry() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.approve(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+    },
+  })
+}
+
+export function useRejectTimeEntry() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) => timeEntriesApi.reject(id, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+    },
+  })
+}
+
+export function useLockTimeEntry() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.lock(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+    },
+  })
+}
+
+export function useReopenTimeEntry() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => timeEntriesApi.reopen(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: timeEntriesKeys.running() })
+    },
+  })
+}

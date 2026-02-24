@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timekeeper Service Manager</title>
+    <link rel="icon" type="image/png" href="/icons/icon-192.png">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 600; }
+        .header p { font-size: 1.1em; opacity: 0.95; }
+        .content { padding: 40px 30px; }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .tab {
+            padding: 15px 30px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .tab:hover { color: #667eea; }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Status Section */
+        .status-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .status-label {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #334155;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .status-dot.red { background: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+        .status-dot.green { background: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
+        .status-dot.gray { background: #9ca3af; animation: none; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        
+        /* Port Scanner */
+        .port-scanner {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px solid #e2e8f0;
+        }
+        .port-scanner h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .port-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .port-item {
+            padding: 15px 10px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+        .port-item.available {
+            background: #d1fae5;
+            border-color: #10b981;
+        }
+        .port-item.available:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .port-item.in-use {
+            background: #fee2e2;
+            border-color: #ef4444;
+            cursor: not-allowed;
+        }
+        .port-item.scanning {
+            background: #e0e7ff;
+            border-color: #6366f1;
+            animation: scanning 1s ease-in-out infinite;
+        }
+        .port-item.selected {
+            background: #667eea;
+            color: white;
+            border-color: #764ba2;
+            transform: scale(1.05);
+        }
+        @keyframes scanning {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        .port-number {
+            font-size: 1.3em;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .port-status {
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        /* Custom Port Input */
+        .custom-port {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 10px;
+        }
+        .custom-port label {
+            font-weight: 600;
+            color: #334155;
+        }
+        .custom-port input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.2s ease;
+        }
+        .custom-port input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .custom-port button {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .custom-port button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        
+        /* Command Box */
+        .command-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px solid #e2e8f0;
+        }
+        .command-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+        }
+        .command-box {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            position: relative;
+            font-family: 'Courier New', monospace;
+        }
+        .command-label {
+            color: #94a3b8;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+            display: block;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;
+        }
+        .command-text {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s ease;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;
+        }
+        .copy-btn:hover { background: #764ba2; }
+        .copy-btn.copied { background: #10b981; }
+        
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #334155;
+            border: 2px solid #cbd5e1;
+        }
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+        
+        /* Info Boxes */
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        .success-box {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        
+        /* Scanning Animation */
+        .scanning-progress {
+            width: 100%;
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+        .scanning-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            animation: progress 2s ease-in-out infinite;
+        }
+        @keyframes progress {
+            0% { width: 0%; }
+            50% { width: 100%; }
+            100% { width: 0%; }
+        }
+        
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #667eea;
+        }
+        
+        /* Download Buttons */
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .download-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .download-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        .download-card h3 {
+            color: #334155;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        .download-card p {
+            color: #64748b;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+        .download-card button {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .download-card button:hover {
+            background: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Timekeeper Service Manager</h1>
+            <p>Port scanning, service management & diagnostic tools</p>
+        </div>
+
+        <div class="content">
+            <!-- Status Card -->
+            <div class="status-card">
+                <div class="status-row">
+                    <span class="status-label">API Status:</span>
+                    <div class="status-indicator">
+                        <span class="status-dot gray" id="api-dot"></span>
+                        <span id="api-status">Not Running</span>
+                    </div>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Frontend Status:</span>
+                    <div class="status-indicator">
+                        <span class="status-dot gray" id="frontend-dot"></span>
+                        <span id="frontend-status">Not Running</span>
+                    </div>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Access URLs:</span>
+                    <div class="status-indicator">
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <a href="#" id="api-url" style="color: #667eea; text-decoration: none; font-weight: 600;">API: -</a>
+                            <a href="#" id="frontend-url" style="color: #667eea; text-decoration: none; font-weight: 600;">Frontend: -</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('api-scanner')">🔍 API Ports</button>
+                <button class="tab" onclick="switchTab('frontend-scanner')">🌐 Frontend Ports</button>
+                <button class="tab" onclick="switchTab('scripts')">📥 Download Scripts</button>
+                <button class="tab" onclick="switchTab('help')">❓ Help</button>
+            </div>
+
+            <!-- API Port Scanner Tab -->
+            <div class="tab-content active" id="api-scanner">
+                <div class="port-scanner">
+                    <h2>🔍 API Port Scanner (5000-5020)</h2>
+                    <div class="info-box">
+                        <strong>Scanning API ports...</strong> Select an available port (green) or enter a custom port below.
+                    </div>
+                    
+                    <div class="port-grid" id="api-port-grid"></div>
+                    
+                    <div id="api-scanning-indicator" style="display: none;">
+                        <div style="text-align: center; color: #64748b; margin-bottom: 10px;">
+                            Scanning API ports... <span id="api-scan-progress">0%</span>
+                        </div>
+                        <div class="scanning-progress">
+                            <div class="scanning-progress-bar"></div>
+                        </div>
+                    </div>
+
+                    <div class="custom-port">
+                        <label>Custom API Port:</label>
+                        <input type="number" id="custom-api-port" placeholder="e.g., 8080" min="1000" max="65535">
+                        <button onclick="setCustomPort('api')">Use This Port</button>
+                    </div>
+
+                    <div id="api-commands" style="display: none; margin-top: 30px;">
+                        <div class="success-box">
+                            <strong>API Port <span id="selected-api-port">5000</span> selected!</strong>
+                        </div>
+                        <div class="command-box">
+                            <button class="copy-btn" onclick="copyApiCommand()">Copy</button>
+                            <span class="command-label">Start API on Port <span id="cmd-api-port">5000</span></span>
+                            <div class="command-text" id="api-start-command"></div>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn btn-secondary" onclick="resetApiPort()">Change Port</button>
+                            <button class="btn btn-primary" onclick="downloadStartApiScript()">
+                                <span>📥</span>
+                                <span>Download Start Script</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frontend Port Scanner Tab -->
+            <div class="tab-content" id="frontend-scanner">
+                <div class="port-scanner">
+                    <h2>🌐 Frontend Port Scanner (5173-5183)</h2>
+                    <div class="info-box">
+                        <strong>Scanning Frontend ports...</strong> Select an available port (green) or enter a custom port below.
+                    </div>
+                    
+                    <div class="port-grid" id="frontend-port-grid"></div>
+                    
+                    <div id="frontend-scanning-indicator" style="display: none;">
+                        <div style="text-align: center; color: #64748b; margin-bottom: 10px;">
+                            Scanning Frontend ports... <span id="frontend-scan-progress">0%</span>
+                        </div>
+                        <div class="scanning-progress">
+                            <div class="scanning-progress-bar"></div>
+                        </div>
+                    </div>
+
+                    <div class="custom-port">
+                        <label>Custom Frontend Port:</label>
+                        <input type="number" id="custom-frontend-port" placeholder="e.g., 3000" min="1000" max="65535">
+                        <button onclick="setCustomPort('frontend')">Use This Port</button>
+                    </div>
+
+                    <div id="frontend-commands" style="display: none; margin-top: 30px;">
+                        <div class="success-box">
+                            <strong>Frontend Port <span id="selected-frontend-port">5173</span> selected!</strong>
+                        </div>
+                        <div class="command-box">
+                            <button class="copy-btn" onclick="copyFrontendCommand()">Copy</button>
+                            <span class="command-label">Start Frontend on Port <span id="cmd-frontend-port">5173</span></span>
+                            <div class="command-text" id="frontend-start-command"></div>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn btn-secondary" onclick="resetFrontendPort()">Change Port</button>
+                            <button class="btn btn-primary" onclick="downloadStartFrontendScript()">
+                                <span>📥</span>
+                                <span>Download Start Script</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scripts Download Tab -->
+            <div class="tab-content" id="scripts">
+                <div class="command-section">
+                    <h2>📥 Downloadable PowerShell Scripts</h2>
+                    <div class="info-box">
+                        <strong>Note:</strong> Since browsers cannot directly execute PowerShell, download these scripts and run them manually.
+                    </div>
+
+                    <div class="download-grid">
+                        <!-- Smart Launcher -->
+                        <div class="download-card">
+                            <h3>🚀 Smart Launcher</h3>
+                            <p>Automatically finds Timekeeper and starts both API & Frontend with intelligent port detection.</p>
+                            <button onclick="downloadSmartLauncher()">
+                                📥 Download Start-Timekeeper.ps1
+                            </button>
+                        </div>
+
+                        <!-- Check Ports -->
+                        <div class="download-card">
+                            <h3>🔍 Port Checker</h3>
+                            <p>Shows all processes using ports 5000-5020 (API) and 5173-5183 (Frontend).</p>
+                            <button onclick="downloadPortChecker()">
+                                📥 Download Check-Ports.ps1
+                            </button>
+                        </div>
+
+                        <!-- Kill Port -->
+                        <div class="download-card">
+                            <h3>🛑 Kill Port Process</h3>
+                            <p>Stops any process running on a specific port. Prompts you to enter the port number.</p>
+                            <button onclick="downloadKillPort()">
+                                📥 Download Kill-Port.ps1
+                            </button>
+                        </div>
+
+                        <!-- Stop All -->
+                        <div class="download-card">
+                            <h3>⏹️ Stop All Services</h3>
+                            <p>Stops all Timekeeper API and Frontend processes safely.</p>
+                            <button onclick="downloadStopAll()">
+                                📥 Download Stop-Timekeeper.ps1
+                            </button>
+                        </div>
+
+                        <!-- Start API Only -->
+                        <div class="download-card">
+                            <h3>🔧 Start API Only</h3>
+                            <p>Starts just the API backend on a specific port.</p>
+                            <button onclick="downloadStartApi()">
+                                📥 Download Start-Api.ps1
+                            </button>
+                        </div>
+
+                        <!-- Start Frontend Only -->
+                        <div class="download-card">
+                            <h3>🌐 Start Frontend Only</h3>
+                            <p>Starts just the React frontend (requires API running).</p>
+                            <button onclick="downloadStartFrontend()">
+                                📥 Download Start-Frontend.ps1
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="warning-box" style="margin-top: 30px;">
+                        <strong>⚠️ How to Run Downloaded Scripts:</strong><br>
+                        1. Right-click on the downloaded .ps1 file<br>
+                        2. Select "Run with PowerShell"<br>
+                        3. If you see a security warning, right-click → Properties → Check "Unblock" → Apply
+                    </div>
+                </div>
+            </div>
+
+            <!-- Help Tab -->
+            <div class="tab-content" id="help">
+                <div class="command-section">
+                    <h2>❓ Help & Troubleshooting</h2>
+                    
+                    <div class="info-box">
+                        <h3 style="margin-bottom: 10px;">🎯 Quick Start</h3>
+                        <ol style="line-height: 1.8; margin-left: 20px;">
+                            <li>Download the <strong>Smart Launcher</strong> from the Scripts tab</li>
+                            <li>Right-click the downloaded .ps1 file → Run with PowerShell</li>
+                            <li>Browser opens automatically to Timekeeper!</li>
+                        </ol>
+                    </div>
+
+                    <div class="warning-box">
+                        <h3 style="margin-bottom: 10px;">🔧 Port Already in Use?</h3>
+                        <ol style="line-height: 1.8; margin-left: 20px;">
+                            <li>Go to <strong>API Ports</strong> or <strong>Frontend Ports</strong> tab</li>
+                            <li>Scan shows which ports are available (green) vs in use (red)</li>
+                            <li>Select an available port</li>
+                            <li>Download the start script for that specific port</li>
+                        </ol>
+                    </div>
+
+                    <div class="success-box">
+                        <h3 style="margin-bottom: 10px;">🚫 Need to Stop Services?</h3>
+                        <ol style="line-height: 1.8; margin-left: 20px;">
+                            <li>Download <strong>Kill Port Process</strong> to stop a specific port</li>
+                            <li>Or download <strong>Stop All Services</strong> to stop everything</li>
+                            <li>Close the PowerShell windows that are running the services</li>
+                        </ol>
+                    </div>
+
+                    <div class="command-box">
+                        <span class="command-label">Manual Port Check (PowerShell)</span>
+                        <div class="command-text">
+Get-NetTCPConnection -LocalPort 5000-5020 | Select-Object LocalPort, State, OwningProcess | Format-Table
+                        </div>
+                    </div>
+
+                    <div class="command-box">
+                        <span class="command-label">Find Process Using Port (PowerShell)</span>
+                        <div class="command-text">
+$port = 5000<br>
+$conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue<br>
+if ($conn) { Get-Process -Id $conn.OwningProcess }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_PORT_START = 5000;
+        const API_PORT_END = 5020;
+        const FRONTEND_PORT_START = 5173;
+        const FRONTEND_PORT_END = 5183;
+        const CHECK_INTERVAL = 3000;
+        
+        let selectedApiPort = null;
+        let selectedFrontendPort = null;
+        let apiStatusInterval = null;
+        let frontendStatusInterval = null;
+        let apiPortsStatus = {};
+        let frontendPortsStatus = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            scanApiPorts();
+            scanFrontendPorts();
+            startStatusMonitoring();
+        });
+
+        // Tab Switching
+        function switchTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // API Port Scanner
+        async function scanApiPorts() {
+            const grid = document.getElementById('api-port-grid');
+            const indicator = document.getElementById('api-scanning-indicator');
+            grid.innerHTML = '';
+            indicator.style.display = 'block';
+            apiPortsStatus = {};
+
+            const ports = [];
+            for (let port = API_PORT_START; port <= API_PORT_END; port++) {
+                ports.push(port);
+            }
+
+            let completed = 0;
+            const total = ports.length;
+
+            // Create port items
+            ports.forEach(port => {
+                const item = document.createElement('div');
+                item.className = 'port-item scanning';
+                item.id = `api-port-${port}`;
+                item.innerHTML = `
+                    <div class="port-number">${port}</div>
+                    <div class="port-status">Scanning...</div>
+                `;
+                grid.appendChild(item);
+            });
+
+            // Check each port
+            for (const port of ports) {
+                const available = await checkPort(port);
+                apiPortsStatus[port] = available;
+                
+                const item = document.getElementById(`api-port-${port}`);
+                if (available) {
+                    item.className = 'port-item available';
+                    item.innerHTML = `
+                        <div class="port-number">${port}</div>
+                        <div class="port-status">Available</div>
+                    `;
+                    item.onclick = () => selectApiPort(port);
+                } else {
+                    item.className = 'port-item in-use';
+                    item.innerHTML = `
+                        <div class="port-number">${port}</div>
+                        <div class="port-status">In Use</div>
+                    `;
+                }
+
+                completed++;
+                document.getElementById('api-scan-progress').textContent = 
+                    Math.round((completed / total) * 100) + '%';
+            }
+
+            indicator.style.display = 'none';
+
+            // Auto-select first available port
+            const firstAvailable = ports.find(p => apiPortsStatus[p]);
+            if (firstAvailable && !selectedApiPort) {
+                selectApiPort(firstAvailable);
+            }
+        }
+
+        // Frontend Port Scanner
+        async function scanFrontendPorts() {
+            const grid = document.getElementById('frontend-port-grid');
+            const indicator = document.getElementById('frontend-scanning-indicator');
+            grid.innerHTML = '';
+            indicator.style.display = 'block';
+            frontendPortsStatus = {};
+
+            const ports = [];
+            for (let port = FRONTEND_PORT_START; port <= FRONTEND_PORT_END; port++) {
+                ports.push(port);
+            }
+
+            let completed = 0;
+            const total = ports.length;
+
+            // Create port items
+            ports.forEach(port => {
+                const item = document.createElement('div');
+                item.className = 'port-item scanning';
+                item.id = `frontend-port-${port}`;
+                item.innerHTML = `
+                    <div class="port-number">${port}</div>
+                    <div class="port-status">Scanning...</div>
+                `;
+                grid.appendChild(item);
+            });
+
+            // Check each port
+            for (const port of ports) {
+                const available = await checkPort(port);
+                frontendPortsStatus[port] = available;
+                
+                const item = document.getElementById(`frontend-port-${port}`);
+                if (available) {
+                    item.className = 'port-item available';
+                    item.innerHTML = `
+                        <div class="port-number">${port}</div>
+                        <div class="port-status">Available</div>
+                    `;
+                    item.onclick = () => selectFrontendPort(port);
+                } else {
+                    item.className = 'port-item in-use';
+                    item.innerHTML = `
+                        <div class="port-number">${port}</div>
+                        <div class="port-status">In Use</div>
+                    `;
+                }
+
+                completed++;
+                document.getElementById('frontend-scan-progress').textContent = 
+                    Math.round((completed / total) * 100) + '%';
+            }
+
+            indicator.style.display = 'none';
+
+            // Auto-select first available port
+            const firstAvailable = ports.find(p => frontendPortsStatus[p]);
+            if (firstAvailable && !selectedFrontendPort) {
+                selectFrontendPort(firstAvailable);
+            }
+        }
+
+        // Check if port is available
+        async function checkPort(port) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1000);
+                
+                const response = await fetch(`http://localhost:${port}/api/customers`, {
+                    signal: controller.signal,
+                    method: 'HEAD'
+                });
+                
+                clearTimeout(timeoutId);
+                return false; // Port is in use
+            } catch (error) {
+                return true; // Port is available
+            }
+        }
+
+        // Select API Port
+        function selectApiPort(port) {
+            selectedApiPort = port;
+            
+            document.querySelectorAll('.port-item').forEach(item => {
+                if (item.id.startsWith('api-port-')) {
+                    item.classList.remove('selected');
+                }
+            });
+            const selectedItem = document.getElementById(`api-port-${port}`);
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+
+            document.getElementById('selected-api-port').textContent = port;
+            document.getElementById('cmd-api-port').textContent = port;
+            
+            document.getElementById('api-start-command').innerHTML = `
+$env:ASPNETCORE_ENVIRONMENT = "Development"<br>
+$env:ASPNETCORE_URLS = "http://localhost:${port}"<br>
+cd Timekeeper.Api<br>
+dotnet Timekeeper.Api.dll
+            `;
+
+            document.getElementById('api-commands').style.display = 'block';
+        }
+
+        // Select Frontend Port
+        function selectFrontendPort(port) {
+            selectedFrontendPort = port;
+            
+            document.querySelectorAll('.port-item').forEach(item => {
+                if (item.id.startsWith('frontend-port-')) {
+                    item.classList.remove('selected');
+                }
+            });
+            const selectedItem = document.getElementById(`frontend-port-${port}`);
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+
+            document.getElementById('selected-frontend-port').textContent = port;
+            document.getElementById('cmd-frontend-port').textContent = port;
+            
+            document.getElementById('frontend-start-command').innerHTML = `
+cd Timekeeper.Web<br>
+npm run dev -- --port ${port}
+            `;
+
+            document.getElementById('frontend-commands').style.display = 'block';
+        }
+
+        // Set Custom Port
+        function setCustomPort(type) {
+            const input = document.getElementById(`custom-${type}-port`);
+            const port = parseInt(input.value);
+            
+            if (!port || port < 1000 || port > 65535) {
+                alert('Please enter a valid port number between 1000 and 65535');
+                return;
+            }
+
+            if (type === 'api') {
+                selectApiPort(port);
+            } else {
+                selectFrontendPort(port);
+            }
+            input.value = '';
+        }
+
+        // Reset Ports
+        function resetApiPort() {
+            selectedApiPort = null;
+            document.getElementById('api-commands').style.display = 'none';
+            scanApiPorts();
+        }
+
+        function resetFrontendPort() {
+            selectedFrontendPort = null;
+            document.getElementById('frontend-commands').style.display = 'none';
+            scanFrontendPorts();
+        }
+
+        // Copy Commands
+        function copyApiCommand() {
+            const text = `$env:ASPNETCORE_ENVIRONMENT = "Development"; $env:ASPNETCORE_URLS = "http://localhost:${selectedApiPort}"; cd Timekeeper.Api; dotnet Timekeeper.Api.dll`;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        function copyFrontendCommand() {
+            const text = `cd Timekeeper.Web; npm run dev -- --port ${selectedFrontendPort}`;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Status Monitoring
+        function startStatusMonitoring() {
+            checkApiStatus();
+            checkFrontendStatus();
+            apiStatusInterval = setInterval(checkApiStatus, CHECK_INTERVAL);
+            frontendStatusInterval = setInterval(checkFrontendStatus, CHECK_INTERVAL);
+        }
+
+        async function checkApiStatus() {
+            const testPorts = selectedApiPort ? [selectedApiPort] : [5000, 5001, 5002];
+            
+            for (const port of testPorts) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    
+                    const response = await fetch(`http://localhost:${port}/api/customers`, {
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok || response.status === 404) {
+                        updateApiStatus(true, port);
+                        return;
+                    }
+                } catch (error) {
+                    // Continue to next port
+                }
+            }
+            
+            updateApiStatus(false, null);
+        }
+
+        async function checkFrontendStatus() {
+            const testPorts = selectedFrontendPort ? [selectedFrontendPort] : [5173, 5174, 5175];
+            
+            for (const port of testPorts) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    
+                    await fetch(`http://localhost:${port}`, {
+                        signal: controller.signal,
+                        mode: 'no-cors'
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    updateFrontendStatus(true, port);
+                    return;
+                } catch (error) {
+                    // Continue to next port
+                }
+            }
+            
+            updateFrontendStatus(false, null);
+        }
+
+        function updateApiStatus(running, port) {
+            const dot = document.getElementById('api-dot');
+            const text = document.getElementById('api-status');
+            const urlLink = document.getElementById('api-url');
+
+            if (running && port) {
+                dot.className = 'status-dot green';
+                text.textContent = `Running on ${port}`;
+                text.style.color = '#10b981';
+                urlLink.textContent = `API: http://localhost:${port}`;
+                urlLink.href = `http://localhost:${port}/api`;
+            } else {
+                dot.className = 'status-dot gray';
+                text.textContent = 'Not Running';
+                text.style.color = '#64748b';
+                urlLink.textContent = 'API: -';
+                urlLink.href = '#';
+            }
+        }
+
+        function updateFrontendStatus(running, port) {
+            const dot = document.getElementById('frontend-dot');
+            const text = document.getElementById('frontend-status');
+            const urlLink = document.getElementById('frontend-url');
+
+            if (running && port) {
+                dot.className = 'status-dot green';
+                text.textContent = `Running on ${port}`;
+                text.style.color = '#10b981';
+                urlLink.textContent = `Frontend: http://localhost:${port}`;
+                urlLink.href = `http://localhost:${port}`;
+            } else {
+                dot.className = 'status-dot gray';
+                text.textContent = 'Not Running';
+                text.style.color = '#64748b';
+                urlLink.textContent = 'Frontend: -';
+                urlLink.href = '#';
+            }
+        }
+
+        // Download Script Functions
+        function downloadScript(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadSmartLauncher() {
+            const script = `# Timekeeper Smart Launcher
+# Automatically finds and starts Timekeeper
+
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "          TIMEKEEPER - Smart Launcher                       " -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host ""
+
+function Find-TimekeeperProject {
+    Write-Host "Searching for Timekeeper installation..." -ForegroundColor Yellow
+    
+    # Check parent directories
+    $currentDir = $PSScriptRoot
+    for ($i = 0; $i -lt 5; $i++) {
+        $apiPath = Join-Path $currentDir "Timekeeper.Api"
+        $webPath = Join-Path $currentDir "Timekeeper.Web"
+        $apiDll = Join-Path $apiPath "Timekeeper.Api.dll"
+        
+        if ((Test-Path $apiPath) -and (Test-Path $webPath) -and (Test-Path $apiDll)) {
+            Write-Host "Found Timekeeper at: $currentDir" -ForegroundColor Green
+            return $currentDir
+        }
+        $currentDir = Split-Path $currentDir -Parent
+        if (-not $currentDir) { break }
+    }
+    
+    return $null
+}
+
+function Find-AvailablePort {
+    param($StartPort, $MaxAttempts = 20)
+    
+    for ($i = 0; $i -lt $MaxAttempts; $i++) {
+        $testPort = $StartPort + $i
+        $inUse = Get-NetTCPConnection -LocalPort $testPort -ErrorAction SilentlyContinue
+        if (-not $inUse) {
+            return $testPort
+        }
+    }
+    return $null
+}
+
+$projectRoot = Find-TimekeeperProject
+
+if (-not $projectRoot) {
+    Write-Host "Could not find Timekeeper installation!" -ForegroundColor Red
+    Write-Host "Press any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+# Find available ports
+$apiPort = Find-AvailablePort -StartPort 5000
+if ($null -eq $apiPort) {
+    Write-Host "ERROR: All API ports (5000-5020) are occupied!" -ForegroundColor Red
+    Write-Host "Opening Service Manager for help..." -ForegroundColor Yellow
+    $htmlPath = Join-Path $projectRoot "Timekeeper.Web\\public\\smart-launcher.html"
+    if (Test-Path $htmlPath) {
+        Start-Process $htmlPath
+    }
+    exit 1
+}
+
+Write-Host "Starting API on port $apiPort..." -ForegroundColor Cyan
+$apiPath = Join-Path $projectRoot "Timekeeper.Api"
+$apiDll = Join-Path $apiPath "Timekeeper.Api.dll"
+
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$apiPath'; $env:ASPNETCORE_URLS='http://localhost:$apiPort'; dotnet '$apiDll'"
+
+Start-Sleep -Seconds 3
+
+Write-Host "Starting Frontend..." -ForegroundColor Cyan
+$webPath = Join-Path $projectRoot "Timekeeper.Web"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$webPath'; npm run dev"
+
+Start-Sleep -Seconds 5
+
+# Detect frontend port
+for ($port = 5173; $port -le 5183; $port++) {
+    $check = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    if ($check) {
+        Write-Host "Opening browser..." -ForegroundColor Yellow
+        Start-Process "http://localhost:$port"
+        break
+    }
+}
+
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "  TIMEKEEPER IS RUNNING!                                   " -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "To stop: Close the PowerShell windows that opened" -ForegroundColor Yellow
+Write-Host ""`;
+
+            downloadScript('Start-Timekeeper.ps1', script);
+        }
+
+        function downloadPortChecker() {
+            const script = `# Port Checker - Shows what's running on Timekeeper ports
+
+Write-Host "Checking API Ports (5000-5020)..." -ForegroundColor Cyan
+Write-Host ""
+
+$apiConnections = Get-NetTCPConnection -LocalPort 5000,5001,5002,5003,5004,5005,5006,5007,5008,5009,5010,5011,5012,5013,5014,5015,5016,5017,5018,5019,5020 -ErrorAction SilentlyContinue
+
+if ($apiConnections) {
+    $apiConnections | ForEach-Object {
+        $process = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+        [PSCustomObject]@{
+            Port = $_.LocalPort
+            State = $_.State
+            ProcessID = $_.OwningProcess
+            ProcessName = $process.ProcessName
+            Path = $process.Path
+        }
+    } | Format-Table -AutoSize
+} else {
+    Write-Host "No processes found on API ports" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "Checking Frontend Ports (5173-5183)..." -ForegroundColor Cyan
+Write-Host ""
+
+$frontendConnections = Get-NetTCPConnection -LocalPort 5173,5174,5175,5176,5177,5178,5179,5180,5181,5182,5183 -ErrorAction SilentlyContinue
+
+if ($frontendConnections) {
+    $frontendConnections | ForEach-Object {
+        $process = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+        [PSCustomObject]@{
+            Port = $_.LocalPort
+            State = $_.State
+            ProcessID = $_.OwningProcess
+            ProcessName = $process.ProcessName
+            Path = $process.Path
+        }
+    } | Format-Table -AutoSize
+} else {
+    Write-Host "No processes found on Frontend ports" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "Press any key to exit..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
+
+            downloadScript('Check-Ports.ps1', script);
+        }
+
+        function downloadKillPort() {
+            const script = `# Kill Port Process - Stops process on specific port
+
+$port = Read-Host "Enter port number to free up"
+
+$connection = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+
+if ($connection) {
+    $process = Get-Process -Id $connection.OwningProcess -ErrorAction SilentlyContinue
+    
+    if ($process) {
+        Write-Host "Found process on port $port:" -ForegroundColor Yellow
+        Write-Host "  Process: $($process.ProcessName)" -ForegroundColor Gray
+        Write-Host "  PID: $($process.Id)" -ForegroundColor Gray
+        Write-Host ""
+        
+        $confirm = Read-Host "Kill this process? (Y/N)"
+        
+        if ($confirm -eq 'Y' -or $confirm -eq 'y') {
+            Stop-Process -Id $process.Id -Force
+            Write-Host "Process stopped!" -ForegroundColor Green
+        } else {
+            Write-Host "Cancelled" -ForegroundColor Yellow
+        }
+    }
+} else {
+    Write-Host "No process found on port $port" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "Press any key to exit..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
+
+            downloadScript('Kill-Port.ps1', script);
+        }
+
+        function downloadStopAll() {
+            const script = `# Stop All Timekeeper Services
+
+Write-Host "Stopping Timekeeper services..." -ForegroundColor Yellow
+
+# Stop API processes
+Get-NetTCPConnection -LocalPort 5000-5020 -ErrorAction SilentlyContinue | ForEach-Object {
+    $process = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($process -and $process.ProcessName -like "*dotnet*") {
+        Write-Host "Stopping API on port $($_.LocalPort)..." -ForegroundColor Gray
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Stop Frontend processes
+Get-NetTCPConnection -LocalPort 5173-5183 -ErrorAction SilentlyContinue | ForEach-Object {
+    $process = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($process -and ($process.ProcessName -like "*node*" -or $process.ProcessName -like "*npm*")) {
+        Write-Host "Stopping Frontend on port $($_.LocalPort)..." -ForegroundColor Gray
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Host ""
+Write-Host "All Timekeeper services stopped!" -ForegroundColor Green
+Write-Host ""
+Write-Host "Press any key to exit..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
+
+            downloadScript('Stop-Timekeeper.ps1', script);
+        }
+
+        function downloadStartApi() {
+            const port = selectedApiPort || 5000;
+            const script = `# Start API Only
+
+$port = ${port}
+
+Write-Host "Starting Timekeeper API on port $port..." -ForegroundColor Cyan
+
+# Find Timekeeper directory
+$currentDir = $PSScriptRoot
+for ($i = 0; $i -lt 5; $i++) {
+    $apiPath = Join-Path $currentDir "Timekeeper.Api"
+    $apiDll = Join-Path $apiPath "Timekeeper.Api.dll"
+    
+    if ((Test-Path $apiDll)) {
+        cd $apiPath
+        $env:ASPNETCORE_ENVIRONMENT = "Development"
+        $env:ASPNETCORE_URLS = "http://localhost:$port"
+        dotnet Timekeeper.Api.dll
+        exit
+    }
+    $currentDir = Split-Path $currentDir -Parent
+    if (-not $currentDir) { break }
+}
+
+Write-Host "Could not find Timekeeper.Api!" -ForegroundColor Red
+Write-Host "Press any key to exit..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
+
+            downloadScript('Start-Api.ps1', script);
+        }
+
+        function downloadStartFrontend() {
+            const port = selectedFrontendPort || 5173;
+            const script = `# Start Frontend Only
+
+$port = ${port}
+
+Write-Host "Starting Timekeeper Frontend on port $port..." -ForegroundColor Cyan
+
+# Find Timekeeper directory
+$currentDir = $PSScriptRoot
+for ($i = 0; $i -lt 5; $i++) {
+    $webPath = Join-Path $currentDir "Timekeeper.Web"
+    $packageJson = Join-Path $webPath "package.json"
+    
+    if ((Test-Path $packageJson)) {
+        cd $webPath
+        npm run dev -- --port $port
+        exit
+    }
+    $currentDir = Split-Path $currentDir -Parent
+    if (-not $currentDir) { break }
+}
+
+Write-Host "Could not find Timekeeper.Web!" -ForegroundColor Red
+Write-Host "Press any key to exit..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")`;
+
+            downloadScript('Start-Frontend.ps1', script);
+        }
+
+        function downloadStartApiScript() {
+            downloadStartApi();
+        }
+
+        function downloadStartFrontendScript() {
+            downloadStartFrontend();
+        }
+    </script>
+</body>
+</html>

@@ -17,6 +17,77 @@ namespace Timekeeper.Core.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.0");
 
+            modelBuilder.Entity("Timekeeper.Core.Models.AppUser", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalProvider")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalProviderUserId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("WorkspaceId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "ExternalProvider", "ExternalProviderUserId")
+                        .IsUnique();
+
+                    b.ToTable("Users");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
+                            DisplayName = "Local Admin",
+                            Email = "admin@local.timekeeper",
+                            IsActive = true,
+                            Role = "Admin",
+                            WorkspaceId = 1
+                        });
+                });
+
             modelBuilder.Entity("Timekeeper.Core.Models.Break", b =>
                 {
                     b.Property<int>("Id")
@@ -36,11 +107,18 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<int?>("WorkDayId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("StartTime");
 
                     b.HasIndex("WorkDayId");
+
+                    b.HasIndex("WorkspaceId", "StartTime");
 
                     b.ToTable("Breaks");
                 });
@@ -73,9 +151,16 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("WorkspaceId", "Name");
 
                     b.ToTable("Customers");
 
@@ -83,18 +168,20 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             Description = "Sample customer",
                             IsActive = true,
-                            Name = "Acme Corp"
+                            Name = "Acme Corp",
+                            WorkspaceId = 1
                         },
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             Description = "Technology startup",
                             IsActive = true,
-                            Name = "TechStart Inc"
+                            Name = "TechStart Inc",
+                            WorkspaceId = 1
                         });
                 });
 
@@ -129,11 +216,18 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("WorkspaceId", "Name");
 
                     b.ToTable("Projects");
 
@@ -141,29 +235,32 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             CustomerId = 1,
                             Description = "Redesign company website",
                             IsActive = true,
-                            Name = "Website Redesign"
+                            Name = "Website Redesign",
+                            WorkspaceId = 1
                         },
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             CustomerId = 1,
                             Description = "Develop mobile application",
                             IsActive = true,
-                            Name = "Mobile App"
+                            Name = "Mobile App",
+                            WorkspaceId = 1
                         },
                         new
                         {
                             Id = 3,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             CustomerId = 2,
                             Description = "Build REST API",
                             IsActive = true,
-                            Name = "API Development"
+                            Name = "API Development",
+                            WorkspaceId = 1
                         });
                 });
 
@@ -191,11 +288,18 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<int?>("TaskId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("SortOrder");
 
                     b.HasIndex("TaskId");
+
+                    b.HasIndex("WorkspaceId", "SortOrder");
 
                     b.ToTable("QuickActions");
                 });
@@ -235,11 +339,18 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("WorkspaceId", "Name");
 
                     b.ToTable("Tasks");
 
@@ -247,38 +358,42 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             Description = "Develop frontend UI",
                             IsActive = true,
                             Name = "Frontend Development",
-                            ProjectId = 1
+                            ProjectId = 1,
+                            WorkspaceId = 1
                         },
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             Description = "Develop backend services",
                             IsActive = true,
                             Name = "Backend Development",
-                            ProjectId = 1
+                            ProjectId = 1,
+                            WorkspaceId = 1
                         },
                         new
                         {
                             Id = 3,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             Description = "Design user interface",
                             IsActive = true,
                             Name = "UI Design",
-                            ProjectId = 2
+                            ProjectId = 2,
+                            WorkspaceId = 1
                         },
                         new
                         {
                             Id = 4,
-                            CreatedAt = new DateTime(2026, 2, 17, 14, 18, 34, 96, DateTimeKind.Utc).AddTicks(824),
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
                             Description = "Implement REST endpoints",
                             IsActive = true,
                             Name = "API Endpoints",
-                            ProjectId = 3
+                            ProjectId = 3,
+                            WorkspaceId = 1
                         });
                 });
 
@@ -286,6 +401,12 @@ namespace Timekeeper.Core.Data.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ApprovedByUserId")
                         .HasColumnType("INTEGER");
 
                     b.Property<decimal?>("BilledHours")
@@ -297,6 +418,12 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime?>("EndTime")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("LockedByUserId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -304,8 +431,31 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime?>("PausedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RejectedByUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Draft");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SubmittedByUserId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("TaskId")
                         .HasColumnType("INTEGER");
@@ -316,8 +466,18 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.Property<int?>("WorkDayId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
 
                     b.HasKey("Id");
 
@@ -327,7 +487,13 @@ namespace Timekeeper.Core.Data.Migrations
 
                     b.HasIndex("TaskId");
 
+                    b.HasIndex("UserId");
+
                     b.HasIndex("WorkDayId");
+
+                    b.HasIndex("WorkspaceId", "StartTime");
+
+                    b.HasIndex("WorkspaceId", "UserId", "StartTime");
 
                     b.ToTable("TimeEntries");
                 });
@@ -351,13 +517,77 @@ namespace Timekeeper.Core.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("WorkspaceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("CheckInTime");
 
                     b.HasIndex("Date");
 
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WorkspaceId", "Date");
+
+                    b.HasIndex("WorkspaceId", "UserId", "Date");
+
                     b.ToTable("WorkDays");
+                });
+
+            modelBuilder.Entity("Timekeeper.Core.Models.Workspace", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Workspaces");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 2, 23, 23, 49, 0, 629, DateTimeKind.Utc).AddTicks(7976),
+                            IsActive = true,
+                            Name = "Default Workspace"
+                        });
+                });
+
+            modelBuilder.Entity("Timekeeper.Core.Models.AppUser", b =>
+                {
+                    b.HasOne("Timekeeper.Core.Models.Workspace", "Workspace")
+                        .WithMany("Users")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Timekeeper.Core.Models.Break", b =>
@@ -367,7 +597,22 @@ namespace Timekeeper.Core.Data.Migrations
                         .HasForeignKey("WorkDayId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("WorkDay");
+                });
+
+            modelBuilder.Entity("Timekeeper.Core.Models.Customer", b =>
+                {
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Timekeeper.Core.Models.Project", b =>
@@ -375,6 +620,12 @@ namespace Timekeeper.Core.Data.Migrations
                     b.HasOne("Timekeeper.Core.Models.Customer", "Customer")
                         .WithMany("Projects")
                         .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -388,6 +639,12 @@ namespace Timekeeper.Core.Data.Migrations
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Task");
                 });
 
@@ -396,6 +653,12 @@ namespace Timekeeper.Core.Data.Migrations
                     b.HasOne("Timekeeper.Core.Models.Project", "Project")
                         .WithMany("Tasks")
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -409,14 +672,45 @@ namespace Timekeeper.Core.Data.Migrations
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Timekeeper.Core.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Timekeeper.Core.Models.WorkDay", "WorkDay")
                         .WithMany("TimeEntries")
                         .HasForeignKey("WorkDayId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Task");
 
+                    b.Navigation("User");
+
                     b.Navigation("WorkDay");
+                });
+
+            modelBuilder.Entity("Timekeeper.Core.Models.WorkDay", b =>
+                {
+                    b.HasOne("Timekeeper.Core.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Timekeeper.Core.Models.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Timekeeper.Core.Models.Customer", b =>
@@ -439,6 +733,11 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Navigation("Breaks");
 
                     b.Navigation("TimeEntries");
+                });
+
+            modelBuilder.Entity("Timekeeper.Core.Models.Workspace", b =>
+                {
+                    b.Navigation("Users");
                 });
 #pragma warning restore 612, 618
         }

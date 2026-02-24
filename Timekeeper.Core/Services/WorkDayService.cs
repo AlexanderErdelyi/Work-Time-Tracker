@@ -19,10 +19,14 @@ public interface IWorkDayService
 public class WorkDayService : IWorkDayService
 {
     private readonly TimekeeperContext _context;
+    private readonly IWorkspaceContext? _workspaceContext;
 
-    public WorkDayService(TimekeeperContext context)
+    private int CurrentUserId => _workspaceContext?.UserId ?? 1;
+
+    public WorkDayService(TimekeeperContext context, IWorkspaceContext? workspaceContext = null)
     {
         _context = context;
+        _workspaceContext = workspaceContext;
     }
 
     public async Task<WorkDay?> GetTodayWorkDayAsync()
@@ -32,7 +36,7 @@ public class WorkDayService : IWorkDayService
             .Include(w => w.TimeEntries)
                 .ThenInclude(e => e.Task)
             .Include(w => w.Breaks)
-            .FirstOrDefaultAsync(w => w.Date.Date == today);
+            .FirstOrDefaultAsync(w => w.UserId == CurrentUserId && w.Date.Date == today);
     }
 
     public async Task<WorkDay?> GetWorkDayByDateAsync(DateTime date)
@@ -41,7 +45,7 @@ public class WorkDayService : IWorkDayService
             .Include(w => w.TimeEntries)
                 .ThenInclude(e => e.Task)
             .Include(w => w.Breaks)
-            .FirstOrDefaultAsync(w => w.Date.Date == date.Date);
+            .FirstOrDefaultAsync(w => w.UserId == CurrentUserId && w.Date.Date == date.Date);
     }
 
     public async Task<List<WorkDay>> GetWorkDaysAsync(DateTime? startDate = null, DateTime? endDate = null)
@@ -49,6 +53,7 @@ public class WorkDayService : IWorkDayService
         var query = _context.WorkDays
             .Include(w => w.TimeEntries)
             .Include(w => w.Breaks)
+            .Where(w => w.UserId == CurrentUserId)
             .AsQueryable();
 
         if (startDate.HasValue)
@@ -77,6 +82,7 @@ public class WorkDayService : IWorkDayService
         {
             workDay = new WorkDay
             {
+                UserId = CurrentUserId,
                 Date = today,
                 CheckInTime = checkInTime,
                 Notes = notes
@@ -127,7 +133,7 @@ public class WorkDayService : IWorkDayService
 
     public async Task<WorkDay?> UpdateWorkDayAsync(int id, DateTime? checkInTime, DateTime? checkOutTime, string? notes)
     {
-        var workDay = await _context.WorkDays.FindAsync(id);
+        var workDay = await _context.WorkDays.FirstOrDefaultAsync(w => w.Id == id && w.UserId == CurrentUserId);
         if (workDay == null)
         {
             return null;
@@ -157,7 +163,7 @@ public class WorkDayService : IWorkDayService
         var workDay = await _context.WorkDays
             .Include(w => w.TimeEntries)
             .Include(w => w.Breaks)
-            .FirstOrDefaultAsync(w => w.Id == id);
+            .FirstOrDefaultAsync(w => w.Id == id && w.UserId == CurrentUserId);
 
         if (workDay == null)
         {

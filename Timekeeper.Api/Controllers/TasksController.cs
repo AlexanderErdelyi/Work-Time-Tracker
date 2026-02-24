@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
@@ -99,6 +101,7 @@ public class TasksController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<TaskDto>> CreateTask(CreateTaskDto dto)
     {
         var project = await _context.Projects.Include(p => p.Customer).FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
@@ -144,9 +147,10 @@ public class TasksController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> UpdateTask(int id, UpdateTaskDto dto)
     {
-        var task = await _context.Tasks.FindAsync(id);
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
 
         if (task == null)
         {
@@ -155,7 +159,7 @@ public class TasksController : ControllerBase
 
         if (dto.ProjectId.HasValue)
         {
-            var project = await _context.Projects.FindAsync(dto.ProjectId.Value);
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == dto.ProjectId.Value);
             if (project == null)
             {
                 return BadRequest("Project not found");
@@ -176,9 +180,10 @@ public class TasksController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<IActionResult> DeleteTask(int id)
     {
-        var task = await _context.Tasks.FindAsync(id);
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
 
         if (task == null)
         {
