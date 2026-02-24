@@ -6,6 +6,7 @@ import { useRunningTimer } from '../../hooks/useTimeEntries'
 import { useWorkDayStatus, useCheckIn, useCheckOut } from '../../hooks/useWorkDays'
 import { useBreakStatus, useStartBreak, useEndBreak } from '../../hooks/useBreaks'
 import { QuickActionsDropdown } from '../QuickActionsDropdown'
+import { parseApiDateTime } from '../../lib/timeUtils'
 
 export function TopBar() {
   const [darkMode, setDarkMode] = useState(false)
@@ -45,12 +46,12 @@ export function TopBar() {
       
       if (runningTimer.isPaused && runningTimer.pausedAt) {
         // When paused: Calculate from start to pause time
-        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
-        const pause = new Date(runningTimer.pausedAt + (runningTimer.pausedAt.endsWith('Z') ? '' : 'Z'))
+        const start = parseApiDateTime(runningTimer.startTime)
+        const pause = parseApiDateTime(runningTimer.pausedAt)
         totalSeconds = Math.floor((pause.getTime() - start.getTime()) / 1000)
       } else {
         // When running: Calculate from start to now
-        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
+        const start = parseApiDateTime(runningTimer.startTime)
         const now = new Date()
         totalSeconds = Math.floor((now.getTime() - start.getTime()) / 1000)
       }

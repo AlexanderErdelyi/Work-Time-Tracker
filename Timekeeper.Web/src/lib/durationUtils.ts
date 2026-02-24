@@ -1,3 +1,5 @@
+import { parseApiDateTime } from './timeUtils'
+
 export function parseDuration(duration: string): number {
   if (!duration) return 0
   
@@ -26,13 +28,8 @@ export function formatDurationHours(duration: string): string {
 }
 
 export function calculateDuration(startTime: string, endTime?: string): string {
-  // Ensure we're working with UTC times to avoid timezone issues
-  // Normalize to UTC by appending Z if missing
-  const normalizeUTC = (time: string) => 
-    time && !time.endsWith('Z') ? time + 'Z' : time
-  
-  const start = new Date(normalizeUTC(startTime))
-  const end = endTime ? new Date(normalizeUTC(endTime)) : new Date()
+  const start = parseApiDateTime(startTime)
+  const end = endTime ? parseApiDateTime(endTime) : new Date()
   
   // Calculate difference in milliseconds
   const diffMs = end.getTime() - start.getTime()

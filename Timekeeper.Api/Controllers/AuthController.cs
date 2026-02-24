@@ -153,6 +153,61 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [HttpGet("windows/current-user")]
+    public async Task<ActionResult<object>> GetCurrentWindowsUser()
+    {
+        string? identityName = null;
+
+        var windowsAuth = await HttpContext.AuthenticateAsync(WindowsScheme);
+        if (windowsAuth.Succeeded && windowsAuth.Principal != null)
+        {
+            identityName = windowsAuth.Principal.FindFirstValue(ClaimTypes.Upn)
+                ?? windowsAuth.Principal.FindFirstValue(ClaimTypes.Name)
+                ?? windowsAuth.Principal.Identity?.Name;
+        }
+
+        identityName ??= Request.Headers["X-Remote-User"].FirstOrDefault();
+        identityName ??= Request.Headers["X-Windows-User"].FirstOrDefault();
+
+        string? username = null;
+        string? domain = null;
+
+        if (!string.IsNullOrWhiteSpace(identityName))
+        {
+            var normalized = identityName.Trim();
+
+            if (normalized.Contains('\\'))
+            {
+                var parts = normalized.Split('\\', 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    domain = parts[0];
+                    username = parts[1];
+                }
+            }
+            else if (normalized.Contains('@'))
+            {
+                var parts = normalized.Split('@', 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    username = parts[0];
+                    domain = parts[1];
+                }
+            }
+            else
+            {
+                username = normalized;
+            }
+        }
+
+        return Ok(new
+        {
+            username,
+            domain
+        });
+    }
+
+    [AllowAnonymous]
     [HttpPost("windows-credentials/signin")]
     public async Task<ActionResult<AuthResponseDto>> SignInWithWindowsCredentials([FromBody] WindowsCredentialsAuthDto dto)
     {

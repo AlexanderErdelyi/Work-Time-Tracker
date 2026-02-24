@@ -8,6 +8,7 @@ import type { UserRole } from '../types'
 
 type AuthMode = 'signin' | 'signup'
 type AuthMethod = 'email' | 'microsoft' | 'google' | 'github' | 'windows' | 'windowsCredentials'
+type SelectableMethod = 'email' | 'microsoft' | 'github' | 'windows' | 'windowsIntegrated'
 
 interface LoginProps {
   onLogin: () => void
@@ -28,14 +29,20 @@ interface ExternalProvidersResponse {
   windowsCredentials?: boolean
 }
 
+interface WindowsCurrentUserResponse {
+  username?: string
+  domain?: string
+}
+
 export function Login({ onLogin }: LoginProps) {
   const [mode, setMode] = useState<AuthMode>('signin')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState(localStorage.getItem('timekeeper_authUserEmail') || '')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [windowsUsername, setWindowsUsername] = useState('')
-  const [windowsDomain, setWindowsDomain] = useState('')
+  const [selectedMethod, setSelectedMethod] = useState<SelectableMethod>('email')
+  const [windowsUsername, setWindowsUsername] = useState(localStorage.getItem('timekeeper_windows_username') || '')
+  const [windowsDomain, setWindowsDomain] = useState(localStorage.getItem('timekeeper_windows_domain') || '')
   const [windowsPassword, setWindowsPassword] = useState('')
   const [workspaceId] = useState(localStorage.getItem('timekeeper_authWorkspaceId') || '1')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -167,6 +174,78 @@ export function Login({ onLogin }: LoginProps) {
 
     loadProviders()
   }, [])
+
+  useEffect(() => {
+    if (!windowsUsername) {
+      const fallbackEmail = localStorage.getItem('timekeeper_authUserEmail') || ''
+      if (fallbackEmail.includes('@')) {
+        setWindowsUsername(fallbackEmail.split('@')[0])
+      }
+    }
+
+    const loadWindowsCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/auth/windows/current-user')
+        if (!response.ok) {
+          return
+        }
+
+        const currentUser = (await response.json()) as WindowsCurrentUserResponse
+
+        if (currentUser.username && !windowsUsername) {
+          setWindowsUsername(currentUser.username)
+        }
+
+        if (currentUser.domain && !windowsDomain) {
+          setWindowsDomain(currentUser.domain)
+        }
+      } catch {
+        // No-op fallback: user can type manually.
+      }
+    }
+
+    loadWindowsCurrentUser()
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('timekeeper_windows_username', windowsUsername)
+  }, [windowsUsername])
+
+  useEffect(() => {
+    localStorage.setItem('timekeeper_windows_domain', windowsDomain)
+  }, [windowsDomain])
+
+  useEffect(() => {
+    setAuthError('')
+  }, [selectedMethod, mode])
+
+  const isMethodAvailable = (method: SelectableMethod) => {
+    if (method === 'microsoft') {
+      return providers.microsoft
+    }
+
+    if (method === 'github') {
+      return providers.github
+    }
+
+    if (method === 'windows') {
+      return providers.windowsCredentials ?? false
+    }
+
+    if (method === 'windowsIntegrated') {
+      return providers.windows
+    }
+
+    return true
+  }
+
+  const getMethodButtonLabel = (method: SelectableMethod) => {
+    if (method === 'email') return 'Email'
+    if (method === 'microsoft') return 'Microsoft'
+    if (method === 'github') return 'GitHub'
+    if (method === 'windows') return 'Windows'
+    return 'Windows Integrated'
+  }
 
   const normalizeWorkspaceId = () => {
     const parsedWorkspaceId = parseInt(workspaceId, 10)
@@ -410,149 +489,203 @@ export function Login({ onLogin }: LoginProps) {
               <CardTitle className="pt-2">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</CardTitle>
               <CardDescription>
                 {mode === 'signin'
-                  ? 'Choose a login method to continue'
-                  : 'Use your preferred provider or create an email/password account'}
+                  ? 'Choose your preferred sign-in method'
+                  : 'Choose a method, then complete the required fields'}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleExternalLogin('microsoft')}
-                  disabled={!providers.microsoft || isSubmitting}
-                >
-                  Microsoft
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleExternalLogin('github')}
-                  disabled={!providers.github || isSubmitting}
-                >
-                  GitHub
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleExternalLogin('windows')}
-                  disabled={!providers.windows || isSubmitting}
-                >
-                  Windows
-                </Button>
+              <div className="space-y-2">
+                <Label>Choose method</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['email', 'microsoft', 'github', 'windows'] as const).map((method) => {
+                    const available = isMethodAvailable(method)
+                    return (
+                      <Button
+                        key={method}
+                        type="button"
+                        variant={selectedMethod === method ? 'default' : 'outline'}
+                        onClick={() => setSelectedMethod(method)}
+                        disabled={isSubmitting}
+                        className="justify-between"
+                      >
+                        <span>{getMethodButtonLabel(method)}</span>
+                        {!available && <span className="text-[10px] opacity-80">Not configured</span>}
+                      </Button>
+                    )
+                  })}
+                </div>
+
+                {providers.windows && (
+                  <Button
+                    type="button"
+                    variant={selectedMethod === 'windowsIntegrated' ? 'default' : 'ghost'}
+                    onClick={() => setSelectedMethod('windowsIntegrated')}
+                    disabled={isSubmitting}
+                    className="w-full justify-between"
+                  >
+                    <span>Windows Integrated (SSO)</span>
+                    {!isMethodAvailable('windowsIntegrated') && <span className="text-[10px] opacity-80">Not configured</span>}
+                  </Button>
+                )}
               </div>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
-                </div>
-              </div>
+              {selectedMethod === 'email' && (
+                <div className="space-y-3 rounded-md border p-4">
+                  <p className="text-sm font-medium">Email account</p>
+                  {mode === 'signup' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="loginFullName">Full name</Label>
+                      <Input
+                        id="loginFullName"
+                        value={fullName}
+                        onChange={(event) => setFullName(event.target.value)}
+                        placeholder="Alex Johnson"
+                        autoComplete="name"
+                      />
+                    </div>
+                  )}
 
-              <div className="space-y-3 rounded-md border p-4">
-                <div className="text-sm font-medium">Windows account credentials</div>
-                <p className="text-xs text-muted-foreground">
-                  Use this for cross-domain login when integrated Windows sign-in is unavailable.
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor="windowsUsername">Windows username</Label>
-                  <Input
-                    id="windowsUsername"
-                    value={windowsUsername}
-                    onChange={(event) => setWindowsUsername(event.target.value)}
-                    placeholder="DOMAIN\\username or username@domain"
-                    autoComplete="username"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="windowsDomain">Domain (optional)</Label>
-                  <Input
-                    id="windowsDomain"
-                    value={windowsDomain}
-                    onChange={(event) => setWindowsDomain(event.target.value)}
-                    placeholder="contoso"
-                    autoComplete="organization"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="windowsPassword">Windows password</Label>
-                  <Input
-                    id="windowsPassword"
-                    type="password"
-                    value={windowsPassword}
-                    onChange={(event) => setWindowsPassword(event.target.value)}
-                    placeholder="Enter Windows password"
-                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={isSubmitting || !providers.windowsCredentials}
-                  onClick={handleWindowsCredentialsSubmit}
-                >
-                  {mode === 'signup' ? 'Create account with Windows credentials' : 'Log in with Windows credentials'}
-                </Button>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loginEmail">Email</Label>
+                    <Input
+                      id="loginEmail"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="name@company.com"
+                      autoComplete="email"
+                    />
+                  </div>
 
-              {mode === 'signup' && (
-                <div className="space-y-2">
-                  <Label htmlFor="loginFullName">Full name</Label>
-                  <Input
-                    id="loginFullName"
-                    value={fullName}
-                    onChange={(event) => setFullName(event.target.value)}
-                    placeholder="Alex Johnson"
-                    autoComplete="name"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="loginPassword">Password</Label>
+                    <Input
+                      id="loginPassword"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder={mode === 'signup' ? 'Minimum 8 characters' : 'Enter your password'}
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                    />
+                  </div>
+
+                  {mode === 'signup' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="loginConfirmPassword">Confirm password</Label>
+                      <Input
+                        id="loginConfirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        placeholder="Re-enter your password"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  )}
+
+                  <Button onClick={handleEmailSubmit} disabled={isSubmitting} className="w-full">
+                    {mode === 'signin' ? 'Log in' : 'Create account'}
+                  </Button>
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="loginEmail">Email</Label>
-                <Input
-                  id="loginEmail"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="name@company.com"
-                  autoComplete="email"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="loginPassword">Password</Label>
-                <Input
-                  id="loginPassword"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder={mode === 'signup' ? 'Minimum 8 characters' : 'Enter your password'}
-                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                />
-              </div>
-
-              {mode === 'signup' && (
-                <div className="space-y-2">
-                  <Label htmlFor="loginConfirmPassword">Confirm password</Label>
-                  <Input
-                    id="loginConfirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    placeholder="Re-enter your password"
-                    autoComplete="new-password"
-                  />
+              {selectedMethod === 'windows' && (
+                <div className="space-y-3 rounded-md border p-4">
+                  <p className="text-sm font-medium">Windows credentials</p>
+                  <p className="text-xs text-muted-foreground">
+                    Username is prefilled when available. You can edit it before continuing.
+                  </p>
+                  {mode === 'signup' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="windowsDisplayName">Full name</Label>
+                      <Input
+                        id="windowsDisplayName"
+                        value={fullName}
+                        onChange={(event) => setFullName(event.target.value)}
+                        placeholder="Alex Johnson"
+                        autoComplete="name"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="windowsUsername">Windows username</Label>
+                    <Input
+                      id="windowsUsername"
+                      value={windowsUsername}
+                      onChange={(event) => setWindowsUsername(event.target.value)}
+                      placeholder="DOMAIN\\username or username@domain"
+                      autoComplete="username"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="windowsDomain">Domain (optional)</Label>
+                    <Input
+                      id="windowsDomain"
+                      value={windowsDomain}
+                      onChange={(event) => setWindowsDomain(event.target.value)}
+                      placeholder="contoso"
+                      autoComplete="organization"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="windowsPassword">Windows password</Label>
+                    <Input
+                      id="windowsPassword"
+                      type="password"
+                      value={windowsPassword}
+                      onChange={(event) => setWindowsPassword(event.target.value)}
+                      placeholder="Enter Windows password"
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="w-full"
+                    disabled={isSubmitting}
+                    onClick={handleWindowsCredentialsSubmit}
+                  >
+                    {mode === 'signup' ? 'Create account' : 'Log in'}
+                  </Button>
                 </div>
               )}
 
-              <Button onClick={handleEmailSubmit} disabled={isSubmitting} className="w-full">
-                {mode === 'signin' ? 'Log in with Email' : 'Create account'}
-              </Button>
+              {selectedMethod === 'microsoft' && (
+                <div className="space-y-3 rounded-md border p-4">
+                  <p className="text-sm font-medium">Microsoft account</p>
+                  <p className="text-xs text-muted-foreground">
+                    Continue with your Microsoft identity to {mode === 'signup' ? 'create an account' : 'sign in'}.
+                  </p>
+                  <Button type="button" className="w-full" disabled={isSubmitting} onClick={() => handleExternalLogin('microsoft')}>
+                    Continue with Microsoft
+                  </Button>
+                </div>
+              )}
+
+              {selectedMethod === 'github' && (
+                <div className="space-y-3 rounded-md border p-4">
+                  <p className="text-sm font-medium">GitHub account</p>
+                  <p className="text-xs text-muted-foreground">
+                    Continue with your GitHub identity to {mode === 'signup' ? 'create an account' : 'sign in'}.
+                  </p>
+                  <Button type="button" className="w-full" disabled={isSubmitting} onClick={() => handleExternalLogin('github')}>
+                    Continue with GitHub
+                  </Button>
+                </div>
+              )}
+
+              {selectedMethod === 'windowsIntegrated' && (
+                <div className="space-y-3 rounded-md border p-4">
+                  <p className="text-sm font-medium">Windows integrated sign-in</p>
+                  <p className="text-xs text-muted-foreground">
+                    Uses your current domain session when network and browser policy allow integrated auth.
+                  </p>
+                  <Button type="button" className="w-full" disabled={isSubmitting} onClick={() => handleExternalLogin('windows')}>
+                    Continue with Windows Integrated
+                  </Button>
+                </div>
+              )}
 
               {authError && (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">

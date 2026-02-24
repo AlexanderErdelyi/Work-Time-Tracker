@@ -212,6 +212,6 @@ app.MapControllers();
 
 // SPA fallback - serve index.html for all non-API, non-file routes
 // This enables React Router to work correctly
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
