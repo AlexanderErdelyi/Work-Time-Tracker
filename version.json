@@ -1,23 +1,29 @@
 {
-  "version": "1.0.0",
-  "releaseDate": "2026-02-05",
+  "version": "3.0.0-rc1",
+  "releaseDate": "2026-02-23",
   "features": [
-    "Time tracking with start/stop timer",
-    "Customer, Project, and Task management",
-    "Time entry filtering and search",
-    "Excel and CSV export",
-    "Dark mode support",
-    "Billing duration rounding",
-    "Daily and weekly reports",
-    "Resizable table columns",
-    "Column visibility toggle",
-    "Drag-and-drop column reordering",
-    "Sticky table headers",
-    "Inline duration editing",
-    "Excel task import",
-    "Right-click context menu for columns"
+    "Workspace-aware multi-user foundation",
+    "Role-based access control (Admin/Manager/User)",
+    "Timesheet lifecycle (Draft, Submitted, Approved, Rejected, Locked)",
+    "Approval and review workflow endpoints",
+    "Workspace context and membership management APIs",
+    "Tenant-safe query scoping across core entities",
+    "Lazy-loaded reports and optimized frontend chunks",
+    "Improved reports empty-state navigation"
   ],
   "changelog": {
+    "3.0.0-rc1": {
+      "date": "2026-02-23",
+      "changes": [
+        "Added workspace and user domain foundation for multi-user deployments",
+        "Added role-aware authorization policies and protected mutation endpoints",
+        "Implemented full time entry lifecycle with transition APIs",
+        "Added workspace context and user management API endpoints",
+        "Integrated lifecycle controls and status filtering in Time Entries UI",
+        "Optimized frontend bundle with route-level and chart-level lazy loading",
+        "Stabilized timer pause/resume unit tests by removing timing-based flakiness"
+      ]
+    },
     "1.0.0": {
       "date": "2026-02-05",
       "changes": [

@@ -3,6 +3,7 @@ import {
   LayoutDashboard, 
   Clock,
   Calendar,
+  User,
   Users, 
   Briefcase, 
   ListTodo, 
@@ -15,6 +16,7 @@ import {
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 import { useState } from 'react'
+import { useWorkspaceContext } from '../../hooks/useWorkspaceContext'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -31,6 +33,12 @@ const navigation = [
 export function Sidebar() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
+  const { data: workspaceContext } = useWorkspaceContext()
+  const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
+
+  const navigationItems = isAdminUser
+    ? [...navigation, { name: 'Users', href: '/users', icon: User }]
+    : navigation
 
   return (
     <div
@@ -62,7 +70,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 p-2">
-        {navigation.map((item) => {
+        {navigationItems.map((item) => {
           const Icon = item.icon
           const isActive = location.pathname === item.href
           

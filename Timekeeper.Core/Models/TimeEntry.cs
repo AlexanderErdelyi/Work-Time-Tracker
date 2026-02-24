@@ -14,6 +14,7 @@ public class TimeEntry
 {
     public int Id { get; set; }
     public int WorkspaceId { get; set; } = 1;
+    public int UserId { get; set; } = 1;
     public int? TaskId { get; set; }
     public int? WorkDayId { get; set; }
     public DateTime StartTime { get; set; }
@@ -37,6 +38,7 @@ public class TimeEntry
 
     public TaskItem? Task { get; set; }
     public WorkDay? WorkDay { get; set; }
+    public AppUser? User { get; set; }
 
     public TimeSpan? Duration
     {

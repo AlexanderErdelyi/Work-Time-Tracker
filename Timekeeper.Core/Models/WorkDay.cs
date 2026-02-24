@@ -5,6 +5,7 @@ public class WorkDay
 {
     public int Id { get; set; }
     public int WorkspaceId { get; set; } = 1;
+    public int UserId { get; set; } = 1;
     
     public DateTime Date { get; set; }
     
@@ -13,6 +14,7 @@ public class WorkDay
     public DateTime? CheckOutTime { get; set; }
     
     public string? Notes { get; set; }
+    public AppUser? User { get; set; }
     
     // Navigation properties
     public ICollection<Break> Breaks { get; set; } = new List<Break>();

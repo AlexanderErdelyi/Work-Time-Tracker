@@ -1,5 +1,5 @@
 // Service Worker for Timekeeper PWA
-const CACHE_VERSION = 'v10';
+const CACHE_VERSION = 'v11';
 const CACHE_NAME = `timekeeper-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install
@@ -67,6 +67,16 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Never intercept Vite dev module/HMR traffic
+  if (
+    url.port === '5173' ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@vite/') ||
+    url.pathname.startsWith('/@react-refresh')
+  ) {
+    return;
+  }
+
   // Skip cross-origin requests
   if (url.origin !== location.origin) {
     return;
@@ -131,8 +141,8 @@ self.addEventListener('fetch', (event) => {
             if (request.mode === 'navigate') {
               return caches.match('/index.html');
             }
-            
-            throw error;
+
+            return new Response('', { status: 503, statusText: 'Service Unavailable' });
           });
       })
   );

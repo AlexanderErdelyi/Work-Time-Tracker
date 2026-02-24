@@ -58,6 +58,33 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Email == userEmail && u.IsActive);
 
+        if (user == null)
+        {
+            var shouldAutoProvision = !userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase)
+                && userEmail.Contains('@');
+
+            if (shouldAutoProvision)
+            {
+                var initialRole = Enum.TryParse<UserRole>(requestedRole, true, out var parsedRequestedRole)
+                    ? parsedRequestedRole
+                    : UserRole.Member;
+
+                var displayName = userEmail.Split('@')[0];
+                user = new AppUser
+                {
+                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? userEmail : displayName,
+                    Email = userEmail,
+                    Role = initialRole,
+                    WorkspaceId = workspaceId,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                context.Users.Add(user);
+                await context.SaveChangesAsync();
+            }
+        }
+
         var userId = user?.Id ?? (userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
 
         var role = user?.Role.ToString()

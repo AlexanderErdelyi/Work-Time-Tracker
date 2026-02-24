@@ -213,9 +213,8 @@ public class TimeEntryServiceTests
 
         var entry = await service.StartTimerAsync(1);
         var pausedEntry = await service.PauseTimerAsync(entry.Id);
-        
-        // Simulate 2 seconds pause
-        await Task.Delay(2000);
+        pausedEntry.PausedAt = DateTime.UtcNow.AddSeconds(-3);
+        await context.SaveChangesAsync();
 
         // Act
         var resumedEntry = await service.ResumeFromPauseAsync(entry.Id);
@@ -223,7 +222,7 @@ public class TimeEntryServiceTests
         // Assert
         Assert.Null(resumedEntry.PausedAt);
         Assert.Null(resumedEntry.EndTime);
-        Assert.True(resumedEntry.TotalPausedSeconds >= 2);
+        Assert.True(resumedEntry.TotalPausedSeconds >= 3);
         Assert.False(resumedEntry.IsPaused);
     }
 
@@ -245,16 +244,15 @@ public class TimeEntryServiceTests
 
         var entry = await service.StartTimerAsync(1);
         var stoppedEntry = await service.StopTimerAsync(entry.Id);
-        
-        // Simulate 2 seconds stopped
-        await Task.Delay(2000);
+        stoppedEntry.EndTime = DateTime.UtcNow.AddSeconds(-3);
+        await context.SaveChangesAsync();
 
         // Act
         var restartedEntry = await service.ResumeTimerAsync(entry.Id);
 
         // Assert
         Assert.Null(restartedEntry.EndTime);
-        Assert.True(restartedEntry.TotalPausedSeconds >= 2);
+        Assert.True(restartedEntry.TotalPausedSeconds >= 3);
         Assert.True(restartedEntry.IsRunning);
     }
 
@@ -277,19 +275,21 @@ public class TimeEntryServiceTests
         var entry = await service.StartTimerAsync(1);
         
         // First stop-restart cycle
-        await service.StopTimerAsync(entry.Id);
-        await Task.Delay(1000);
+        var firstStopped = await service.StopTimerAsync(entry.Id);
+        firstStopped.EndTime = DateTime.UtcNow.AddSeconds(-2);
+        await context.SaveChangesAsync();
         var restart1 = await service.ResumeTimerAsync(entry.Id);
         var stoppedTime1 = restart1.TotalPausedSeconds;
 
         // Second stop-restart cycle
-        await service.StopTimerAsync(entry.Id);
-        await Task.Delay(1000);
+        var secondStopped = await service.StopTimerAsync(entry.Id);
+        secondStopped.EndTime = DateTime.UtcNow.AddSeconds(-3);
+        await context.SaveChangesAsync();
         var restart2 = await service.ResumeTimerAsync(entry.Id);
 
         // Assert
         Assert.Null(restart2.EndTime);
-        Assert.True(restart2.TotalPausedSeconds >= stoppedTime1 + 1);
+        Assert.True(restart2.TotalPausedSeconds >= stoppedTime1 + 3);
         Assert.True(restart2.IsRunning);
     }
 
@@ -312,19 +312,21 @@ public class TimeEntryServiceTests
         var entry = await service.StartTimerAsync(1);
         
         // Pause and resume
-        await service.PauseTimerAsync(entry.Id);
-        await Task.Delay(1000);
+        var paused = await service.PauseTimerAsync(entry.Id);
+        paused.PausedAt = DateTime.UtcNow.AddSeconds(-2);
+        await context.SaveChangesAsync();
         var resumed = await service.ResumeFromPauseAsync(entry.Id);
         var pausedTime = resumed.TotalPausedSeconds;
 
         // Stop and restart
-        await service.StopTimerAsync(entry.Id);
-        await Task.Delay(1000);
+        var stopped = await service.StopTimerAsync(entry.Id);
+        stopped.EndTime = DateTime.UtcNow.AddSeconds(-3);
+        await context.SaveChangesAsync();
         var restarted = await service.ResumeTimerAsync(entry.Id);
 
         // Assert
         Assert.Null(restarted.EndTime);
-        Assert.True(restarted.TotalPausedSeconds >= pausedTime + 1);
+        Assert.True(restarted.TotalPausedSeconds >= pausedTime + 3);
         Assert.True(restarted.IsRunning);
     }
 
@@ -344,30 +346,23 @@ public class TimeEntryServiceTests
         context.Tasks.Add(task);
         await context.SaveChangesAsync();
 
-        var startTime = DateTime.UtcNow;
         var entry = await service.StartTimerAsync(1);
-        
-        // Work for a bit, then stop
-        await Task.Delay(1000);
-        await service.StopTimerAsync(entry.Id);
-        
-        // Stop for 2 seconds
-        await Task.Delay(2000);
-        
-        // Restart and work more
+        entry.StartTime = DateTime.UtcNow.AddSeconds(-20);
+        await context.SaveChangesAsync();
+
+        var firstStopped = await service.StopTimerAsync(entry.Id);
+        firstStopped.EndTime = DateTime.UtcNow.AddSeconds(-12);
+        await context.SaveChangesAsync();
+
         await service.ResumeTimerAsync(entry.Id);
-        await Task.Delay(1000);
-        
-        // Stop and calculate duration
         var stoppedEntry = await service.StopTimerAsync(entry.Id);
 
         // Assert
-        // Total elapsed time is ~4 seconds, but stopped time was ~2 seconds
-        // So duration should be approximately 2 seconds (4 - 2)
+        // Total elapsed ~20s, stopped period ~12s, expected duration ~8s
         Assert.NotNull(stoppedEntry.Duration);
         var durationSeconds = stoppedEntry.Duration.Value.TotalSeconds;
-        Assert.True(durationSeconds >= 1.5 && durationSeconds <= 2.5, 
-            $"Duration should be ~2 seconds excluding stopped time, but was {durationSeconds}");
+        Assert.True(durationSeconds >= 7.0 && durationSeconds <= 9.0,
+            $"Duration should be ~8 seconds excluding stopped time, but was {durationSeconds}");
     }
 
     [Fact]
@@ -387,25 +382,28 @@ public class TimeEntryServiceTests
         await context.SaveChangesAsync();
 
         var entry = await service.StartTimerAsync(1);
-        
-        // Work, pause, resume, stop, restart pattern
-        await Task.Delay(500);
-        await service.PauseTimerAsync(entry.Id);
-        await Task.Delay(500); // 500ms paused
+        entry.StartTime = DateTime.UtcNow.AddSeconds(-20);
+        await context.SaveChangesAsync();
+
+        // Pause and resume with deterministic paused duration (~3s)
+        var pausedEntry = await service.PauseTimerAsync(entry.Id);
+        pausedEntry.PausedAt = DateTime.UtcNow.AddSeconds(-3);
+        await context.SaveChangesAsync();
         await service.ResumeFromPauseAsync(entry.Id);
-        await Task.Delay(500);
-        await service.StopTimerAsync(entry.Id);
-        await Task.Delay(500); // 500ms stopped
+
+        // Stop and restart with deterministic stopped duration (~4s)
+        var firstStopped = await service.StopTimerAsync(entry.Id);
+        firstStopped.EndTime = DateTime.UtcNow.AddSeconds(-4);
+        await context.SaveChangesAsync();
         await service.ResumeTimerAsync(entry.Id);
-        await Task.Delay(500);
-        
+
         var stoppedEntry = await service.StopTimerAsync(entry.Id);
 
         // Assert
-        // Total elapsed ~2.5s, but paused+stopped ~1s, so duration should be ~1.5s
+        // Total elapsed ~20s, paused+stopped ~7s, so duration should be ~13s
         Assert.NotNull(stoppedEntry.Duration);
         var durationSeconds = stoppedEntry.Duration.Value.TotalSeconds;
-        Assert.True(durationSeconds >= 1.0 && durationSeconds <= 2.0, 
-            $"Duration should be ~1.5 seconds excluding paused and stopped time, but was {durationSeconds}");
+        Assert.True(durationSeconds >= 12.0 && durationSeconds <= 14.0,
+            $"Duration should be ~13 seconds excluding paused and stopped time, but was {durationSeconds}");
     }
 }

@@ -12,12 +12,16 @@ public class BreaksController : ControllerBase
 {
     private readonly IBreakService _breakService;
     private readonly TimekeeperContext _context;
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public BreaksController(IBreakService breakService, TimekeeperContext context)
+    public BreaksController(IBreakService breakService, TimekeeperContext context, IWorkspaceContext workspaceContext)
     {
         _breakService = breakService;
         _context = context;
+        _workspaceContext = workspaceContext;
     }
+
+    private int CurrentUserId => _workspaceContext.UserId ?? 1;
 
     [HttpGet("active")]
     public async Task<ActionResult<BreakDto>> GetActiveBreak()
@@ -54,7 +58,7 @@ public class BreaksController : ControllerBase
         
         // Get the work day to find check-in time
         var workDay = await _context.WorkDays
-            .Where(w => w.CheckInTime.HasValue && w.CheckInTime.Value.Date == DateTime.Today)
+            .Where(w => w.UserId == CurrentUserId && w.CheckInTime.HasValue && w.CheckInTime.Value.Date == DateTime.Today)
             .OrderByDescending(w => w.CheckInTime)
             .FirstOrDefaultAsync();
         

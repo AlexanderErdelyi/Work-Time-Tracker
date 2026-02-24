@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
+using Timekeeper.Api.Services;
 using Timekeeper.Core.Data;
 using Timekeeper.Core.Models;
 using Timekeeper.Core.Services;
@@ -16,11 +17,16 @@ public class WorkspacesController : ControllerBase
 {
     private readonly TimekeeperContext _context;
     private readonly IWorkspaceContext _workspaceContext;
+    private readonly IPasswordHashService _passwordHashService;
 
-    public WorkspacesController(TimekeeperContext context, IWorkspaceContext workspaceContext)
+    public WorkspacesController(
+        TimekeeperContext context,
+        IWorkspaceContext workspaceContext,
+        IPasswordHashService passwordHashService)
     {
         _context = context;
         _workspaceContext = workspaceContext;
+        _passwordHashService = passwordHashService;
     }
 
     [HttpGet("current")]
@@ -52,6 +58,8 @@ public class WorkspacesController : ControllerBase
                     Email = email,
                     DisplayName = email,
                     Role = role,
+                    LoginMethod = "email",
+                    CanResetPassword = true,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -64,6 +72,8 @@ public class WorkspacesController : ControllerBase
                 Email = email,
                 DisplayName = email,
                 Role = role,
+                LoginMethod = "email",
+                CanResetPassword = true,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -169,6 +179,92 @@ public class WorkspacesController : ControllerBase
         return Ok(MapUser(user));
     }
 
+    [HttpPut("current/users/{id:int}/password")]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
+    public async Task<ActionResult<WorkspaceUserDto>> ResetWorkspaceUserPassword(int id, [FromBody] UpdateWorkspaceUserPasswordDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 8)
+        {
+            return BadRequest("New password must be at least 8 characters.");
+        }
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.ExternalProvider))
+        {
+            return BadRequest("Password reset is only available for email login accounts.");
+        }
+
+        user.PasswordHash = _passwordHashService.HashPassword(dto.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(MapUser(user));
+    }
+
+    [HttpDelete("current/users/{id:int}")]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
+    public async Task<IActionResult> DeleteWorkspaceUser(int id)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        var currentUserIdValue = User.FindFirstValue(AuthClaimTypes.UserId);
+        if (int.TryParse(currentUserIdValue, out var currentUserId) && currentUserId == id)
+        {
+            return BadRequest("You cannot delete your own account.");
+        }
+
+        if (user.Role == UserRole.Admin)
+        {
+            var adminCount = await _context.Users.CountAsync(u => u.Role == UserRole.Admin);
+            if (adminCount <= 1)
+            {
+                return BadRequest("You cannot delete the last admin account.");
+            }
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        var workDayIds = await _context.WorkDays
+            .Where(w => w.UserId == id)
+            .Select(w => w.Id)
+            .ToListAsync();
+
+        if (workDayIds.Count > 0)
+        {
+            await _context.Breaks
+                .Where(b => b.WorkDayId.HasValue && workDayIds.Contains(b.WorkDayId.Value))
+                .ExecuteDeleteAsync();
+
+            await _context.TimeEntries
+                .Where(te => te.WorkDayId.HasValue && workDayIds.Contains(te.WorkDayId.Value))
+                .ExecuteDeleteAsync();
+        }
+
+        await _context.TimeEntries
+            .Where(te => te.UserId == id)
+            .ExecuteDeleteAsync();
+
+        await _context.WorkDays
+            .Where(w => w.UserId == id)
+            .ExecuteDeleteAsync();
+
+        _context.Users.Remove(user);
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return NoContent();
+    }
+
     private static WorkspaceUserDto MapUser(AppUser user)
     {
         return new WorkspaceUserDto
@@ -177,6 +273,8 @@ public class WorkspacesController : ControllerBase
             DisplayName = user.DisplayName,
             Email = user.Email,
             Role = user.Role.ToString(),
+            LoginMethod = string.IsNullOrWhiteSpace(user.ExternalProvider) ? "email" : user.ExternalProvider,
+            CanResetPassword = string.IsNullOrWhiteSpace(user.ExternalProvider),
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt

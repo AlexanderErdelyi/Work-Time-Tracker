@@ -45,8 +45,12 @@ public class TimekeeperContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(320);
+            entity.Property(e => e.PasswordHash).HasMaxLength(512);
+            entity.Property(e => e.ExternalProvider).HasMaxLength(50);
+            entity.Property(e => e.ExternalProviderUserId).HasMaxLength(200);
             entity.Property(e => e.Role).HasConversion<string>().HasMaxLength(20);
             entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => new { e.WorkspaceId, e.ExternalProvider, e.ExternalProviderUserId }).IsUnique();
             entity.HasOne(e => e.Workspace)
                 .WithMany(w => w.Users)
                 .HasForeignKey(e => e.WorkspaceId)
@@ -120,12 +124,14 @@ public class TimekeeperContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.UserId).HasDefaultValue(1);
             entity.Property(e => e.Notes).HasMaxLength(2000);
             entity.Property(e => e.RejectionReason).HasMaxLength(1000);
             entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TimeEntryStatus.Draft);
             entity.HasIndex(e => e.StartTime);
             entity.HasIndex(e => e.EndTime);
             entity.HasIndex(e => new { e.WorkspaceId, e.StartTime });
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.StartTime });
             entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
 
             entity.HasOne<Workspace>()
@@ -136,6 +142,11 @@ public class TimekeeperContext : DbContext
             entity.HasOne(e => e.Task)
                 .WithMany(t => t.TimeEntries)
                 .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.WorkDay)
@@ -168,15 +179,22 @@ public class TimekeeperContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.UserId).HasDefaultValue(1);
             entity.Property(e => e.Notes).HasMaxLength(2000);
             entity.HasIndex(e => e.Date);
             entity.HasIndex(e => e.CheckInTime);
             entity.HasIndex(e => new { e.WorkspaceId, e.Date });
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.Date });
             entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
 
             entity.HasOne<Workspace>()
                 .WithMany()
                 .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

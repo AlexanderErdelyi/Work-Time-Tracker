@@ -1,4 +1,4 @@
-import { Moon, Sun } from 'lucide-react'
+import { LogOut, Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
@@ -83,6 +83,11 @@ export function TopBar() {
     setDarkMode(newDarkMode)
   }
 
+  const signOut = () => {
+    localStorage.removeItem('timekeeper_loggedIn')
+    window.location.reload()
+  }
+
   return (
     <div className="flex h-16 items-center justify-between border-b bg-card px-6">
       {/* Timer Status */}
@@ -125,6 +130,15 @@ export function TopBar() {
           ) : (
             <Moon className="h-5 w-5" />
           )}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={signOut}
+          title="Sign out"
+        >
+          <LogOut className="h-5 w-5" />
         </Button>
         
         <QuickActionsDropdown />

@@ -161,6 +161,8 @@ export interface WorkspaceUser {
   displayName: string
   email: string
   role: UserRole
+  loginMethod: 'email' | 'github' | 'microsoft' | 'windows' | string
+  canResetPassword: boolean
   isActive: boolean
   createdAt: string
   updatedAt?: string

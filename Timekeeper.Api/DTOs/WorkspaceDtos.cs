@@ -20,6 +20,8 @@ public class WorkspaceUserDto
     public string DisplayName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public string LoginMethod { get; set; } = "email";
+    public bool CanResetPassword { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -40,4 +42,9 @@ public class UpdateWorkspaceUserRoleDto
 public class UpdateWorkspaceUserStatusDto
 {
     public bool IsActive { get; set; }
+}
+
+public class UpdateWorkspaceUserPasswordDto
+{
+    public string NewPassword { get; set; } = string.Empty;
 }

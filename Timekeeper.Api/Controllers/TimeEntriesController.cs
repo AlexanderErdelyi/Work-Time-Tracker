@@ -24,6 +24,8 @@ public class TimeEntriesController : ControllerBase
         _workspaceContext = workspaceContext;
     }
 
+    private int CurrentUserId => _workspaceContext.UserId ?? 1;
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TimeEntryDto>>> GetTimeEntries(
         [FromQuery] DateTime? startDate = null,
@@ -39,6 +41,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
+            .Where(e => e.UserId == CurrentUserId)
             .AsQueryable();
 
         if (startDate.HasValue)
@@ -141,7 +144,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -293,6 +296,7 @@ public class TimeEntriesController : ControllerBase
 
         var entry = new TimeEntry
         {
+            UserId = CurrentUserId,
             TaskId = dto.TaskId,
             StartTime = dto.StartTime ?? DateTime.UtcNow,
             EndTime = dto.EndTime,
@@ -318,7 +322,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -379,7 +383,7 @@ public class TimeEntriesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteTimeEntry(int id)
     {
-        var entry = await _context.TimeEntries.FirstOrDefaultAsync(e => e.Id == id);
+        var entry = await _context.TimeEntries.FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -406,7 +410,7 @@ public class TimeEntriesController : ControllerBase
         }
 
         var entries = await _context.TimeEntries
-            .Where(e => dto.Ids.Contains(e.Id))
+            .Where(e => dto.Ids.Contains(e.Id) && e.UserId == CurrentUserId)
             .ToListAsync();
 
         if (entries.Count == 0)
@@ -438,7 +442,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -479,7 +483,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -511,7 +515,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -545,7 +549,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -574,7 +578,7 @@ public class TimeEntriesController : ControllerBase
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
                     .ThenInclude(p => p.Customer)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (entry == null)
         {
@@ -613,6 +617,7 @@ public class TimeEntriesController : ControllerBase
         var query = _context.TimeEntries
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
+            .Where(e => e.UserId == CurrentUserId)
             .Where(e => e.EndTime != null)
             .AsQueryable();
 
@@ -669,6 +674,7 @@ public class TimeEntriesController : ControllerBase
         var query = _context.TimeEntries
             .Include(e => e.Task)
                 .ThenInclude(t => t.Project)
+            .Where(e => e.UserId == CurrentUserId)
             .Where(e => e.EndTime != null)
             .AsQueryable();
 

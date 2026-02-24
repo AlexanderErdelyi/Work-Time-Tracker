@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './components/Layout/AppShell'
 import { useNotifications } from './hooks/useNotifications'
+import { Login } from './pages/Login'
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const TimeEntries = lazy(() => import('./pages/TimeEntries').then(module => ({ default: module.TimeEntries })))
@@ -10,12 +11,19 @@ const Projects = lazy(() => import('./pages/Projects').then(module => ({ default
 const Tasks = lazy(() => import('./pages/Tasks').then(module => ({ default: module.Tasks })))
 const Reports = lazy(() => import('./pages/Reports').then(module => ({ default: module.Reports })))
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
+const Users = lazy(() => import('./pages/Users').then(module => ({ default: module.Users })))
 const WorkDays = lazy(() => import('./pages/WorkDays').then(module => ({ default: module.WorkDays })))
 const ServiceManager = lazy(() => import('./pages/ServiceManager').then(module => ({ default: module.ServiceManager })))
 
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('timekeeper_loggedIn') === 'true')
+
   // Initialize notification system
   useNotifications();
+
+  if (!isLoggedIn) {
+    return <Login onLogin={() => setIsLoggedIn(true)} />
+  }
 
   return (
     <BrowserRouter>
@@ -32,6 +40,7 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/service" element={<ServiceManager />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/users" element={<Users />} />
           </Routes>
         </Suspense>
       </AppShell>

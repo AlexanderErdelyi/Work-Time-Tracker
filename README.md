@@ -2,6 +2,23 @@
 
 A comprehensive C# .NET 8 time tracking application with a **modern React UI** for managing time entries, customers, projects, and tasks.
 
+## 🆕 v3.0.0-rc1 Highlights
+
+- **Workspace + multi-user foundation** with tenant-aware data scoping
+- **RBAC policies** (`Admin`, `Manager`, `User`) on sensitive API operations
+- **Timesheet lifecycle**: Draft → Submitted → Approved/Rejected → Locked
+- **Lifecycle actions in UI** with role-aware controls and status filters
+- **Reports performance optimization** with route/chart lazy loading and improved empty states
+
+Release candidate tagging command:
+
+```bash
+git tag -a v3.0.0-rc1 -m "Release candidate v3.0.0-rc1"
+git push origin v3.0.0-rc1
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+
 ## ✨ Modern React UI (NEW!)
 
 Timekeeper now features a completely redesigned, futuristic user interface built with:
