@@ -5,6 +5,7 @@ import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { Plus, Search, Edit, Trash2, Upload, Download, Filter, X, ArrowUpDown } from 'lucide-react'
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, useImportTasks } from '../hooks/useTasks'
+import { useCustomers } from '../hooks/useCustomers'
 import { useProjects } from '../hooks/useProjects'
 import { importApi } from '../api'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog'
@@ -31,10 +32,13 @@ export function Tasks() {
   
   const { data: tasks = [], isLoading } = useTasks({ search })
   const { data: projects = [] } = useProjects({ isActive: true })
+  const { data: allCustomers = [] } = useCustomers()
+  const { data: allProjects = [] } = useProjects()
   const createTask = useCreateTask()
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
   const importTasks = useImportTasks()
+  const hasExistingImportData = allCustomers.length > 0 || allProjects.length > 0
 
   const [formData, setFormData] = useState<TaskDto>({
     name: '',
@@ -194,7 +198,7 @@ export function Tasks() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => importApi.downloadTemplate()} className="gap-2">
             <Download className="h-4 w-4" />
-            Template
+            {hasExistingImportData ? 'Export' : 'Template'}
           </Button>
           <Button variant="outline" onClick={() => setIsImportDialogOpen(true)} className="gap-2">
             <Upload className="h-4 w-4" />
@@ -529,7 +533,9 @@ export function Tasks() {
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Download the template to see the required format
+                  {hasExistingImportData
+                    ? 'Download the export to review and update existing customers, projects, and tasks'
+                    : 'Download the template to see the required format'}
                 </p>
               </div>
             </div>

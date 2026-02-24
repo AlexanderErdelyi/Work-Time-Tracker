@@ -60,6 +60,16 @@
 }
 
 @layer utilities {
+  .react-grid-item > .react-resizable-handle {
+    z-index: 20;
+    opacity: 0.95;
+  }
+
+  .react-grid-item > .react-resizable-handle::after {
+    border-right: 2px solid hsl(var(--muted-foreground));
+    border-bottom: 2px solid hsl(var(--muted-foreground));
+  }
+
   .gradient-bg {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   }

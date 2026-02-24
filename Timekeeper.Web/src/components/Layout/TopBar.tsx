@@ -135,7 +135,8 @@ export function TopBar() {
   const formatCheckInTime = (value?: string) => {
     if (!value) return '—'
     const date = new Date(value)
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    if (Number.isNaN(date.getTime())) return '—'
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   }
 
   const formatSecondsAsClock = (totalSeconds: number) => {
@@ -190,14 +191,31 @@ export function TopBar() {
       {/* Actions */}
       <div className="flex items-center gap-2">
         <div className="hidden lg:flex items-center gap-3 border-r pr-4 mr-2">
+          <div className="flex items-center gap-2">
+            <div
+              className={`h-2.5 w-2.5 rounded-full ${
+                workDayStatus?.isCheckedIn ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
+              }`}
+            />
+            <span
+              className={`text-sm font-medium ${
+                workDayStatus?.isCheckedIn ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+              }`}
+            >
+              {workDayStatus?.isCheckedIn ? 'Checked in' : 'Check-in needed'}
+            </span>
+          </div>
           <span className="text-sm text-muted-foreground">
-            Check in: {formatCheckInTime(workDayStatus?.workDay?.checkInTime || workDayStatus?.checkInTime)}
+            {formatCheckInTime(workDayStatus?.workDay?.checkInTime || workDayStatus?.checkInTime)}
           </span>
           <Button
             variant={workDayStatus?.isCheckedIn ? 'outline' : 'default'}
             onClick={handleCheckInOut}
             disabled={checkIn.isPending || checkOut.isPending}
             size="sm"
+            className={workDayStatus?.isCheckedIn
+              ? 'border-green-500/40 text-green-700 dark:text-green-300'
+              : 'animate-pulse ring-2 ring-amber-500/40 ring-offset-2 ring-offset-background'}
           >
             {workDayStatus?.isCheckedIn ? 'Check Out' : 'Check In'}
           </Button>

@@ -754,16 +754,16 @@ export function Settings() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="billingIncrement">Billing Increment (hours)</Label>
-                <select
-                  id="billingIncrement"
-                  value={billingIncrement}
-                  onChange={(e) => setBillingIncrement(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="0.25">0.25 (15 minutes)</option>
-                  <option value="0.5">0.5 (30 minutes)</option>
-                  <option value="1.0">1.0 (60 minutes)</option>
-                </select>
+                <Select value={billingIncrement} onValueChange={setBillingIncrement}>
+                  <SelectTrigger id="billingIncrement">
+                    <SelectValue placeholder="Select billing increment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0.25">0.25 (15 minutes)</SelectItem>
+                    <SelectItem value="0.5">0.5 (30 minutes)</SelectItem>
+                    <SelectItem value="1.0">1.0 (60 minutes)</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
                   Round to nearest increment
                 </p>

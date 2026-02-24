@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Badge } from '../components/ui/Badge'
-import { Play, Square, Clock, Search, Edit, RefreshCw, Pause, Monitor, Activity, PlusCircle } from 'lucide-react'
-import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries, useCreateTimeEntry } from '../hooks/useTimeEntries'
+import { Play, Square, Clock, Search, Edit, RefreshCw, Pause, Monitor, Activity, PlusCircle, Trash2 } from 'lucide-react'
+import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries, useCreateTimeEntry, useDeleteTimeEntry } from '../hooks/useTimeEntries'
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { useState, useEffect, useMemo } from 'react'
@@ -16,13 +16,111 @@ import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
 import { useBreakStatus } from '../hooks/useBreaks'
-import { useNavigate } from 'react-router-dom'
+import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy'
 import axios from 'axios'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const ResponsiveGridLayout = WidthProvider(Responsive)
+const DASHBOARD_LAYOUTS_KEY = 'timekeeper_dashboard_layouts_v1'
+const RECENT_ENTRIES_MODE_KEY = 'timekeeper_recent_entries_mode'
+const RECENT_ENTRIES_PAGE_SIZE = 8
+const RECENT_ENTRIES_MIN_H = 6
+const RECENT_ENTRIES_MAX_H = 20
+
+type RecentEntriesMode = 'scroll' | 'pagination'
+
+const DEFAULT_DASHBOARD_LAYOUTS: ResponsiveLayouts = {
+  lg: [
+    { i: 'quickTimer', x: 0, y: 0, w: 6, h: 13, minW: 4, minH: 10 },
+    { i: 'recentEntries', x: 6, y: 0, w: 6, h: 13, minW: 4, minH: RECENT_ENTRIES_MIN_H },
+    { i: 'stats', x: 0, y: 13, w: 12, h: 6, minW: 6, minH: 4 },
+    { i: 'breaksList', x: 0, y: 19, w: 12, h: 8, minW: 6, minH: 6 },
+  ],
+  md: [
+    { i: 'quickTimer', x: 0, y: 0, w: 10, h: 13, minW: 6, minH: 10 },
+    { i: 'recentEntries', x: 0, y: 13, w: 10, h: 13, minW: 6, minH: RECENT_ENTRIES_MIN_H },
+    { i: 'stats', x: 0, y: 26, w: 10, h: 7, minW: 6, minH: 4 },
+    { i: 'breaksList', x: 0, y: 33, w: 10, h: 8, minW: 6, minH: 6 },
+  ],
+  sm: [
+    { i: 'quickTimer', x: 0, y: 0, w: 6, h: 13, minW: 4, minH: 10 },
+    { i: 'recentEntries', x: 0, y: 13, w: 6, h: 13, minW: 4, minH: RECENT_ENTRIES_MIN_H },
+    { i: 'stats', x: 0, y: 26, w: 6, h: 8, minW: 4, minH: 4 },
+    { i: 'breaksList', x: 0, y: 34, w: 6, h: 8, minW: 4, minH: 6 },
+  ],
+  xs: [
+    { i: 'quickTimer', x: 0, y: 0, w: 4, h: 14, minW: 2, minH: 10 },
+    { i: 'recentEntries', x: 0, y: 14, w: 4, h: 14, minW: 2, minH: RECENT_ENTRIES_MIN_H },
+    { i: 'stats', x: 0, y: 28, w: 4, h: 10, minW: 2, minH: 4 },
+    { i: 'breaksList', x: 0, y: 38, w: 4, h: 8, minW: 2, minH: 6 },
+  ],
+  xxs: [
+    { i: 'quickTimer', x: 0, y: 0, w: 2, h: 16, minW: 2, minH: 10 },
+    { i: 'recentEntries', x: 0, y: 16, w: 2, h: 16, minW: 2, minH: RECENT_ENTRIES_MIN_H },
+    { i: 'stats', x: 0, y: 32, w: 2, h: 12, minW: 2, minH: 4 },
+    { i: 'breaksList', x: 0, y: 44, w: 2, h: 10, minW: 2, minH: 6 },
+  ],
+}
+
+function loadDashboardLayouts(): ResponsiveLayouts {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_LAYOUTS_KEY)
+    if (!raw) {
+      return DEFAULT_DASHBOARD_LAYOUTS
+    }
+    return JSON.parse(raw) as ResponsiveLayouts
+  } catch {
+    return DEFAULT_DASHBOARD_LAYOUTS
+  }
+}
+
+function loadRecentEntriesMode(): RecentEntriesMode {
+  const value = localStorage.getItem(RECENT_ENTRIES_MODE_KEY)
+  if (value === 'pagination') {
+    return 'pagination'
+  }
+  return 'scroll'
+}
+
+function getRecentEntriesHeight(entriesCount: number, mode: RecentEntriesMode, hasPaginationControls: boolean) {
+  const baseRows = 6
+  const perEntryRows = 2
+  const paginationRows = mode === 'pagination' && hasPaginationControls ? 2 : 0
+  const desired = baseRows + (entriesCount * perEntryRows) + paginationRows
+  return Math.max(RECENT_ENTRIES_MIN_H, Math.min(RECENT_ENTRIES_MAX_H, desired))
+}
+
+function normalizeRecentEntriesLayouts(layouts: ResponsiveLayouts, targetHeight?: number): ResponsiveLayouts {
+  const next: ResponsiveLayouts = {}
+
+  for (const [breakpoint, layout] of Object.entries(layouts)) {
+    if (!layout) {
+      continue
+    }
+
+    next[breakpoint] = layout.map(item => {
+      if (item.i !== 'recentEntries') {
+        return item
+      }
+
+      const nextHeight = targetHeight != null
+        ? Math.max(RECENT_ENTRIES_MIN_H, Math.min(RECENT_ENTRIES_MAX_H, targetHeight))
+        : Math.max(RECENT_ENTRIES_MIN_H, item.h)
+
+      return {
+        ...item,
+        h: nextHeight,
+        minH: RECENT_ENTRIES_MIN_H,
+      }
+    })
+  }
+
+  return next
+}
 
 export function Dashboard() {
-  const navigate = useNavigate()
   const { data: runningTimer } = useRunningTimer()
   const { data: workDayStatus } = useWorkDayStatus()
   const { data: tasks = [] } = useTasks({ isActive: true })
@@ -52,6 +150,7 @@ export function Dashboard() {
   const pauseTimer = usePauseTimer()
   const resumeFromPause = useResumeFromPause()
   const updateTimer = useUpdateTimeEntry()
+  const deleteEntry = useDeleteTimeEntry()
   const createTimeEntry = useCreateTimeEntry()
   const [elapsed, setElapsed] = useState('00:00:00')
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>()
@@ -70,7 +169,20 @@ export function Dashboard() {
   const [manualNotes, setManualNotes] = useState('')
   const [manualError, setManualError] = useState<string | null>(null)
   const [manualFieldErrors, setManualFieldErrors] = useState<{ start?: string; end?: string }>({})
+  const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null)
+  const [editTaskId, setEditTaskId] = useState<number | undefined>()
+  const [editTaskSearch, setEditTaskSearch] = useState('')
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editBilledHours, setEditBilledHours] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
   const [detectionMethod, setDetectionMethod] = useState<'system-level' | 'browser-only' | 'none'>('none')
+  const [isLayoutEditMode, setIsLayoutEditMode] = useState(false)
+  const [dashboardLayouts, setDashboardLayouts] = useState<ResponsiveLayouts>(() => loadDashboardLayouts())
+  const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
+  const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
   // Idle detection
   const {
@@ -100,6 +212,19 @@ export function Dashboard() {
   const limitedRecentEntries = useMemo(() => {
     return recentEntries.slice(0, recentEntriesLimit)
   }, [recentEntries, recentEntriesLimit])
+
+  const totalRecentEntriesPages = Math.max(1, Math.ceil(limitedRecentEntries.length / RECENT_ENTRIES_PAGE_SIZE))
+
+  const paginatedRecentEntries = useMemo(() => {
+    const startIndex = (recentEntriesPage - 1) * RECENT_ENTRIES_PAGE_SIZE
+    return limitedRecentEntries.slice(startIndex, startIndex + RECENT_ENTRIES_PAGE_SIZE)
+  }, [limitedRecentEntries, recentEntriesPage])
+
+  const displayedRecentEntries = recentEntriesMode === 'pagination' ? paginatedRecentEntries : limitedRecentEntries
+  const recentEntriesWidgetHeight = useMemo(
+    () => getRecentEntriesHeight(displayedRecentEntries.length, recentEntriesMode, recentEntriesMode === 'pagination' && totalRecentEntriesPages > 1),
+    [displayedRecentEntries.length, recentEntriesMode, totalRecentEntriesPages]
+  )
 
   useEffect(() => {
     if (!runningTimer) {
@@ -148,6 +273,30 @@ export function Dashboard() {
       return () => clearInterval(interval)
     }
   }, [runningTimer])
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_LAYOUTS_KEY, JSON.stringify(dashboardLayouts))
+  }, [dashboardLayouts])
+
+  useEffect(() => {
+    setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev))
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(RECENT_ENTRIES_MODE_KEY, recentEntriesMode)
+    setRecentEntriesPage(1)
+  }, [recentEntriesMode])
+
+  useEffect(() => {
+    if (recentEntriesPage > totalRecentEntriesPages) {
+      setRecentEntriesPage(totalRecentEntriesPages)
+    }
+  }, [recentEntriesPage, totalRecentEntriesPages])
+
+  useEffect(() => {
+    if (isLayoutEditMode) return
+    setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev, recentEntriesWidgetHeight))
+  }, [recentEntriesWidgetHeight, isLayoutEditMode])
 
   // Populate dialog when opening for running timer
   useEffect(() => {
@@ -325,6 +474,108 @@ export function Dashboard() {
     }
   }
 
+  const handleDeleteRecentEntry = async (entryId: number) => {
+    if (!confirm('Are you sure you want to delete this time entry?')) {
+      return
+    }
+
+    try {
+      await deleteEntry.mutateAsync(entryId)
+    } catch (error) {
+      console.error('Failed to delete time entry:', error)
+      alert('Failed to delete time entry. Please try again.')
+    }
+  }
+
+  const toLocalDateTimeInput = (value?: string) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    const year = date.getFullYear()
+    const month = `${date.getMonth() + 1}`.padStart(2, '0')
+    const day = `${date.getDate()}`.padStart(2, '0')
+    const hours = `${date.getHours()}`.padStart(2, '0')
+    const minutes = `${date.getMinutes()}`.padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  const openEditEntryDialog = (entry: typeof recentEntries[number]) => {
+    setEditingEntryId(entry.id)
+    setEditTaskId(entry.taskId)
+    setEditTaskSearch('')
+    setEditStart(toLocalDateTimeInput(entry.startTime))
+    setEditEnd(toLocalDateTimeInput(entry.endTime))
+    setEditNotes(entry.notes || '')
+    setEditBilledHours(entry.billedHours != null ? entry.billedHours.toString() : '')
+    setEditError(null)
+    setEditEntryDialogOpen(true)
+  }
+
+  const resetEditEntryDialog = () => {
+    setEditEntryDialogOpen(false)
+    setEditingEntryId(null)
+    setEditTaskId(undefined)
+    setEditTaskSearch('')
+    setEditStart('')
+    setEditEnd('')
+    setEditNotes('')
+    setEditBilledHours('')
+    setEditError(null)
+  }
+
+  const handleSaveEditedEntry = () => {
+    if (!editingEntryId) return
+
+    setEditError(null)
+
+    if (!editStart) {
+      setEditError('Start time is required.')
+      return
+    }
+
+    const start = new Date(editStart)
+    const end = editEnd ? new Date(editEnd) : undefined
+
+    if (Number.isNaN(start.getTime())) {
+      setEditError('Start time is invalid.')
+      return
+    }
+
+    if (end && Number.isNaN(end.getTime())) {
+      setEditError('End time is invalid.')
+      return
+    }
+
+    if (end && end <= start) {
+      setEditError('End time must be after start time.')
+      return
+    }
+
+    const billedHoursValue = editBilledHours.trim() === '' ? undefined : Number(editBilledHours)
+    if (editBilledHours.trim() !== '' && (!Number.isFinite(billedHoursValue) || (billedHoursValue ?? 0) < 0)) {
+      setEditError('Billed hours must be 0 or greater.')
+      return
+    }
+
+    updateTimer.mutate(
+      {
+        id: editingEntryId,
+        data: {
+          taskId: editTaskId,
+          startTime: start.toISOString(),
+          endTime: end ? end.toISOString() : undefined,
+          billedHours: billedHoursValue,
+          notes: editNotes || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          resetEditEntryDialog()
+        },
+      }
+    )
+  }
+
   const resetManualDialog = () => {
     setManualTaskId(undefined)
     setManualTaskSearch('')
@@ -418,6 +669,19 @@ export function Dashboard() {
     )
   }, [tasks, manualTaskSearch])
 
+  const filteredEditTasks = useMemo(() => {
+    const term = editTaskSearch.trim().toLowerCase()
+    if (!term) {
+      return tasks
+    }
+
+    return tasks.filter(task =>
+      task.name?.toLowerCase().includes(term) ||
+      task.projectName?.toLowerCase().includes(term) ||
+      task.customerName?.toLowerCase().includes(term)
+    )
+  }, [tasks, editTaskSearch])
+
   return (
     <div className="space-y-6">
       <div>
@@ -425,7 +689,7 @@ export function Dashboard() {
         <p className="text-muted-foreground">
           Welcome to your modern time tracking workspace
         </p>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
@@ -452,26 +716,61 @@ export function Dashboard() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Task (optional)</label>
-                  <Input
-                    placeholder="Search task, project, or customer..."
-                    value={manualTaskSearch}
-                    onChange={(e) => setManualTaskSearch(e.target.value)}
-                  />
-                  <select
-                    className={`w-full rounded-md border bg-background px-3 py-2 text-sm ${manualTaskSearch && filteredManualTasks.length === 0 ? 'border-destructive' : ''}`}
-                    value={manualTaskId ?? ''}
-                    onChange={(e) => setManualTaskId(e.target.value ? Number(e.target.value) : undefined)}
-                  >
-                    <option value="">No task</option>
-                    {filteredManualTasks.map(task => (
-                      <option key={task.id} value={task.id}>
-                        {task.customerName} / {task.projectName} / {task.name}
-                      </option>
-                    ))}
-                  </select>
-                  {manualTaskSearch && filteredManualTasks.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No tasks match your search.</p>
-                  )}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search tasks, projects, or customers..."
+                      value={manualTaskSearch}
+                      onChange={(e) => setManualTaskSearch(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto rounded-md border p-2">
+                    <button
+                      type="button"
+                      onClick={() => setManualTaskId(undefined)}
+                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        manualTaskId == null
+                          ? 'bg-primary/10 border-primary'
+                          : 'hover:bg-accent hover:border-primary'
+                      }`}
+                    >
+                      <div className="font-medium">No task</div>
+                      <div className="text-sm text-muted-foreground">Create entry without assigning a task</div>
+                    </button>
+
+                    {filteredManualTasks.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4 text-sm">
+                        {manualTaskSearch ? 'No tasks found' : 'No active tasks available'}
+                      </p>
+                    ) : (
+                      filteredManualTasks.map((task) => (
+                        <button
+                          type="button"
+                          key={task.id}
+                          onClick={() => setManualTaskId(task.id)}
+                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                            manualTaskId === task.id
+                              ? 'bg-primary/10 border-primary'
+                              : 'hover:bg-accent hover:border-primary'
+                          }`}
+                        >
+                          <div className="font-medium">{task.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {task.customerName} / {task.projectName}
+                          </div>
+                          {(task.position || task.procurementNumber) && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {task.position && <span>Position: {task.position}</span>}
+                              {task.position && task.procurementNumber && <span> • </span>}
+                              {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -556,11 +855,43 @@ export function Dashboard() {
               </div>
             </DialogContent>
           </Dialog>
+          <Button
+            variant={isLayoutEditMode ? 'default' : 'outline'}
+            onClick={() => setIsLayoutEditMode(prev => !prev)}
+            className="gap-2"
+          >
+            {isLayoutEditMode ? 'Done customizing' : 'Customize layout'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDashboardLayouts(DEFAULT_DASHBOARD_LAYOUTS)}
+          >
+            Reset layout
+          </Button>
         </div>
       </div>
 
-      <div>
-        <Card className="border-2 h-full">
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={dashboardLayouts}
+        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+        rowHeight={24}
+        margin={[16, 16]}
+        containerPadding={[0, 0]}
+        isDraggable={isLayoutEditMode}
+        isResizable={isLayoutEditMode}
+        resizeHandles={['se', 's', 'e']}
+        draggableHandle=".dashboard-drag-handle"
+        onLayoutChange={(_layout: unknown, layouts: ResponsiveLayouts) => setDashboardLayouts(normalizeRecentEntriesLayouts(layouts))}
+      >
+      <div key="quickTimer" className="flex h-full min-h-0 flex-col">
+        {isLayoutEditMode && (
+          <div className="dashboard-drag-handle mb-2 cursor-move rounded-md border border-dashed px-3 py-1 text-xs font-medium text-muted-foreground">
+            Drag / resize: Quick Timer
+          </div>
+        )}
+        <Card className="border-2 flex-1 min-h-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-6 w-6" />
@@ -941,8 +1272,13 @@ export function Dashboard() {
       </Card>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div key="stats" className="flex h-full min-h-0 flex-col">
+        {isLayoutEditMode && (
+          <div className="dashboard-drag-handle mb-2 cursor-move rounded-md border border-dashed px-3 py-1 text-xs font-medium text-muted-foreground">
+            Drag / resize: Stats
+          </div>
+        )}
+      <div className="grid h-full min-h-0 gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Today</CardTitle>
@@ -993,12 +1329,24 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      </div>
 
-      {/* Today's Breaks */}
+      <div key="breaksList" className="flex h-full min-h-0 flex-col">
+        {isLayoutEditMode && (
+          <div className="dashboard-drag-handle mb-2 cursor-move rounded-md border border-dashed px-3 py-1 text-xs font-medium text-muted-foreground">
+            Drag / resize: Breaks
+          </div>
+        )}
       <BreaksList />
+      </div>
 
-      {/* Recent Activity */}
-      <Card>
+      <div key="recentEntries" className="flex h-full min-h-0 flex-col">
+        {isLayoutEditMode && (
+          <div className="dashboard-drag-handle mb-2 cursor-move rounded-md border border-dashed px-3 py-1 text-xs font-medium text-muted-foreground">
+            Drag / resize: Recent Entries
+          </div>
+        )}
+      <Card className="flex h-full min-h-0 flex-col">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -1007,21 +1355,31 @@ export function Dashboard() {
                 Double-click to restart timer for any entry
               </CardDescription>
             </div>
-            <Badge variant="secondary">{limitedRecentEntries.length} entries</Badge>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 rounded-md border bg-background px-2 text-xs"
+                value={recentEntriesMode}
+                onChange={(e) => setRecentEntriesMode(e.target.value as RecentEntriesMode)}
+              >
+                <option value="scroll">Scrolling</option>
+                <option value="pagination">Pagination</option>
+              </select>
+              <Badge variant="secondary">{limitedRecentEntries.length} entries</Badge>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {limitedRecentEntries.length === 0 ? (
+        <CardContent className={recentEntriesMode === 'scroll' ? 'flex-1 min-h-0 overflow-y-auto' : 'flex-1 min-h-0'}>
+          {displayedRecentEntries.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               No recent entries yet. Start tracking time to see your activity here!
             </p>
           ) : (
-            <div className="space-y-2">
-              {limitedRecentEntries.map((entry) => (
+            <div className="space-y-2 pr-1">
+              {displayedRecentEntries.map((entry) => (
                 <div
                   key={entry.id}
                   onDoubleClick={() => handleRestartTimer(entry.id)}
-                  className="grid grid-cols-1 gap-2 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer md:grid-cols-[1.2fr_1fr_1.2fr_auto_auto_auto] md:items-center"
+                  className="grid grid-cols-1 gap-2 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer md:grid-cols-[1.2fr_1fr_1.2fr_auto_auto_auto_auto] md:items-center"
                   title="Double-click to restart timer"
                 >
                   <div className="min-w-0">
@@ -1068,12 +1426,26 @@ export function Dashboard() {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate('/entries')
+                        openEditEntryDialog(entry)
                       }}
-                      title="Open Time Entries page to edit"
+                      title="Edit entry"
                     >
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
+                    </Button>
+                  </div>
+                  <div className="flex md:justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteRecentEntry(entry.id)
+                      }}
+                      disabled={deleteEntry.isPending || entry.isRunning}
+                      title={entry.isRunning ? 'Stop running timer before deleting' : 'Delete entry'}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                   <div className="flex md:justify-end">
@@ -1091,10 +1463,162 @@ export function Dashboard() {
                   </div>
                 </div>
               ))}
+
+              {recentEntriesMode === 'pagination' && totalRecentEntriesPages > 1 && (
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="text-xs text-muted-foreground">
+                    Page {recentEntriesPage} of {totalRecentEntriesPages}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRecentEntriesPage(prev => Math.max(1, prev - 1))}
+                      disabled={recentEntriesPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRecentEntriesPage(prev => Math.min(totalRecentEntriesPages, prev + 1))}
+                      disabled={recentEntriesPage === totalRecentEntriesPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={editEntryDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          resetEditEntryDialog()
+          return
+        }
+        setEditEntryDialogOpen(open)
+      }}>
+        <DialogContent className="max-w-2xl max-h-[700px]">
+          <DialogHeader>
+            <DialogTitle>Edit Time Entry</DialogTitle>
+            <DialogDescription>Update task, timestamps, notes, and billing for this entry.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Task</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks, projects, or customers..."
+                  value={editTaskSearch}
+                  onChange={(e) => setEditTaskSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="space-y-2 max-h-[220px] overflow-y-auto rounded-md border p-2">
+                <button
+                  type="button"
+                  onClick={() => setEditTaskId(undefined)}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    editTaskId == null
+                      ? 'bg-primary/10 border-primary'
+                      : 'hover:bg-accent hover:border-primary'
+                  }`}
+                >
+                  <div className="font-medium">No task</div>
+                  <div className="text-sm text-muted-foreground">Keep this entry without an assigned task</div>
+                </button>
+
+                {filteredEditTasks.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4 text-sm">
+                    {editTaskSearch ? 'No tasks found' : 'No active tasks available'}
+                  </p>
+                ) : (
+                  filteredEditTasks.map((task) => (
+                    <button
+                      type="button"
+                      key={task.id}
+                      onClick={() => setEditTaskId(task.id)}
+                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        editTaskId === task.id
+                          ? 'bg-primary/10 border-primary'
+                          : 'hover:bg-accent hover:border-primary'
+                      }`}
+                    >
+                      <div className="font-medium">{task.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {task.customerName} / {task.projectName}
+                      </div>
+                      {(task.position || task.procurementNumber) && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {task.position && <span>Position: {task.position}</span>}
+                          {task.position && task.procurementNumber && <span> • </span>}
+                          {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
+                        </div>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Start</label>
+                <Input type="datetime-local" value={editStart} onChange={(e) => setEditStart(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">End (optional)</label>
+                <Input type="datetime-local" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} />
+              </div>
+            </div>
+
+            {isBillingEnabled && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Billed hours</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  value={editBilledHours}
+                  onChange={(e) => setEditBilledHours(e.target.value)}
+                  placeholder="e.g. 1.50"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notes</label>
+              <Textarea
+                placeholder="Describe what you worked on..."
+                rows={3}
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+              />
+            </div>
+
+            {editError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {editError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={resetEditEntryDialog}>Cancel</Button>
+              <Button onClick={handleSaveEditedEntry} disabled={updateTimer.isPending}>
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      </div>
+      </ResponsiveGridLayout>
 
       {/* Idle Resume Dialog */}
       {dialogState.idleStartTime && (

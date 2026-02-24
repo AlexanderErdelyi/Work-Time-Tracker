@@ -11,14 +11,20 @@ import {
   type ColumnFiltersState,
   type VisibilityState,
   type ColumnOrderState,
+  type ColumnSizingState,
 } from '@tanstack/react-table'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/Dialog'
+import { Textarea } from '../components/ui/Textarea'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/DropdownMenu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import { 
   Trash2, 
+  Edit,
+  Calendar,
   ChevronUp, 
   ChevronDown, 
   ChevronsUpDown,
@@ -39,17 +45,20 @@ import {
   XCircle,
   Lock,
   Unlock,
+  MoreHorizontal,
 } from 'lucide-react'
 import { 
   useTimeEntries, 
   useDeleteTimeEntry,
   useBulkDeleteTimeEntries,
+  useUpdateTimeEntry,
   useSubmitTimeEntry,
   useApproveTimeEntry,
   useRejectTimeEntry,
   useLockTimeEntry,
   useReopenTimeEntry,
 } from '../hooks/useTimeEntries'
+import { useTasks } from '../hooks/useTasks'
 import { useWorkspaceContext } from '../hooks/useWorkspaceContext'
 import { exportApi } from '../api'
 import type { TimeEntry } from '../types'
@@ -65,6 +74,7 @@ const DEFAULT_COLUMN_ORDER: string[] = [
   'taskProcurementNumber',
   'notes',
   'billedHours',
+  'status',
   'actions',
 ]
 
@@ -77,7 +87,88 @@ const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
   taskProcurementNumber: true,
   notes: true,
   billedHours: true,
+  status: true,
   actions: true,
+}
+
+const sanitizeColumnSizing = (value: ColumnSizingState): ColumnSizingState => {
+  const next = { ...value }
+  if (typeof next.status === 'number') {
+    next.status = Math.max(70, Math.min(96, next.status))
+  }
+  return next
+}
+
+const formatDateForDisplay = (date: Date) => {
+  const day = `${date.getDate()}`.padStart(2, '0')
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}.${month}.${year}`
+}
+
+const formatDateForIso = (date: Date) => {
+  const day = `${date.getDate()}`.padStart(2, '0')
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const year = date.getFullYear()
+  return `${year}-${month}-${day}`
+}
+
+const parseSmartDateInput = (raw: string): Date | null => {
+  const value = raw.trim().toLowerCase()
+  if (!value) return null
+
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+
+  if (value === 'h' || value === 't' || value === 'today') {
+    return now
+  }
+
+  if (/^[+-]\d{1,3}$/.test(value)) {
+    const deltaDays = Number(value)
+    const parsed = new Date(now)
+    parsed.setDate(parsed.getDate() + deltaDays)
+    parsed.setHours(0, 0, 0, 0)
+    return parsed
+  }
+
+  if (/^\d{1,2}$/.test(value)) {
+    const day = Number(value)
+    if (day < 1 || day > 31) return null
+    const parsed = new Date(now.getFullYear(), now.getMonth(), day)
+    if (parsed.getMonth() !== now.getMonth()) return null
+    parsed.setHours(0, 0, 0, 0)
+    return parsed
+  }
+
+  const parts = value.split(/[.\/-]/).filter(Boolean)
+  if (parts.length >= 2 && parts.length <= 3) {
+    const day = Number(parts[0])
+    const month = Number(parts[1])
+    let year = parts.length === 3 ? Number(parts[2]) : now.getFullYear()
+
+    if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
+      return null
+    }
+
+    if (year < 100) {
+      year = 2000 + year
+    }
+
+    const parsed = new Date(year, month - 1, day)
+    if (
+      parsed.getFullYear() !== year ||
+      parsed.getMonth() !== month - 1 ||
+      parsed.getDate() !== day
+    ) {
+      return null
+    }
+
+    parsed.setHours(0, 0, 0, 0)
+    return parsed
+  }
+
+  return null
 }
 
 export function TimeEntries() {
@@ -87,10 +178,26 @@ export function TimeEntries() {
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [startDateInput, setStartDateInput] = useState('')
+  const [endDateInput, setEndDateInput] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [showColumnSettings, setShowColumnSettings] = useState(false)
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null)
+  const [editTaskId, setEditTaskId] = useState<number | undefined>()
+  const [editTaskSearch, setEditTaskSearch] = useState('')
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editBilledHours, setEditBilledHours] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
+    const saved = localStorage.getItem('timekeeper_columnSizing')
+    return saved ? sanitizeColumnSizing(JSON.parse(saved)) : {}
+  })
 
   // Load column visibility and order from localStorage
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
@@ -113,15 +220,22 @@ export function TimeEntries() {
     localStorage.setItem('timekeeper_columnOrder', JSON.stringify(columnOrder))
   }, [columnOrder])
 
+  useEffect(() => {
+    localStorage.setItem('timekeeper_columnSizing', JSON.stringify(columnSizing))
+  }, [columnSizing])
+
   const { data: entries = [], isLoading } = useTimeEntries({})
+  const { data: tasks = [] } = useTasks({ isActive: true })
   const { data: workspaceContext } = useWorkspaceContext()
   const deleteEntry = useDeleteTimeEntry()
   const bulkDelete = useBulkDeleteTimeEntries()
+  const updateEntry = useUpdateTimeEntry()
   const submitEntry = useSubmitTimeEntry()
   const approveEntry = useApproveTimeEntry()
   const rejectEntry = useRejectTimeEntry()
   const lockEntry = useLockTimeEntry()
   const reopenEntry = useReopenTimeEntry()
+  const isBillingEnabled = localStorage.getItem('timekeeper_enableBilling') === 'true'
 
   const currentUserRole = workspaceContext?.currentUser.role ?? 'Member'
   const isManagerOrAdmin = currentUserRole === 'Admin' || currentUserRole === 'Manager'
@@ -145,10 +259,110 @@ export function TimeEntries() {
     [entries]
   )
 
+  const filteredEditTasks = useMemo(() => {
+    const term = editTaskSearch.trim().toLowerCase()
+    if (!term) return tasks
+    return tasks.filter(task =>
+      task.name?.toLowerCase().includes(term) ||
+      task.projectName?.toLowerCase().includes(term) ||
+      task.customerName?.toLowerCase().includes(term)
+    )
+  }, [tasks, editTaskSearch])
+
+  const toLocalDateTimeInput = (value?: string) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    const year = date.getFullYear()
+    const month = `${date.getMonth() + 1}`.padStart(2, '0')
+    const day = `${date.getDate()}`.padStart(2, '0')
+    const hours = `${date.getHours()}`.padStart(2, '0')
+    const minutes = `${date.getMinutes()}`.padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  const resetEditDialog = () => {
+    setEditDialogOpen(false)
+    setEditingEntryId(null)
+    setEditTaskId(undefined)
+    setEditTaskSearch('')
+    setEditStart('')
+    setEditEnd('')
+    setEditNotes('')
+    setEditBilledHours('')
+    setEditError(null)
+  }
+
+  const handleOpenEditDialog = (entry: TimeEntry) => {
+    setEditingEntryId(entry.id)
+    setEditTaskId(entry.taskId)
+    setEditTaskSearch('')
+    setEditStart(toLocalDateTimeInput(entry.startTime))
+    setEditEnd(toLocalDateTimeInput(entry.endTime))
+    setEditNotes(entry.notes || '')
+    setEditBilledHours(entry.billedHours != null ? entry.billedHours.toString() : '')
+    setEditError(null)
+    setEditDialogOpen(true)
+  }
+
+  const handleSaveEditedEntry = () => {
+    if (!editingEntryId) return
+    if (!editStart) {
+      setEditError('Start time is required.')
+      return
+    }
+
+    const start = new Date(editStart)
+    const end = editEnd ? new Date(editEnd) : undefined
+
+    if (Number.isNaN(start.getTime())) {
+      setEditError('Start time is invalid.')
+      return
+    }
+
+    if (end && Number.isNaN(end.getTime())) {
+      setEditError('End time is invalid.')
+      return
+    }
+
+    if (end && end <= start) {
+      setEditError('End time must be after start time.')
+      return
+    }
+
+    const billedHoursValue = editBilledHours.trim() === '' ? undefined : Number(editBilledHours)
+    if (editBilledHours.trim() !== '' && (!Number.isFinite(billedHoursValue) || (billedHoursValue ?? 0) < 0)) {
+      setEditError('Billed hours must be 0 or greater.')
+      return
+    }
+
+    updateEntry.mutate(
+      {
+        id: editingEntryId,
+        data: {
+          taskId: editTaskId,
+          startTime: start.toISOString(),
+          endTime: end ? end.toISOString() : undefined,
+          notes: editNotes || undefined,
+          billedHours: billedHoursValue,
+        },
+      },
+      {
+        onSuccess: () => {
+          resetEditDialog()
+        },
+      }
+    )
+  }
+
   const columns = useMemo<ColumnDef<TimeEntry>[]>(
     () => [
       {
         id: 'select',
+        size: 44,
+        minSize: 40,
+        maxSize: 56,
+        enableResizing: false,
         header: ({ table }) => (
           <input
             type="checkbox"
@@ -170,6 +384,9 @@ export function TimeEntries() {
       {
         id: 'startTime',
         accessorKey: 'startTime',
+        size: 140,
+        minSize: 120,
+        maxSize: 220,
         header: ({ column }) => {
           return (
             <Button
@@ -189,8 +406,8 @@ export function TimeEntries() {
           )
         },
         cell: ({ row }) => (
-          <div className="font-medium">
-            {formatDate(row.original.startTime, 'MMM d, yyyy HH:mm')}
+          <div className="font-medium whitespace-nowrap">
+            {formatDate(row.original.startTime, 'dd.MM HH:mm')}
             {row.original.isRunning && (
               <Badge variant="success" className="ml-2">Running</Badge>
             )}
@@ -200,6 +417,9 @@ export function TimeEntries() {
       {
         id: 'status',
         accessorKey: 'status',
+        size: 84,
+        minSize: 70,
+        maxSize: 96,
         header: 'Status',
         cell: ({ row }) => {
           const status = row.original.status
@@ -226,41 +446,56 @@ export function TimeEntries() {
       {
         id: 'customerName',
         accessorKey: 'customerName',
+        size: 110,
+        minSize: 90,
+        maxSize: 200,
         header: 'Customer',
         cell: ({ row }) => (
-          <div className="max-w-[150px] truncate">{row.original.customerName || '—'}</div>
+          <div className="truncate" title={row.original.customerName || '—'}>{row.original.customerName || '—'}</div>
         ),
       },
       {
         id: 'projectName',
         accessorKey: 'projectName',
+        size: 120,
+        minSize: 100,
+        maxSize: 220,
         header: 'Project',
         cell: ({ row }) => (
-          <div className="max-w-[150px] truncate">{row.original.projectName || '—'}</div>
+          <div className="truncate" title={row.original.projectName || '—'}>{row.original.projectName || '—'}</div>
         ),
       },
       {
         id: 'taskName',
         accessorKey: 'taskName',
+        size: 140,
+        minSize: 110,
+        maxSize: 260,
         header: 'Task',
         cell: ({ row }) => (
-          <div className="max-w-[200px] truncate font-medium">{row.original.taskName || 'No task'}</div>
+          <div className="truncate font-medium" title={row.original.taskName || 'No task'}>{row.original.taskName || 'No task'}</div>
         ),
       },
       {
         id: 'taskProcurementNumber',
         accessorKey: 'taskProcurementNumber',
+        size: 120,
+        minSize: 100,
+        maxSize: 220,
         header: 'Procurement',
         cell: ({ row }) => (
-          <div className="max-w-[150px] truncate">{row.original.taskProcurementNumber || '—'}</div>
+          <div className="truncate" title={row.original.taskProcurementNumber || '—'}>{row.original.taskProcurementNumber || '—'}</div>
         ),
       },
       {
         id: 'notes',
         accessorKey: 'notes',
+        size: 280,
+        minSize: 200,
+        maxSize: 800,
         header: 'Notes',
         cell: ({ row }) => (
-          <div className="max-w-[300px] truncate text-sm text-muted-foreground">
+          <div className="whitespace-normal break-words text-sm text-muted-foreground leading-5" title={row.original.notes || '—'}>
             {row.original.notes || '—'}
           </div>
         ),
@@ -268,6 +503,9 @@ export function TimeEntries() {
       {
         id: 'billedHours',
         accessorKey: 'billedHours',
+        size: 110,
+        minSize: 90,
+        maxSize: 180,
         header: ({ column }) => {
           return (
             <Button
@@ -298,6 +536,10 @@ export function TimeEntries() {
       },
       {
         id: 'actions',
+        size: 56,
+        minSize: 52,
+        maxSize: 68,
+        enableResizing: false,
         cell: ({ row }) => {
           const entry = row.original
 
@@ -310,76 +552,69 @@ export function TimeEntries() {
             deleteEntry.isPending
 
           return (
-            <div className="flex items-center gap-1">
-              {entry.status === 'Draft' || entry.status === 'Rejected' ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Submit"
-                  onClick={() => handleSubmit(entry.id)}
-                  disabled={entry.isRunning || isMutationBusy}
-                >
-                  <Send className="h-4 w-4" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" disabled={isMutationBusy} title="Actions">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              ) : null}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem
+                  onClick={() => handleOpenEditDialog(entry)}
+                  disabled={entry.status === 'Locked' || isMutationBusy}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
 
-              {entry.status === 'Submitted' && isManagerOrAdmin ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Approve"
-                    onClick={() => handleApprove(entry.id)}
-                    disabled={isMutationBusy}
+                {entry.status === 'Draft' || entry.status === 'Rejected' ? (
+                  <DropdownMenuItem
+                    onClick={() => handleSubmit(entry.id)}
+                    disabled={entry.isRunning || isMutationBusy}
                   >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Reject"
-                    onClick={() => handleReject(entry.id)}
-                    disabled={isMutationBusy}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : null}
+                    <Send className="mr-2 h-4 w-4" />
+                    Submit
+                  </DropdownMenuItem>
+                ) : null}
 
-              {entry.status === 'Approved' && isManagerOrAdmin ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Lock"
-                  onClick={() => handleLock(entry.id)}
-                  disabled={isMutationBusy}
+                {entry.status === 'Submitted' && isManagerOrAdmin ? (
+                  <>
+                    <DropdownMenuItem onClick={() => handleApprove(entry.id)} disabled={isMutationBusy}>
+                      <Check className="mr-2 h-4 w-4" />
+                      Approve
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleReject(entry.id)} disabled={isMutationBusy}>
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Reject
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+
+                {entry.status === 'Approved' && isManagerOrAdmin ? (
+                  <DropdownMenuItem onClick={() => handleLock(entry.id)} disabled={isMutationBusy}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Lock
+                  </DropdownMenuItem>
+                ) : null}
+
+                {entry.status !== 'Draft' && isManagerOrAdmin ? (
+                  <DropdownMenuItem onClick={() => handleReopen(entry.id)} disabled={isMutationBusy}>
+                    <Unlock className="mr-2 h-4 w-4" />
+                    Reopen
+                  </DropdownMenuItem>
+                ) : null}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => handleDelete(entry.id)}
+                  disabled={entry.isRunning || entry.status === 'Submitted' || entry.status === 'Approved' || entry.status === 'Locked' || isMutationBusy}
                 >
-                  <Lock className="h-4 w-4" />
-                </Button>
-              ) : null}
-
-              {entry.status !== 'Draft' && isManagerOrAdmin ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Reopen"
-                  onClick={() => handleReopen(entry.id)}
-                  disabled={isMutationBusy}
-                >
-                  <Unlock className="h-4 w-4" />
-                </Button>
-              ) : null}
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDelete(entry.id)}
-                disabled={entry.isRunning || entry.status === 'Submitted' || entry.status === 'Approved' || entry.status === 'Locked' || isMutationBusy}
-                title="Delete"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )
         },
       },
@@ -405,7 +640,10 @@ export function TimeEntries() {
       rowSelection,
       columnVisibility,
       columnOrder,
+      columnSizing,
     },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
     enableRowSelection: (row) => !row.original.isRunning,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -413,6 +651,7 @@ export function TimeEntries() {
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnOrderChange: setColumnOrder,
+    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -427,6 +666,7 @@ export function TimeEntries() {
   const handleResetColumns = () => {
     setColumnVisibility(DEFAULT_COLUMN_VISIBILITY)
     setColumnOrder(DEFAULT_COLUMN_ORDER)
+    setColumnSizing({})
   }
 
   const handleToggleColumn = (columnId: string) => {
@@ -539,6 +779,39 @@ export function TimeEntries() {
   const clearFilters = () => {
     setStartDate('')
     setEndDate('')
+    setStartDateInput('')
+    setEndDateInput('')
+  }
+
+  const applySmartDate = (value: string, target: 'start' | 'end') => {
+    const parsed = parseSmartDateInput(value)
+
+    if (!value.trim()) {
+      if (target === 'start') {
+        setStartDate('')
+        setStartDateInput('')
+      } else {
+        setEndDate('')
+        setEndDateInput('')
+      }
+      return
+    }
+
+    if (!parsed) {
+      return
+    }
+
+    const formattedDisplay = formatDateForDisplay(parsed)
+    const formattedIso = formatDateForIso(parsed)
+
+    if (target === 'start') {
+      setStartDate(formattedIso)
+      setStartDateInput(formattedDisplay)
+      return
+    }
+
+    setEndDate(formattedIso)
+    setEndDateInput(formattedDisplay)
   }
 
   const handleExport = async () => {
@@ -647,25 +920,45 @@ export function TimeEntries() {
                 <label htmlFor="startDate" className="text-sm font-medium mb-2 block">
                   Start Date
                 </label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  placeholder="Start date"
-                />
+                <div className="relative">
+                  <Calendar className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="startDate"
+                    type="text"
+                    value={startDateInput}
+                    onChange={(e) => setStartDateInput(e.target.value)}
+                    onBlur={(e) => applySmartDate(e.target.value, 'start')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        applySmartDate((e.target as HTMLInputElement).value, 'start')
+                      }
+                    }}
+                    placeholder="h, -1, +7, 24, 24.02, 24.02.2026"
+                    className="pl-9"
+                  />
+                </div>
               </div>
               <div className="flex-1">
                 <label htmlFor="endDate" className="text-sm font-medium mb-2 block">
                   End Date
                 </label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  placeholder="End date"
-                />
+                <div className="relative">
+                  <Calendar className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="endDate"
+                    type="text"
+                    value={endDateInput}
+                    onChange={(e) => setEndDateInput(e.target.value)}
+                    onBlur={(e) => applySmartDate(e.target.value, 'end')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        applySmartDate((e.target as HTMLInputElement).value, 'end')
+                      }
+                    }}
+                    placeholder="h, -1, +7, 24, 24.02, 24.02.2026"
+                    className="pl-9"
+                  />
+                </div>
               </div>
               {(startDate || endDate) && (
                 <Button
@@ -722,7 +1015,7 @@ export function TimeEntries() {
               </Button>
             </div>
             <CardDescription>
-              Toggle column visibility and drag to reorder columns
+              Toggle visibility, drag to reorder, and resize columns from table header borders
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -819,7 +1112,7 @@ export function TimeEntries() {
                   placeholder="Search entries..."
                   value={globalFilter ?? ''}
                   onChange={(e) => setGlobalFilter(e.target.value)}
-                  className="pl-8 w-[300px]"
+                  className="pl-8 w-[260px]"
                 />
               </div>
             </div>
@@ -838,15 +1131,16 @@ export function TimeEntries() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-md border">
-                <table className="w-full">
+              <div className="rounded-md border overflow-x-auto">
+                <table className="w-full min-w-[920px] table-fixed">
                   <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
                       <tr key={headerGroup.id} className="border-b bg-muted/50">
                         {headerGroup.headers.map((header) => (
                           <th
                             key={header.id}
-                            className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"
+                            className="relative h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground"
+                            style={{ width: header.getSize() }}
                           >
                             {header.isPlaceholder
                               ? null
@@ -854,6 +1148,18 @@ export function TimeEntries() {
                                   header.column.columnDef.header,
                                   header.getContext()
                                 )}
+
+                            {header.column.getCanResize() && (
+                              <div
+                                onMouseDown={header.getResizeHandler()}
+                                onTouchStart={header.getResizeHandler()}
+                                className={`absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none ${
+                                  header.column.getIsResizing()
+                                    ? 'bg-primary'
+                                    : 'bg-border/60 hover:bg-primary/60'
+                                }`}
+                              />
+                            )}
                           </th>
                         ))}
                       </tr>
@@ -866,7 +1172,7 @@ export function TimeEntries() {
                         className="border-b transition-colors hover:bg-muted/50"
                       >
                         {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="p-4 align-middle">
+                          <td key={cell.id} className="px-2 py-2 align-middle text-sm" style={{ width: cell.column.getSize() }}>
                             {flexRender(
                               cell.column.columnDef.cell,
                               cell.getContext()
@@ -924,6 +1230,130 @@ export function TimeEntries() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          resetEditDialog()
+          return
+        }
+        setEditDialogOpen(open)
+      }}>
+        <DialogContent className="max-w-2xl max-h-[700px]">
+          <DialogHeader>
+            <DialogTitle>Edit Time Entry</DialogTitle>
+            <DialogDescription>Update task, timestamps, notes, and billing for this entry.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Task</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks, projects, or customers..."
+                  value={editTaskSearch}
+                  onChange={(e) => setEditTaskSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="space-y-2 max-h-[220px] overflow-y-auto rounded-md border p-2">
+                <button
+                  type="button"
+                  onClick={() => setEditTaskId(undefined)}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    editTaskId == null
+                      ? 'bg-primary/10 border-primary'
+                      : 'hover:bg-accent hover:border-primary'
+                  }`}
+                >
+                  <div className="font-medium">No task</div>
+                  <div className="text-sm text-muted-foreground">Keep this entry without an assigned task</div>
+                </button>
+
+                {filteredEditTasks.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4 text-sm">
+                    {editTaskSearch ? 'No tasks found' : 'No active tasks available'}
+                  </p>
+                ) : (
+                  filteredEditTasks.map((task) => (
+                    <button
+                      type="button"
+                      key={task.id}
+                      onClick={() => setEditTaskId(task.id)}
+                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        editTaskId === task.id
+                          ? 'bg-primary/10 border-primary'
+                          : 'hover:bg-accent hover:border-primary'
+                      }`}
+                    >
+                      <div className="font-medium">{task.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {task.customerName} / {task.projectName}
+                      </div>
+                      {(task.position || task.procurementNumber) && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {task.position && <span>Position: {task.position}</span>}
+                          {task.position && task.procurementNumber && <span> • </span>}
+                          {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
+                        </div>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Start</label>
+                <Input type="datetime-local" value={editStart} onChange={(e) => setEditStart(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">End (optional)</label>
+                <Input type="datetime-local" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} />
+              </div>
+            </div>
+
+            {isBillingEnabled && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Billed hours</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  value={editBilledHours}
+                  onChange={(e) => setEditBilledHours(e.target.value)}
+                  placeholder="e.g. 1.50"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notes</label>
+              <Textarea
+                placeholder="Describe what you worked on..."
+                rows={3}
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+              />
+            </div>
+
+            {editError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {editError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={resetEditDialog}>Cancel</Button>
+              <Button onClick={handleSaveEditedEntry} disabled={updateEntry.isPending}>
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

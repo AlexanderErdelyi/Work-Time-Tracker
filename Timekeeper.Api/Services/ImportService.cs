@@ -254,17 +254,46 @@ public class ImportService : IImportService
         headerRange.Style.Font.Bold = true;
         headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
 
-        // Add sample data
-        worksheet.Cell(2, 1).Value = "Acme Corp";
-        worksheet.Cell(2, 2).Value = "CUST001";
-        worksheet.Cell(2, 3).Value = "Sample customer";
-        worksheet.Cell(2, 4).Value = "Website Redesign";
-        worksheet.Cell(2, 5).Value = "PROJ001";
-        worksheet.Cell(2, 6).Value = "Redesign company website";
-        worksheet.Cell(2, 7).Value = "Frontend Development";
-        worksheet.Cell(2, 8).Value = "Develop frontend UI";
-        worksheet.Cell(2, 9).Value = "POS001";
-        worksheet.Cell(2, 10).Value = "PROC001";
+        var existingTasks = _context.Tasks
+            .AsNoTracking()
+            .Include(t => t.Project)
+            .ThenInclude(p => p.Customer)
+            .OrderBy(t => t.Project.Customer.Name)
+            .ThenBy(t => t.Project.Name)
+            .ThenBy(t => t.Name)
+            .ToList();
+
+        if (existingTasks.Count > 0)
+        {
+            var row = 2;
+            foreach (var task in existingTasks)
+            {
+                worksheet.Cell(row, 1).Value = task.Project.Customer.Name;
+                worksheet.Cell(row, 2).Value = task.Project.Customer.No ?? string.Empty;
+                worksheet.Cell(row, 3).Value = task.Project.Customer.Description ?? string.Empty;
+                worksheet.Cell(row, 4).Value = task.Project.Name;
+                worksheet.Cell(row, 5).Value = task.Project.No ?? string.Empty;
+                worksheet.Cell(row, 6).Value = task.Project.Description ?? string.Empty;
+                worksheet.Cell(row, 7).Value = task.Name;
+                worksheet.Cell(row, 8).Value = task.Description ?? string.Empty;
+                worksheet.Cell(row, 9).Value = task.Position ?? string.Empty;
+                worksheet.Cell(row, 10).Value = task.ProcurementNumber ?? string.Empty;
+                row++;
+            }
+        }
+        else
+        {
+            worksheet.Cell(2, 1).Value = "Acme Corp";
+            worksheet.Cell(2, 2).Value = "CUST001";
+            worksheet.Cell(2, 3).Value = "Sample customer";
+            worksheet.Cell(2, 4).Value = "Website Redesign";
+            worksheet.Cell(2, 5).Value = "PROJ001";
+            worksheet.Cell(2, 6).Value = "Redesign company website";
+            worksheet.Cell(2, 7).Value = "Frontend Development";
+            worksheet.Cell(2, 8).Value = "Develop frontend UI";
+            worksheet.Cell(2, 9).Value = "POS001";
+            worksheet.Cell(2, 10).Value = "PROC001";
+        }
 
         worksheet.Columns().AdjustToContents();
 
