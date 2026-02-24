@@ -39,6 +39,38 @@ export function Login({ onLogin }: LoginProps) {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [providers, setProviders] = useState<ExternalProvidersResponse>({ github: false, microsoft: false, windows: false })
 
+  const getApiBaseUrl = () => {
+    const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+    const isViteDevHost =
+      window.location.port === '5173' ||
+      window.location.port === '5174' ||
+      window.location.port === '5175' ||
+      window.location.port === '5176'
+
+    if (isViteDevHost) {
+      if (!configured) {
+        return 'http://localhost:5000'
+      }
+
+      if (
+        configured.startsWith('/') ||
+        configured.replace(/\/$/, '') === window.location.origin.replace(/\/$/, '')
+      ) {
+        return 'http://localhost:5000'
+      }
+    }
+
+    if (configured) {
+      return configured.replace(/\/$/, '')
+    }
+
+    if (isViteDevHost) {
+      return 'http://localhost:5000'
+    }
+
+    return window.location.origin
+  }
+
   const completeLogin = (
     resolvedEmail: string,
     resolvedRole: UserRole,
@@ -171,13 +203,13 @@ export function Login({ onLogin }: LoginProps) {
 
     if (provider === 'windows') {
       const returnUrl = `${window.location.origin}${window.location.pathname}`
-      const windowsUrl = `/api/auth/windows?mode=${mode}&workspaceId=${normalizedWorkspaceId}&returnUrl=${encodeURIComponent(returnUrl)}`
+      const windowsUrl = `${getApiBaseUrl()}/api/auth/windows?mode=${mode}&workspaceId=${normalizedWorkspaceId}&returnUrl=${encodeURIComponent(returnUrl)}`
       window.location.href = windowsUrl
       return
     }
 
     const returnUrl = `${window.location.origin}${window.location.pathname}`
-    const externalUrl = `/api/auth/external/${provider}?mode=${mode}&workspaceId=${normalizedWorkspaceId}&returnUrl=${encodeURIComponent(returnUrl)}`
+    const externalUrl = `${getApiBaseUrl()}/api/auth/external/${provider}?mode=${mode}&workspaceId=${normalizedWorkspaceId}&returnUrl=${encodeURIComponent(returnUrl)}`
     window.location.href = externalUrl
   }
 
