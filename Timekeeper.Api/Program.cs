@@ -26,6 +26,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IWorkspaceContext, HttpWorkspaceContext>();
+builder.Services.AddScoped<IWindowsDirectoryAuthService, WindowsDirectoryAuthService>();
 
 var authenticationBuilder = builder.Services.AddAuthentication(options =>
 {

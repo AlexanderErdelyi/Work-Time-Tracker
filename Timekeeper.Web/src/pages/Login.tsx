@@ -7,7 +7,7 @@ import { Label } from '../components/ui/Label'
 import type { UserRole } from '../types'
 
 type AuthMode = 'signin' | 'signup'
-type AuthMethod = 'email' | 'microsoft' | 'google' | 'github' | 'windows'
+type AuthMethod = 'email' | 'microsoft' | 'google' | 'github' | 'windows' | 'windowsCredentials'
 
 interface LoginProps {
   onLogin: () => void
@@ -25,6 +25,7 @@ interface ExternalProvidersResponse {
   github: boolean
   microsoft: boolean
   windows: boolean
+  windowsCredentials?: boolean
 }
 
 export function Login({ onLogin }: LoginProps) {
@@ -33,11 +34,14 @@ export function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState(localStorage.getItem('timekeeper_authUserEmail') || '')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [windowsUsername, setWindowsUsername] = useState('')
+  const [windowsDomain, setWindowsDomain] = useState('')
+  const [windowsPassword, setWindowsPassword] = useState('')
   const [workspaceId] = useState(localStorage.getItem('timekeeper_authWorkspaceId') || '1')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [authError, setAuthError] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(true)
-  const [providers, setProviders] = useState<ExternalProvidersResponse>({ github: false, microsoft: false, windows: false })
+  const [providers, setProviders] = useState<ExternalProvidersResponse>({ github: false, microsoft: false, windows: false, windowsCredentials: false })
 
   const getApiBaseUrl = () => {
     const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
@@ -157,7 +161,7 @@ export function Login({ onLogin }: LoginProps) {
         const available = (await response.json()) as ExternalProvidersResponse
         setProviders(available)
       } catch {
-        setProviders({ github: false, microsoft: false, windows: false })
+        setProviders({ github: false, microsoft: false, windows: false, windowsCredentials: false })
       }
     }
 
@@ -292,6 +296,67 @@ export function Login({ onLogin }: LoginProps) {
     }
   }
 
+  const handleWindowsCredentialsSubmit = async () => {
+    setAuthError('')
+
+    if (!providers.windowsCredentials) {
+      setAuthError('Windows credentials login is not configured on this server.')
+      return
+    }
+
+    const username = windowsUsername.trim()
+    if (!username) {
+      setAuthError('Windows username is required.')
+      return
+    }
+
+    if (!windowsPassword) {
+      setAuthError('Windows password is required.')
+      return
+    }
+
+    const normalizedWorkspaceId = normalizeWorkspaceId()
+    const endpoint = mode === 'signup'
+      ? '/api/auth/windows-credentials/signup'
+      : '/api/auth/windows-credentials/signin'
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          domain: windowsDomain.trim() || undefined,
+          password: windowsPassword,
+          displayName: mode === 'signup' ? fullName.trim() || undefined : undefined,
+          workspaceId: parseInt(normalizedWorkspaceId, 10),
+        }),
+      })
+
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || 'Windows credentials authentication failed.')
+      }
+
+      const auth = (await response.json()) as AuthResponse
+      completeLogin(
+        auth.email,
+        auth.role,
+        String(auth.workspaceId),
+        mode,
+        auth.method,
+        auth.displayName,
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Windows credentials authentication failed.'
+      setAuthError(message)
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="absolute right-4 top-4">
@@ -385,6 +450,53 @@ export function Login({ onLogin }: LoginProps) {
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
                 </div>
+              </div>
+
+              <div className="space-y-3 rounded-md border p-4">
+                <div className="text-sm font-medium">Windows account credentials</div>
+                <p className="text-xs text-muted-foreground">
+                  Use this for cross-domain login when integrated Windows sign-in is unavailable.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="windowsUsername">Windows username</Label>
+                  <Input
+                    id="windowsUsername"
+                    value={windowsUsername}
+                    onChange={(event) => setWindowsUsername(event.target.value)}
+                    placeholder="DOMAIN\\username or username@domain"
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="windowsDomain">Domain (optional)</Label>
+                  <Input
+                    id="windowsDomain"
+                    value={windowsDomain}
+                    onChange={(event) => setWindowsDomain(event.target.value)}
+                    placeholder="contoso"
+                    autoComplete="organization"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="windowsPassword">Windows password</Label>
+                  <Input
+                    id="windowsPassword"
+                    type="password"
+                    value={windowsPassword}
+                    onChange={(event) => setWindowsPassword(event.target.value)}
+                    placeholder="Enter Windows password"
+                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={isSubmitting || !providers.windowsCredentials}
+                  onClick={handleWindowsCredentialsSubmit}
+                >
+                  {mode === 'signup' ? 'Create account with Windows credentials' : 'Log in with Windows credentials'}
+                </Button>
               </div>
 
               {mode === 'signup' && (

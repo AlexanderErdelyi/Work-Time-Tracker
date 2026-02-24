@@ -14,24 +14,35 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
     private const string UserHeader = "X-Timekeeper-User";
     private const string WorkspaceHeader = "X-Timekeeper-Workspace";
     private const string RoleHeader = "X-Timekeeper-Role";
+    private readonly IWebHostEnvironment _environment;
 
     public HeaderAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
-        UrlEncoder encoder)
+        UrlEncoder encoder,
+        IWebHostEnvironment environment)
         : base(options, logger, encoder)
     {
+        _environment = environment;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var userEmail = Request.Headers.TryGetValue(UserHeader, out var userHeaderValue)
+        var hasUserHeader = Request.Headers.TryGetValue(UserHeader, out var userHeaderValue);
+        var userEmail = hasUserHeader
             ? userHeaderValue.ToString().Trim()
-            : "admin@local.timekeeper";
+            : string.Empty;
 
         if (string.IsNullOrWhiteSpace(userEmail))
         {
-            userEmail = "admin@local.timekeeper";
+            if (_environment.IsDevelopment())
+            {
+                userEmail = "admin@local.timekeeper";
+            }
+            else
+            {
+                return AuthenticateResult.Fail("Missing X-Timekeeper-User header.");
+            }
         }
 
         var workspaceId = 1;
@@ -43,7 +54,8 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
         }
 
         string? requestedRole = null;
-        if (Request.Headers.TryGetValue(RoleHeader, out var roleHeaderValue)
+        if (_environment.IsDevelopment()
+            && Request.Headers.TryGetValue(RoleHeader, out var roleHeaderValue)
             && !string.IsNullOrWhiteSpace(roleHeaderValue))
         {
             var normalized = roleHeaderValue.ToString().Trim();
@@ -60,7 +72,8 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
 
         if (user == null)
         {
-            var shouldAutoProvision = !userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase)
+            var shouldAutoProvision = _environment.IsDevelopment()
+                && !userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase)
                 && userEmail.Contains('@');
 
             if (shouldAutoProvision)
@@ -83,15 +96,19 @@ public class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationS
                 context.Users.Add(user);
                 await context.SaveChangesAsync();
             }
+            else if (!_environment.IsDevelopment())
+            {
+                return AuthenticateResult.Fail("Unknown or inactive user.");
+            }
         }
 
-        var userId = user?.Id ?? (userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
+        var userId = user?.Id ?? 0;
+        var role = user?.Role.ToString() ?? requestedRole ?? UserRole.Member.ToString();
 
-        var role = user?.Role.ToString()
-            ?? requestedRole
-            ?? (userEmail.Equals("admin@local.timekeeper", StringComparison.OrdinalIgnoreCase)
-                ? UserRole.Admin.ToString()
-                : UserRole.Member.ToString());
+        if (!_environment.IsDevelopment() && user == null)
+        {
+            return AuthenticateResult.Fail("Unknown user.");
+        }
 
         var claims = new List<Claim>
         {

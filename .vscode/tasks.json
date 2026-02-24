@@ -2,6 +2,35 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "package-shared-host",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/package-shared-host.ps1"
+      ],
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/package-shared-host.ps1"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "stop-all-servers",
       "type": "shell",
       "command": "$port5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5000) { Stop-Process -Id $port5000 -Force -ErrorAction SilentlyContinue }; $port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5173) { Stop-Process -Id $port5173 -Force -ErrorAction SilentlyContinue }; $port5176 = Get-NetTCPConnection -LocalPort 5176 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5176) { Stop-Process -Id $port5176 -Force -ErrorAction SilentlyContinue }; Get-Process -Name 'Timekeeper.Api','node' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Write-Host 'All servers stopped (ports 5000, 5173, 5176)'",
@@ -102,8 +131,27 @@
       "problemMatcher": []
     },
     {
+      "label": "start-app-with-package",
+      "dependsOn": ["package-shared-host", "start-app"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
       "label": "launch-app",
       "dependsOn": ["start-app", "run-api", "run-frontend", "open-browser"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false
+      }
+    },
+    {
+      "label": "launch-app-with-package",
+      "dependsOn": ["start-app-with-package", "run-api", "run-frontend", "open-browser"],
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {

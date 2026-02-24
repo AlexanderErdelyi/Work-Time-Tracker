@@ -172,3 +172,19 @@ export interface CurrentWorkspaceContext {
   workspace: WorkspaceInfo
   currentUser: WorkspaceUser
 }
+
+export interface WindowsCredentialsAuthRequest {
+  username: string
+  password: string
+  domain?: string
+  displayName?: string
+  workspaceId: number
+}
+
+export interface AuthResponseDto {
+  email: string
+  displayName: string
+  role: UserRole
+  workspaceId: number
+  method: 'email' | 'github' | 'microsoft' | 'windows' | 'windowsCredentials' | string
+}

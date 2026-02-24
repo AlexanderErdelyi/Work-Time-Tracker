@@ -24,15 +24,18 @@ public class AuthController : ControllerBase
     private readonly TimekeeperContext _context;
     private readonly IPasswordHashService _passwordHashService;
     private readonly IAuthenticationSchemeProvider _schemeProvider;
+    private readonly IWindowsDirectoryAuthService _windowsDirectoryAuthService;
 
     public AuthController(
         TimekeeperContext context,
         IPasswordHashService passwordHashService,
-        IAuthenticationSchemeProvider schemeProvider)
+        IAuthenticationSchemeProvider schemeProvider,
+        IWindowsDirectoryAuthService windowsDirectoryAuthService)
     {
         _context = context;
         _passwordHashService = passwordHashService;
         _schemeProvider = schemeProvider;
+        _windowsDirectoryAuthService = windowsDirectoryAuthService;
     }
 
     [AllowAnonymous]
@@ -138,13 +141,29 @@ public class AuthController : ControllerBase
         var github = await _schemeProvider.GetSchemeAsync(GitHubScheme) != null;
         var microsoft = await _schemeProvider.GetSchemeAsync(MicrosoftScheme) != null;
         var windows = await _schemeProvider.GetSchemeAsync(WindowsScheme) != null;
+        var windowsCredentials = _windowsDirectoryAuthService.IsEnabled;
 
         return Ok(new
         {
             github,
             microsoft,
-            windows
+            windows,
+            windowsCredentials
         });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("windows-credentials/signin")]
+    public async Task<ActionResult<AuthResponseDto>> SignInWithWindowsCredentials([FromBody] WindowsCredentialsAuthDto dto)
+    {
+        return await HandleWindowsCredentialsAuth(dto, createIfMissing: false);
+    }
+
+    [AllowAnonymous]
+    [HttpPost("windows-credentials/signup")]
+    public async Task<ActionResult<AuthResponseDto>> SignUpWithWindowsCredentials([FromBody] WindowsCredentialsAuthDto dto)
+    {
+        return await HandleWindowsCredentialsAuth(dto, createIfMissing: true);
     }
 
     [AllowAnonymous]
@@ -200,69 +219,141 @@ public class AuthController : ControllerBase
         [FromQuery] string mode = "signin",
         [FromQuery] string? returnUrl = null)
     {
-        if (workspaceId <= 0)
+        try
         {
-            workspaceId = 1;
+            if (workspaceId <= 0)
+            {
+                workspaceId = 1;
+            }
+
+            var normalizedMode = mode.Equals("signup", StringComparison.OrdinalIgnoreCase) ? "signup" : "signin";
+            var resolvedReturnUrl = string.IsNullOrWhiteSpace(returnUrl) ? "http://localhost:5173" : returnUrl;
+
+            var authenticateResult = await HttpContext.AuthenticateAsync(WindowsScheme);
+            if (!authenticateResult.Succeeded || authenticateResult.Principal == null)
+            {
+                var redirectUri = Url.Action(
+                    nameof(WindowsLogin),
+                    "Auth",
+                    new { workspaceId, mode = normalizedMode, returnUrl = resolvedReturnUrl })
+                    ?? $"/api/auth/windows?workspaceId={workspaceId}&mode={normalizedMode}&returnUrl={Uri.EscapeDataString(resolvedReturnUrl)}";
+
+                return Challenge(new AuthenticationProperties { RedirectUri = redirectUri }, WindowsScheme);
+            }
+
+            var principal = authenticateResult.Principal;
+            var identityName = principal.FindFirstValue(ClaimTypes.Upn)
+                ?? principal.FindFirstValue(ClaimTypes.Name)
+                ?? principal.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(identityName))
+            {
+                return Redirect(BuildCallbackUrl(resolvedReturnUrl, success: false, error: "Unable to resolve Windows user identity."));
+            }
+
+            var normalizedName = identityName.Trim();
+            var localPart = normalizedName.Contains('\\')
+                ? normalizedName.Split('\\').Last()
+                : normalizedName;
+            var safeLocalPart = localPart.ToLowerInvariant().Replace(" ", ".");
+            var windowsEmail = principal.FindFirstValue(ClaimTypes.Email)
+                ?? principal.FindFirstValue(ClaimTypes.Upn)
+                ?? $"{safeLocalPart}@windows.local";
+            var externalUserId = principal.FindFirstValue(ClaimTypes.PrimarySid)
+                ?? principal.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? normalizedName;
+
+            var user = await FindOrCreateExternalUserAsync(
+                windowsEmail,
+                normalizedName,
+                workspaceId,
+                "windows",
+                externalUserId);
+
+            if (user == null)
+            {
+                return Redirect(BuildCallbackUrl(resolvedReturnUrl, success: false, error: "This account is deactivated."));
+            }
+
+            return Redirect(BuildCallbackUrl(
+                resolvedReturnUrl,
+                success: true,
+                email: user.Email,
+                displayName: user.DisplayName,
+                role: user.Role.ToString(),
+                workspaceId: user.WorkspaceId,
+                method: "windows",
+                mode: normalizedMode));
+        }
+        catch
+        {
+            var resolvedReturnUrl = string.IsNullOrWhiteSpace(returnUrl) ? "http://localhost:5173" : returnUrl;
+            return Redirect(BuildCallbackUrl(
+                resolvedReturnUrl,
+                success: false,
+                error: "Windows integrated authentication failed for this network/domain context. Use Windows credentials login or email login."));
+        }
+    }
+
+
+    private async Task<ActionResult<AuthResponseDto>> HandleWindowsCredentialsAuth(
+        WindowsCredentialsAuthDto dto,
+        bool createIfMissing)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
+        {
+            return BadRequest("Username and password are required.");
         }
 
-        var normalizedMode = mode.Equals("signup", StringComparison.OrdinalIgnoreCase) ? "signup" : "signin";
-        var resolvedReturnUrl = string.IsNullOrWhiteSpace(returnUrl) ? "http://localhost:5173" : returnUrl;
-
-        var authenticateResult = await HttpContext.AuthenticateAsync(WindowsScheme);
-        if (!authenticateResult.Succeeded || authenticateResult.Principal == null)
+        var workspaceId = dto.WorkspaceId > 0 ? dto.WorkspaceId : 1;
+        var validation = await _windowsDirectoryAuthService.ValidateCredentialsAsync(dto.Username, dto.Password, dto.Domain);
+        if (!validation.Success)
         {
-            var redirectUri = Url.Action(
-                nameof(WindowsLogin),
-                "Auth",
-                new { workspaceId, mode = normalizedMode, returnUrl = resolvedReturnUrl })
-                ?? $"/api/auth/windows?workspaceId={workspaceId}&mode={normalizedMode}&returnUrl={Uri.EscapeDataString(resolvedReturnUrl)}";
-
-            return Challenge(new AuthenticationProperties { RedirectUri = redirectUri }, WindowsScheme);
+            return Unauthorized(validation.Error ?? "Windows credentials authentication failed.");
         }
 
-        var principal = authenticateResult.Principal;
-        var identityName = principal.FindFirstValue(ClaimTypes.Upn)
-            ?? principal.FindFirstValue(ClaimTypes.Name)
-            ?? principal.Identity?.Name;
-
-        if (string.IsNullOrWhiteSpace(identityName))
+        var normalizedEmail = (validation.Email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
         {
-            return BadRequest("Unable to resolve Windows user identity.");
+            return Unauthorized("Windows directory did not return a valid account identity.");
         }
 
-        var normalizedName = identityName.Trim();
-        var localPart = normalizedName.Contains('\\')
-            ? normalizedName.Split('\\').Last()
-            : normalizedName;
-        var safeLocalPart = localPart.ToLowerInvariant().Replace(" ", ".");
-        var windowsEmail = principal.FindFirstValue(ClaimTypes.Email)
-            ?? principal.FindFirstValue(ClaimTypes.Upn)
-            ?? $"{safeLocalPart}@windows.local";
-        var externalUserId = principal.FindFirstValue(ClaimTypes.PrimarySid)
-            ?? principal.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? normalizedName;
+        if (!createIfMissing)
+        {
+            var existing = await _context.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Email == normalizedEmail);
+
+            if (existing == null)
+            {
+                return Unauthorized("No account exists for this Windows identity in this workspace. Use Create account first.");
+            }
+        }
+
+        var displayName = !string.IsNullOrWhiteSpace(dto.DisplayName)
+            ? dto.DisplayName.Trim()
+            : validation.DisplayName;
 
         var user = await FindOrCreateExternalUserAsync(
-            windowsEmail,
-            normalizedName,
+            normalizedEmail,
+            displayName,
             workspaceId,
-            "windows",
-            externalUserId);
+            "windows-credentials",
+            validation.ExternalUserId ?? normalizedEmail);
 
         if (user == null)
         {
-            return Redirect(BuildCallbackUrl(resolvedReturnUrl, success: false, error: "This account is deactivated."));
+            return Unauthorized("This account is deactivated.");
         }
 
-        return Redirect(BuildCallbackUrl(
-            resolvedReturnUrl,
-            success: true,
-            email: user.Email,
-            displayName: user.DisplayName,
-            role: user.Role.ToString(),
-            workspaceId: user.WorkspaceId,
-            method: "windows",
-            mode: normalizedMode));
+        return Ok(new AuthResponseDto
+        {
+            Email = user.Email,
+            DisplayName = user.DisplayName,
+            Role = user.Role.ToString(),
+            WorkspaceId = user.WorkspaceId,
+            Method = "windowsCredentials"
+        });
     }
 
     [AllowAnonymous]
