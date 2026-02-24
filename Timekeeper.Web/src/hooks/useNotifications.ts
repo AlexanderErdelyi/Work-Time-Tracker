@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
+import { fetchApi } from '../api/client';
 import { notificationService } from '../services/notificationService';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 interface WorkDayStatus {
   isCheckedIn: boolean;
@@ -37,8 +35,7 @@ export function useNotifications() {
   const { data: workDayStatus } = useQuery<WorkDayStatus>({
     queryKey: ['workday-status'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/api/workdays/status`);
-      return response.data;
+      return fetchApi<WorkDayStatus>('/workdays/status');
     },
     refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
@@ -48,8 +45,7 @@ export function useNotifications() {
   const { data: breakStatus } = useQuery<BreakStatus>({
     queryKey: ['break-status'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/api/breaks/status`);
-      return response.data;
+      return fetchApi<BreakStatus>('/breaks/status');
     },
     refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
@@ -59,8 +55,8 @@ export function useNotifications() {
   const { data: activeTimer } = useQuery<ActiveTimer | null>({
     queryKey: ['active-timer'],
     queryFn: async () => {
-      const response = await axios.get(`${API_URL}/api/timeentries/running`);
-      return response.data || null;
+      const data = await fetchApi<ActiveTimer | null>('/timeentries/running');
+      return data || null;
     },
     refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
@@ -79,7 +75,7 @@ export function useNotifications() {
       return;
     }
 
-    const isTimerRunning = activeTimer?.isRunning || false;
+    const isTimerRunning = !!activeTimer;
     const isOnBreak = breakStatus?.isOnBreak || false;
     const isCheckedIn = workDayStatus?.isCheckedIn || false;
     const checkInTime = workDayStatus?.checkInTime;

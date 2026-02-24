@@ -100,6 +100,7 @@ export interface TimeEntryDto {
   taskId?: number
   startTime?: string
   endTime?: string
+  billedHours?: number
   notes?: string
 }
 
@@ -119,8 +120,7 @@ export interface DailyTotal {
 }
 
 export interface WeeklyTotal {
-  weekStart: string
-  weekEnd: string
+  date: string
   totalHours: number
   entryCount: number
 }

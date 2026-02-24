@@ -1,0 +1,1 @@
+import{J as t}from"./index-DQB50vNj.js";const p={exportCsv:o=>{const e=o?t(o):"";window.open(`/api/export/csv${e}`,"_blank")},exportExcel:o=>{const e=o?t(o):"";window.open(`/api/export/xlsx${e}`,"_blank")}};export{p as e};

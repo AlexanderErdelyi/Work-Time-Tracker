@@ -40,6 +40,7 @@ public class CreateTimeEntryDto
     public int? TaskId { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
+    public decimal? BilledHours { get; set; }
     public string? Notes { get; set; }
 }
 
@@ -48,6 +49,7 @@ public class UpdateTimeEntryDto
     public int? TaskId { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
+    public decimal? BilledHours { get; set; }
     public string? Notes { get; set; }
 }
 

@@ -11,12 +11,18 @@ namespace Timekeeper.Api.Controllers;
 public class BreaksController : ControllerBase
 {
     private readonly IBreakService _breakService;
+    private readonly ITimeEntryService _timeEntryService;
     private readonly TimekeeperContext _context;
     private readonly IWorkspaceContext _workspaceContext;
 
-    public BreaksController(IBreakService breakService, TimekeeperContext context, IWorkspaceContext workspaceContext)
+    public BreaksController(
+        IBreakService breakService,
+        ITimeEntryService timeEntryService,
+        TimekeeperContext context,
+        IWorkspaceContext workspaceContext)
     {
         _breakService = breakService;
+        _timeEntryService = timeEntryService;
         _context = context;
         _workspaceContext = workspaceContext;
     }
@@ -98,6 +104,12 @@ public class BreaksController : ControllerBase
     {
         try
         {
+            var runningEntry = await _timeEntryService.GetRunningEntryAsync();
+            if (runningEntry != null)
+            {
+                await _timeEntryService.PauseTimerAsync(runningEntry.Id);
+            }
+
             var breakEntity = await _breakService.StartBreakAsync(dto?.Notes);
             return Ok(MapToDto(breakEntity));
         }
@@ -113,6 +125,13 @@ public class BreaksController : ControllerBase
         try
         {
             var breakEntity = await _breakService.EndBreakAsync(dto?.Notes);
+
+            var activeEntry = await _timeEntryService.GetActiveEntryAsync();
+            if (activeEntry?.PausedAt.HasValue == true && !activeEntry.EndTime.HasValue)
+            {
+                await _timeEntryService.ResumeFromPauseAsync(activeEntry.Id);
+            }
+
             return Ok(MapToDto(breakEntity));
         }
         catch (InvalidOperationException ex)

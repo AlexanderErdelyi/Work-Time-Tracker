@@ -1,14 +1,23 @@
-import { LogOut, Moon, Sun } from 'lucide-react'
+import { Coffee, LogOut, Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
 import { useRunningTimer } from '../../hooks/useTimeEntries'
+import { useWorkDayStatus, useCheckIn, useCheckOut } from '../../hooks/useWorkDays'
+import { useBreakStatus, useStartBreak, useEndBreak } from '../../hooks/useBreaks'
 import { QuickActionsDropdown } from '../QuickActionsDropdown'
 
 export function TopBar() {
   const [darkMode, setDarkMode] = useState(false)
   const { data: runningTimer } = useRunningTimer()
+  const { data: workDayStatus } = useWorkDayStatus()
+  const { data: breakStatus } = useBreakStatus()
+  const checkIn = useCheckIn()
+  const checkOut = useCheckOut()
+  const startBreak = useStartBreak()
+  const endBreak = useEndBreak()
   const [elapsed, setElapsed] = useState('00:00:00')
+  const [breakNow, setBreakNow] = useState(Date.now())
 
   useEffect(() => {
     // Load dark mode preference from localStorage
@@ -68,6 +77,18 @@ export function TopBar() {
     }
   }, [runningTimer])
 
+  useEffect(() => {
+    if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      setBreakNow(Date.now())
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [breakStatus?.isOnBreak, breakStatus?.breakStartTime])
+
   const toggleDarkMode = () => {
     const newDarkMode = !darkMode
     
@@ -87,6 +108,54 @@ export function TopBar() {
     localStorage.removeItem('timekeeper_loggedIn')
     window.location.reload()
   }
+
+  const handleCheckInOut = () => {
+    if (workDayStatus?.isCheckedIn) {
+      checkOut.mutate(undefined)
+      return
+    }
+    checkIn.mutate(undefined)
+  }
+
+  const handleBreakToggle = () => {
+    if (breakStatus?.isOnBreak) {
+      endBreak.mutate(undefined)
+      return
+    }
+    startBreak.mutate(undefined)
+  }
+
+  const formatMinutesAsHoursMinutes = (minutes: number) => {
+    const safeMinutes = Math.max(0, Math.round(minutes))
+    const hours = Math.floor(safeMinutes / 60)
+    const remainingMinutes = safeMinutes % 60
+    return `${hours}h ${remainingMinutes}m`
+  }
+
+  const formatCheckInTime = (value?: string) => {
+    if (!value) return '—'
+    const date = new Date(value)
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+  }
+
+  const formatSecondsAsClock = (totalSeconds: number) => {
+    const safeSeconds = Math.max(0, Math.floor(totalSeconds))
+    const hours = Math.floor(safeSeconds / 3600)
+    const minutes = Math.floor((safeSeconds % 3600) / 60)
+    const seconds = safeSeconds % 60
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  const activeBreakSeconds = (() => {
+    if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) return 0
+    const start = new Date(breakStatus.breakStartTime)
+    const now = new Date(breakNow)
+    return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 1000))
+  })()
+
+  const activeBreakMinutes = Math.floor(activeBreakSeconds / 60)
+
+  const totalBreakMinutesToday = (breakStatus?.totalBreakMinutesToday ?? 0) + activeBreakMinutes
 
   return (
     <div className="flex h-16 items-center justify-between border-b bg-card px-6">
@@ -115,10 +184,55 @@ export function TopBar() {
             <span className="text-sm text-muted-foreground">No timer running</span>
           </div>
         )}
+
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        <div className="hidden lg:flex items-center gap-3 border-r pr-4 mr-2">
+          <span className="text-sm text-muted-foreground">
+            Check in: {formatCheckInTime(workDayStatus?.workDay?.checkInTime || workDayStatus?.checkInTime)}
+          </span>
+          <Button
+            variant={workDayStatus?.isCheckedIn ? 'outline' : 'default'}
+            onClick={handleCheckInOut}
+            disabled={checkIn.isPending || checkOut.isPending}
+            size="sm"
+          >
+            {workDayStatus?.isCheckedIn ? 'Check Out' : 'Check In'}
+          </Button>
+        </div>
+
+        <div className="hidden lg:flex items-center gap-3 border-r pr-4 mr-2">
+          {breakStatus?.isOnBreak ? (
+            <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1">
+              <Coffee className="h-4 w-4 text-amber-400" />
+              <div className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
+              <span className="text-sm font-medium text-amber-200">Break Running</span>
+              <Badge variant="outline" className="font-mono text-base border-amber-500/50 text-amber-100">
+                {formatSecondsAsClock(activeBreakSeconds)}
+              </Badge>
+              <span className="text-xs text-amber-200/90">
+                Total: {formatMinutesAsHoursMinutes(totalBreakMinutesToday)}
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              Break: {formatMinutesAsHoursMinutes(totalBreakMinutesToday)}
+            </span>
+          )}
+          <Button
+            variant={breakStatus?.isOnBreak ? 'destructive' : 'outline'}
+            onClick={handleBreakToggle}
+            disabled={startBreak.isPending || endBreak.isPending}
+            size="sm"
+            className="gap-1"
+          >
+            <Coffee className="h-4 w-4" />
+            {breakStatus?.isOnBreak ? 'End Break' : 'Start Break'}
+          </Button>
+        </div>
+
         <Button
           variant="ghost"
           size="icon"

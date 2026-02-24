@@ -16,12 +16,21 @@ public class TimeEntriesController : ControllerBase
     private readonly TimekeeperContext _context;
     private readonly ITimeEntryService _timeEntryService;
     private readonly IWorkspaceContext _workspaceContext;
+    private readonly IBreakService _breakService;
+    private readonly IBillingService _billingService;
 
-    public TimeEntriesController(TimekeeperContext context, ITimeEntryService timeEntryService, IWorkspaceContext workspaceContext)
+    public TimeEntriesController(
+        TimekeeperContext context,
+        ITimeEntryService timeEntryService,
+        IWorkspaceContext workspaceContext,
+        IBreakService breakService,
+        IBillingService billingService)
     {
         _context = context;
         _timeEntryService = timeEntryService;
         _workspaceContext = workspaceContext;
+        _breakService = breakService;
+        _billingService = billingService;
     }
 
     private int CurrentUserId => _workspaceContext.UserId ?? 1;
@@ -201,6 +210,11 @@ public class TimeEntriesController : ControllerBase
     {
         try
         {
+            if (await _breakService.IsOnBreakAsync())
+            {
+                await _breakService.EndBreakAsync("Auto-ended when stopping timer");
+            }
+
             var entry = await _timeEntryService.StopTimerAsync(id);
 
             return Ok(MapToDto(entry));
@@ -241,6 +255,11 @@ public class TimeEntriesController : ControllerBase
         {
             var entry = await _timeEntryService.PauseTimerAsync(id);
 
+            if (!await _breakService.IsOnBreakAsync())
+            {
+                await _breakService.StartBreakAsync("Auto-started from timer pause");
+            }
+
             return Ok(MapToDto(entry));
         }
         catch (InvalidOperationException ex)
@@ -258,6 +277,11 @@ public class TimeEntriesController : ControllerBase
     {
         try
         {
+            if (await _breakService.IsOnBreakAsync())
+            {
+                await _breakService.EndBreakAsync("Auto-ended when resuming timer");
+            }
+
             var entry = await _timeEntryService.ResumeFromPauseAsync(id);
 
             return Ok(MapToDto(entry));
@@ -289,7 +313,16 @@ public class TimeEntriesController : ControllerBase
             }
         }
 
-        if (dto.EndTime.HasValue && dto.EndTime.Value < (dto.StartTime ?? DateTime.UtcNow))
+        var startTime = dto.StartTime ?? DateTime.UtcNow;
+        var endTime = dto.EndTime;
+
+        if (!endTime.HasValue && dto.BilledHours.HasValue && dto.BilledHours.Value > 0)
+        {
+            var billedMinutes = (double)dto.BilledHours.Value * 60d;
+            endTime = startTime.AddMinutes(billedMinutes);
+        }
+
+        if (endTime.HasValue && endTime.Value < startTime)
         {
             return BadRequest("End time must be after start time");
         }
@@ -298,10 +331,19 @@ public class TimeEntriesController : ControllerBase
         {
             UserId = CurrentUserId,
             TaskId = dto.TaskId,
-            StartTime = dto.StartTime ?? DateTime.UtcNow,
-            EndTime = dto.EndTime,
+            StartTime = startTime,
+            EndTime = endTime,
             Notes = dto.Notes
         };
+
+        if (dto.BilledHours.HasValue && dto.BilledHours.Value >= 0)
+        {
+            entry.BilledHours = dto.BilledHours.Value;
+        }
+        else if (entry.EndTime.HasValue)
+        {
+            entry.BilledHours = CalculateBilledHours(entry.StartTime, entry.EndTime.Value, entry.TotalPausedSeconds);
+        }
 
         _context.TimeEntries.Add(entry);
         await _context.SaveChangesAsync();
@@ -372,6 +414,19 @@ public class TimeEntriesController : ControllerBase
         if (entry.EndTime.HasValue && entry.EndTime.Value < entry.StartTime)
         {
             return BadRequest("End time must be after start time");
+        }
+
+        if (dto.BilledHours.HasValue && dto.BilledHours.Value >= 0)
+        {
+            entry.BilledHours = dto.BilledHours.Value;
+        }
+        else if (entry.EndTime.HasValue)
+        {
+            entry.BilledHours = CalculateBilledHours(entry.StartTime, entry.EndTime.Value, entry.TotalPausedSeconds);
+        }
+        else
+        {
+            entry.BilledHours = null;
         }
 
         entry.UpdatedAt = DateTime.UtcNow;
@@ -761,5 +816,20 @@ public class TimeEntriesController : ControllerBase
             CreatedAt = entry.CreatedAt,
             UpdatedAt = entry.UpdatedAt
         };
+    }
+
+    private decimal CalculateBilledHours(DateTime startTime, DateTime endTime, int totalPausedSeconds)
+    {
+        var duration = endTime - startTime - TimeSpan.FromSeconds(totalPausedSeconds);
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        return _billingService.CalculateBilledHours(
+            duration,
+            roundingThresholdMinutes: 3,
+            billingIncrementHours: 0.25m
+        );
     }
 }

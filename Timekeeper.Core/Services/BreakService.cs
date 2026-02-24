@@ -120,7 +120,7 @@ public class BreakService : IBreakService
     public async Task<bool> IsOnBreakAsync()
     {
         return await _context.Breaks
-            .AnyAsync(b => b.EndTime == null);
+            .AnyAsync(b => b.EndTime == null && b.WorkDay != null && b.WorkDay.UserId == CurrentUserId);
     }
 
     public async Task DeleteBreakAsync(int id)
