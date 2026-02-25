@@ -1,0 +1,139 @@
+name: Deploy Shared Host
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (e.g. v3.0.0-rc1)'
+        required: true
+        type: string
+      environment:
+        description: 'GitHub Environment name for approvals'
+        required: true
+        default: production
+        type: string
+      deployRoot:
+        description: 'Target folder on host runner'
+        required: true
+        default: 'C:\Timekeeper-Shared-Host'
+        type: string
+      port:
+        description: 'HTTP port'
+        required: true
+        default: '5000'
+        type: string
+      useHttps:
+        description: 'Deploy with HTTPS'
+        required: true
+        default: true
+        type: boolean
+      httpsPort:
+        description: 'HTTPS port'
+        required: true
+        default: '5443'
+        type: string
+      certificatePath:
+        description: 'Optional certificate path on host (leave empty to auto-detect in certs/)'
+        required: false
+        default: ''
+        type: string
+      keepBackups:
+        description: 'How many backups to retain'
+        required: true
+        default: '3'
+        type: string
+
+jobs:
+  deploy-shared-host:
+    name: Deploy Shared Host
+    runs-on: [self-hosted, windows, timekeeper-shared]
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve tag/version
+        id: resolve
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw 'Tag input is required.'
+          }
+
+          if (-not $tag.StartsWith('v')) {
+            $tag = "v$tag"
+          }
+
+          $version = $tag.Substring(1)
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Download shared-host package from release
+        id: download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $repo = "${{ github.repository }}"
+          $tag = "${{ steps.resolve.outputs.tag }}"
+          $version = "${{ steps.resolve.outputs.version }}"
+          $assetName = "Timekeeper-Shared-Host-v$version.zip"
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+            'User-Agent' = 'github-actions'
+          }
+
+          $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$tag"
+          $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -Method Get
+
+          $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+          if (-not $asset) {
+            $available = ($release.assets | ForEach-Object { $_.name }) -join ', '
+            throw "Release asset '$assetName' not found for tag '$tag'. Available assets: $available"
+          }
+
+          $destinationPath = Join-Path $env:RUNNER_TEMP $asset.name
+          $downloadHeaders = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/octet-stream'
+            'X-GitHub-Api-Version' = '2022-11-28'
+            'User-Agent' = 'github-actions'
+          }
+
+          Invoke-WebRequest -Uri $asset.url -Headers $downloadHeaders -OutFile $destinationPath
+
+          "package_path=$destinationPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Deploy package on self-hosted runner
+        shell: pwsh
+        env:
+          SHARED_HOST_CERT_PASSWORD: ${{ secrets.SHARED_HOST_CERT_PASSWORD }}
+        run: |
+          $params = @{
+            PackageZipPath = "${{ steps.download.outputs.package_path }}"
+            DeployRoot = "${{ inputs.deployRoot }}"
+            Port = [int]"${{ inputs.port }}"
+            HttpsPort = [int]"${{ inputs.httpsPort }}"
+            KeepBackups = [int]"${{ inputs.keepBackups }}"
+          }
+
+          if ("${{ inputs.useHttps }}" -eq 'true') {
+            $params.UseHttps = $true
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace("${{ inputs.certificatePath }}")) {
+            $params.CertificatePath = "${{ inputs.certificatePath }}"
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PASSWORD)) {
+            $params.CertificatePassword = $env:SHARED_HOST_CERT_PASSWORD
+          }
+
+          & "${{ github.workspace }}\deploy-shared-host-release.ps1" @params
