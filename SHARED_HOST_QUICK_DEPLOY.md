@@ -39,10 +39,11 @@ Open: `https://srvbc2506.applabs.local:5443/`
 	Get the token in GitHub: **Settings → Actions → Runners → New self-hosted runner**.
 2. Create GitHub Environment `production` with required approval.
 3. Add secret `SHARED_HOST_CERT_PASSWORD` (optional if password file exists on host).
-4. Run workflow: `.github/workflows/deploy-shared-host.yml`.
-5. Input tag (for example `v3.0.0-rc1`) and deploy root (for example `C:\Timekeeper-Shared-Host`).
+4. Run release workflow: `.github/workflows/release.yml`.
+5. Keep `auto_deploy = true` (default) to automatically start deployment after release succeeds.
+6. If needed, set `auto_deploy = false` to create release only, then run `.github/workflows/deploy-shared-host.yml` manually.
 
-The workflow uses `deploy-shared-host-release.ps1` for stop → backup → deploy → start → verify (auto rollback on failure).
+Deploy uses `deploy-shared-host-release.ps1` for stop → backup → deploy → start → verify (auto rollback on failure).
 
 ## Reset / remove runner (host)
 Run as Administrator:

@@ -112,7 +112,7 @@ function Wait-ForPortListening {
     return $false
 }
 
-function Start-DetachedProcess {
+function Start-UntrackedBackgroundProcess {
     param(
         [Parameter(Mandatory = $true)]
         [string]$FilePath,
@@ -130,62 +130,21 @@ function Start-DetachedProcess {
         [string]$StandardErrorPath
     )
 
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $FilePath
-    foreach ($arg in $ArgumentList) {
-        [void]$startInfo.ArgumentList.Add($arg)
+    $runnerTrackingId = $null
+    $hasRunnerTrackingId = Test-Path Env:RUNNER_TRACKING_ID
+    if ($hasRunnerTrackingId) {
+        $runnerTrackingId = (Get-Item Env:RUNNER_TRACKING_ID).Value
+        Remove-Item Env:RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
     }
 
-    $startInfo.WorkingDirectory = $WorkingDirectory
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.RedirectStandardInput = $false
-
-    foreach ($entry in [System.Environment]::GetEnvironmentVariables().GetEnumerator()) {
-        $key = [string]$entry.Key
-        $value = [string]$entry.Value
-        if ($key -ieq 'RUNNER_TRACKING_ID') {
-            continue
-        }
-        $startInfo.Environment[$key] = $value
+    try {
+        return Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -PassThru -WindowStyle Hidden -RedirectStandardOutput $StandardOutputPath -RedirectStandardError $StandardErrorPath
     }
-
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
-
-    $null = $process.Start()
-
-    $stdOutWriter = New-Object System.IO.StreamWriter($StandardOutputPath, $false)
-    $stdErrWriter = New-Object System.IO.StreamWriter($StandardErrorPath, $false)
-    $stdOutWriter.AutoFlush = $true
-    $stdErrWriter.AutoFlush = $true
-
-    $process.add_OutputDataReceived({
-        param($sender, $eventArgs)
-        if ($eventArgs.Data -ne $null) {
-            $stdOutWriter.WriteLine($eventArgs.Data)
+    finally {
+        if ($hasRunnerTrackingId -and -not [string]::IsNullOrWhiteSpace($runnerTrackingId)) {
+            Set-Item Env:RUNNER_TRACKING_ID -Value $runnerTrackingId
         }
-    })
-
-    $process.add_ErrorDataReceived({
-        param($sender, $eventArgs)
-        if ($eventArgs.Data -ne $null) {
-            $stdErrWriter.WriteLine($eventArgs.Data)
-        }
-    })
-
-    $process.add_Exited({
-        $stdOutWriter.Dispose()
-        $stdErrWriter.Dispose()
-    })
-
-    $process.EnableRaisingEvents = $true
-    $process.BeginOutputReadLine()
-    $process.BeginErrorReadLine()
-
-    return $process
+    }
 }
 
 $existingConnection = Get-ListeningConnection -TargetPort $Port
@@ -298,7 +257,7 @@ if ($apiDllPath) {
         }
         $stdoutLog = Join-Path $logDirectory 'timekeeper-api.stdout.log'
         $stderrLog = Join-Path $logDirectory 'timekeeper-api.stderr.log'
-        $process = Start-DetachedProcess -FilePath 'dotnet' -ArgumentList @($apiDllPath) -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
+        $process = Start-UntrackedBackgroundProcess -FilePath 'dotnet' -ArgumentList @($apiDllPath) -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
         Write-ScriptPid -Path $pidFilePath -PidValue $process.Id
 
         $isReady = Wait-ForPortListening -TargetPort $Port -ProcessId $process.Id -TimeoutSeconds 45
@@ -331,7 +290,7 @@ if ($Background) {
     }
     $stdoutLog = Join-Path $logDirectory 'timekeeper-api.stdout.log'
     $stderrLog = Join-Path $logDirectory 'timekeeper-api.stderr.log'
-    $process = Start-DetachedProcess -FilePath 'dotnet' -ArgumentList @('run', '--project', $apiProjectPath, '--no-launch-profile') -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
+    $process = Start-UntrackedBackgroundProcess -FilePath 'dotnet' -ArgumentList @('run', '--project', $apiProjectPath, '--no-launch-profile') -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
     Write-ScriptPid -Path $pidFilePath -PidValue $process.Id
 
     $isReady = Wait-ForPortListening -TargetPort $Port -ProcessId $process.Id -TimeoutSeconds 45
