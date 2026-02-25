@@ -10,11 +10,19 @@ name: Create Release
         description: 'Tag to release (e.g., v1.0.0)'
         required: true
         type: string
+      auto_deploy:
+        description: 'Automatically deploy to shared host after release build'
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   build-and-release:
     name: Build and Release
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+      tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
     permissions:
       contents: write  # Required to create releases and upload assets
     
@@ -540,3 +548,81 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload shared host package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-host-package-v${{ steps.get_version.outputs.VERSION }}
+          path: |
+            Release/Timekeeper-Shared-Host-v${{ steps.get_version.outputs.VERSION }}.zip
+            Release/Timekeeper-Shared-Host-v${{ steps.get_version.outputs.VERSION }}.sha256.txt
+          if-no-files-found: error
+
+  deploy-after-release:
+    name: Deploy Shared Host (Auto)
+    needs: build-and-release
+    if: ${{ needs.build-and-release.result == 'success' && (github.event_name == 'push' || inputs.auto_deploy == true) }}
+    runs-on: [self-hosted, windows, timekeeper-shared]
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download shared host package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shared-host-package-v${{ needs.build-and-release.outputs.version }}
+          path: ${{ runner.temp }}/shared-host-package
+
+      - name: Deploy package on self-hosted runner
+        shell: pwsh
+        env:
+          SHARED_HOST_CERT_PASSWORD: ${{ secrets.SHARED_HOST_CERT_PASSWORD }}
+          SHARED_HOST_DEPLOY_ROOT: ${{ vars.SHARED_HOST_DEPLOY_ROOT }}
+          SHARED_HOST_HTTP_PORT: ${{ vars.SHARED_HOST_HTTP_PORT }}
+          SHARED_HOST_HTTPS_PORT: ${{ vars.SHARED_HOST_HTTPS_PORT }}
+          SHARED_HOST_USE_HTTPS: ${{ vars.SHARED_HOST_USE_HTTPS }}
+          SHARED_HOST_CERT_PATH: ${{ vars.SHARED_HOST_CERT_PATH }}
+          SHARED_HOST_KEEP_BACKUPS: ${{ vars.SHARED_HOST_KEEP_BACKUPS }}
+        run: |
+          $version = "${{ needs.build-and-release.outputs.version }}"
+          $packagePath = Join-Path $env:RUNNER_TEMP "shared-host-package\Timekeeper-Shared-Host-v$version.zip"
+
+          if (-not (Test-Path -LiteralPath $packagePath)) {
+            throw "Package not found: $packagePath"
+          }
+
+          $deployRoot = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_DEPLOY_ROOT)) { 'C:\Timekeeper-Shared-Host-v3.0.0-rc1' } else { $env:SHARED_HOST_DEPLOY_ROOT }
+          $port = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_HTTP_PORT)) { 5001 } else { [int]$env:SHARED_HOST_HTTP_PORT }
+          $httpsPort = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_HTTPS_PORT)) { 5443 } else { [int]$env:SHARED_HOST_HTTPS_PORT }
+          $keepBackups = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_KEEP_BACKUPS)) { 3 } else { [int]$env:SHARED_HOST_KEEP_BACKUPS }
+
+          $useHttps = $true
+          if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_USE_HTTPS)) {
+            $useHttps = [System.Convert]::ToBoolean($env:SHARED_HOST_USE_HTTPS)
+          }
+
+          $params = @{
+            PackageZipPath = $packagePath
+            DeployRoot = $deployRoot
+            Port = $port
+            HttpsPort = $httpsPort
+            KeepBackups = $keepBackups
+          }
+
+          if ($useHttps) {
+            $params.UseHttps = $true
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PATH)) {
+            $params.CertificatePath = $env:SHARED_HOST_CERT_PATH
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PASSWORD)) {
+            $params.CertificatePassword = $env:SHARED_HOST_CERT_PASSWORD
+          }
+
+          & "${{ github.workspace }}\deploy-shared-host-release.ps1" @params
