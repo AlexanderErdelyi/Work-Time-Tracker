@@ -86,6 +86,118 @@ Test from another machine:
 Test-NetConnection <HOSTNAME> -Port 5000
 ```
 
+## HTTPS setup (required for PWA install + system idle detection on host IP/hostname)
+
+Browser features like PWA installation and `IdleDetector` require a secure context.
+`localhost` is treated specially by browsers, but `http://<HOST-IP>` is not secure.
+
+### 1) Create/export a PFX certificate on host
+
+Easiest option (auto-generates certificate + strong password, with SAN support):
+
+```powershell
+.\create-shared-https-cert.ps1 -DnsNames "srvbc2506","srvbc2506.applabs.local"
+```
+
+This creates:
+- `certs\timekeeper-https.pfx`
+- `certs\timekeeper-https.cer`
+- `certs\timekeeper-https.pfx.password.txt` (contains generated password)
+
+Optional: trust certificate on host for current user:
+
+```powershell
+.\create-shared-https-cert.ps1 -DnsNames "srvbc2506","srvbc2506.applabs.local" -TrustCurrentUser
+```
+
+Optional: trust certificate machine-wide (run elevated):
+
+```powershell
+.\create-shared-https-cert.ps1 -DnsNames "srvbc2506","srvbc2506.applabs.local" -TrustLocalMachine
+```
+
+Notes:
+- If no DNS names are provided, the script now auto-includes short hostname, detected FQDN, and `localhost`.
+- For browser trust without hostname warnings, always include the exact URL hostname clients will use.
+
+Example (self-signed cert for host DNS name):
+
+```powershell
+$cert = New-SelfSignedCertificate -DnsName "timekeeper.local" -CertStoreLocation "Cert:\LocalMachine\My"
+$pwd = ConvertTo-SecureString "ChangeThisPassword!" -AsPlainText -Force
+Export-PfxCertificate -Cert $cert -FilePath "C:\Timekeeper\certs\timekeeper.pfx" -Password $pwd
+```
+
+### 2) Start shared API with HTTPS + HTTP
+
+```powershell
+.\run-api-shared.ps1 -Port 5000 -UseHttps -HttpsPort 5443 -CertificatePath "C:\Timekeeper\certs\timekeeper.pfx" -CertificatePassword "ChangeThisPassword!" -Environment Production -BindAddress 0.0.0.0 -Background
+```
+
+If you used `create-shared-https-cert.ps1`, use values from `certs\timekeeper-https.pfx.password.txt`.
+
+If using packaged host scripts:
+
+```powershell
+.\START_SHARED_HOST.ps1 -UseHttps -HttpsPort 5443 -CertificatePath "C:\Timekeeper\certs\timekeeper.pfx" -CertificatePassword "ChangeThisPassword!"
+```
+
+If auto-generating the cert from `START_SHARED_HOST.ps1`, you can pass SAN names directly:
+
+```powershell
+.\START_SHARED_HOST.ps1 -UseHttps -HttpsPort 5443 -CertificateDnsNames "srvbc2506","srvbc2506.applabs.local" -AutoTrustCurrentUser
+```
+
+Quick mode (auto-generate cert + password if not provided):
+
+```powershell
+.\START_SHARED_HOST.ps1 -UseHttps -HttpsPort 5443
+```
+
+This creates certificate files under `certs\` and uses them automatically.
+
+If you also want the host user to trust the generated certificate automatically:
+
+```powershell
+.\START_SHARED_HOST.ps1 -UseHttps -HttpsPort 5443 -AutoTrustCurrentUser
+```
+
+Machine-wide trust (admin required):
+
+```powershell
+.\START_SHARED_HOST.ps1 -UseHttps -HttpsPort 5443 -AutoTrustLocalMachine
+```
+
+### 3) Open firewall for HTTPS port
+
+```powershell
+New-NetFirewallRule -DisplayName "Timekeeper API 5443" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5443
+```
+
+### 4) Use HTTPS URL in browser
+
+- `https://<HOSTNAME>:5443`
+- or `https://<HOST-IP>:5443`
+
+For self-signed certificates, clients must trust the certificate chain to avoid browser warnings.
+
+### 5) One-command trust setup for client PCs
+
+Copy `certs\timekeeper-https.cer` and `trust-shared-https-cert.ps1` to each client machine,
+then run:
+
+```powershell
+.\trust-shared-https-cert.ps1
+```
+
+This imports the cert to `CurrentUser\Root` (no admin required).
+
+Machine-wide trust (admin required):
+
+```powershell
+.\trust-shared-https-cert.ps1 -TrustLocalMachine
+```
+
 ## 4) User onboarding
 - Log in as admin on the shared URL
 - Open Users management in the app

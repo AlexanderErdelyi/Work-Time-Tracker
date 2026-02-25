@@ -52,7 +52,11 @@ function Resolve-BinDirectory {
 $sharedRunScript = Join-Path $repoRoot 'run-api-shared.ps1'
 $sharedStopScript = Join-Path $repoRoot 'stop-api-shared.ps1'
 $sharedStatusScript = Join-Path $repoRoot 'status-api-shared.ps1'
+$sharedCertScript = Join-Path $repoRoot 'create-shared-https-cert.ps1'
+$sharedClientTrustScript = Join-Path $repoRoot 'trust-shared-https-cert.ps1'
 $sharedGuide = Join-Path $repoRoot 'SHARED_DATASET_SETUP.md'
+$sharedQuickDeployGuide = Join-Path $repoRoot 'SHARED_HOST_QUICK_DEPLOY.md'
+$sharedCertTrustGuide = Join-Path $repoRoot 'SHARED_HOST_CERT_TRUST.md'
 
 if (-not (Test-Path -LiteralPath $sharedRunScript)) {
     throw "Missing required file: $sharedRunScript"
@@ -66,12 +70,37 @@ if (-not (Test-Path -LiteralPath $sharedStopScript)) {
 if (-not (Test-Path -LiteralPath $sharedStatusScript)) {
     throw "Missing required file: $sharedStatusScript"
 }
+if (-not (Test-Path -LiteralPath $sharedCertScript)) {
+    throw "Missing required file: $sharedCertScript"
+}
+if (-not (Test-Path -LiteralPath $sharedClientTrustScript)) {
+    throw "Missing required file: $sharedClientTrustScript"
+}
+if (-not (Test-Path -LiteralPath $sharedQuickDeployGuide)) {
+    throw "Missing required file: $sharedQuickDeployGuide"
+}
+if (-not (Test-Path -LiteralPath $sharedCertTrustGuide)) {
+    throw "Missing required file: $sharedCertTrustGuide"
+}
 
 if (-not $SkipBuild) {
     Write-Host 'Building Timekeeper API (Release)...' -ForegroundColor Cyan
     dotnet build $apiProject -c Release | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw 'dotnet build failed.'
+    }
+
+    Write-Host 'Building Timekeeper frontend (wwwroot)...' -ForegroundColor Cyan
+    $webProjectDir = Join-Path $repoRoot 'Timekeeper.Web'
+    Push-Location $webProjectDir
+    try {
+        npm run build | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw 'npm run build failed.'
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -100,7 +129,11 @@ New-Item -ItemType Directory -Path (Join-Path $packageDir 'Timekeeper.Api\wwwroo
 Copy-Item -LiteralPath $sharedRunScript -Destination (Join-Path $packageDir 'run-api-shared.ps1') -Force
 Copy-Item -LiteralPath $sharedStopScript -Destination (Join-Path $packageDir 'stop-api-shared.ps1') -Force
 Copy-Item -LiteralPath $sharedStatusScript -Destination (Join-Path $packageDir 'status-api-shared.ps1') -Force
+Copy-Item -LiteralPath $sharedCertScript -Destination (Join-Path $packageDir 'create-shared-https-cert.ps1') -Force
+Copy-Item -LiteralPath $sharedClientTrustScript -Destination (Join-Path $packageDir 'trust-shared-https-cert.ps1') -Force
 Copy-Item -LiteralPath $sharedGuide -Destination (Join-Path $packageDir 'SHARED_DATASET_SETUP.md') -Force
+Copy-Item -LiteralPath $sharedQuickDeployGuide -Destination (Join-Path $packageDir 'SHARED_HOST_QUICK_DEPLOY.md') -Force
+Copy-Item -LiteralPath $sharedCertTrustGuide -Destination (Join-Path $packageDir 'SHARED_HOST_CERT_TRUST.md') -Force
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'Timekeeper.Api\appsettings.json') -Destination (Join-Path $packageDir 'Timekeeper.Api\appsettings.json') -Force
 if (Test-Path -LiteralPath (Join-Path $repoRoot 'Timekeeper.Api\appsettings.Development.json')) {
@@ -114,7 +147,14 @@ Copy-Item -Path (Join-Path $repoRoot 'Timekeeper.Api\wwwroot\*') -Destination (J
 $startScriptPath = Join-Path $packageDir 'START_SHARED_HOST.ps1'
 $startScriptContent = @'
 param(
-    [int]$Port = 5000
+    [int]$Port = 5000,
+    [switch]$UseHttps,
+    [int]$HttpsPort = 5443,
+    [string]$CertificatePath,
+    [string]$CertificatePassword,
+    [string[]]$CertificateDnsNames,
+    [switch]$AutoTrustCurrentUser,
+    [switch]$AutoTrustLocalMachine
 )
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -190,8 +230,64 @@ if ($confirmation -ne "$selectedPort") {
 }
 
 Ensure-FirewallRule -TargetPort $selectedPort
+$runArgs = @{
+    Port = $selectedPort
+    Environment = 'Production'
+    BindAddress = '0.0.0.0'
+    Background = $true
+}
 
-& (Join-Path $scriptRoot 'run-api-shared.ps1') -Port $selectedPort -Environment Production -BindAddress 0.0.0.0 -Background
+if ($UseHttps) {
+    if ([string]::IsNullOrWhiteSpace($CertificatePath) -or [string]::IsNullOrWhiteSpace($CertificatePassword)) {
+        $certScriptPath = Join-Path $scriptRoot 'create-shared-https-cert.ps1'
+        if (-not (Test-Path -LiteralPath $certScriptPath)) {
+            throw "HTTPS requested but certificate helper script was not found: $certScriptPath"
+        }
+
+        Write-Host 'HTTPS requested without certificate details. Generating certificate automatically...' -ForegroundColor Yellow
+        $certArgs = @{}
+        if ($CertificateDnsNames -and $CertificateDnsNames.Count -gt 0) {
+            $certArgs.DnsNames = $CertificateDnsNames
+        }
+        if ($AutoTrustCurrentUser) {
+            $certArgs.TrustCurrentUser = $true
+        }
+        if ($AutoTrustLocalMachine) {
+            $certArgs.TrustLocalMachine = $true
+        }
+        & $certScriptPath @certArgs
+
+        $autoCertPath = Join-Path $scriptRoot 'certs\timekeeper-https.pfx'
+        $autoPasswordPath = Join-Path $scriptRoot 'certs\timekeeper-https.pfx.password.txt'
+
+        if (-not (Test-Path -LiteralPath $autoCertPath) -or -not (Test-Path -LiteralPath $autoPasswordPath)) {
+            throw 'Certificate generation did not produce expected files in certs\.'
+        }
+
+        $passwordLine = Get-Content -LiteralPath $autoPasswordPath | Where-Object { $_ -like 'Password:*' } | Select-Object -First 1
+        if ([string]::IsNullOrWhiteSpace($passwordLine)) {
+            throw "Could not read password from $autoPasswordPath"
+        }
+
+        $generatedPassword = $passwordLine.Substring($passwordLine.IndexOf(':') + 1).Trim()
+        if ([string]::IsNullOrWhiteSpace($generatedPassword)) {
+            throw "Generated password is empty in $autoPasswordPath"
+        }
+
+        $CertificatePath = $autoCertPath
+        $CertificatePassword = $generatedPassword
+
+        Write-Host "Using generated certificate: $CertificatePath" -ForegroundColor Green
+    }
+
+    Ensure-FirewallRule -TargetPort $HttpsPort
+    $runArgs.UseHttps = $true
+    $runArgs.HttpsPort = $HttpsPort
+    $runArgs.CertificatePath = $CertificatePath
+    $runArgs.CertificatePassword = $CertificatePassword
+}
+
+& (Join-Path $scriptRoot 'run-api-shared.ps1') @runArgs
 '@
 Set-Content -LiteralPath $startScriptPath -Value $startScriptContent -Encoding UTF8
 

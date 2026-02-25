@@ -49,6 +49,26 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
   return response.json()
 }
 
+export async function fetchApiResponse(endpoint: string, options?: RequestInit): Promise<Response> {
+  const isFormData = options?.body instanceof FormData
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...getDevelopmentIdentityHeaders(),
+      ...options?.headers,
+    },
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText || `HTTP error! status: ${response.status}`)
+  }
+
+  return response
+}
+
 export function buildQueryString(params: Record<string, any>): string {
   const searchParams = new URLSearchParams()
   

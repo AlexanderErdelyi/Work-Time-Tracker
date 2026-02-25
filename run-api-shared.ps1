@@ -3,6 +3,15 @@ param(
     [ValidateRange(1, 65535)]
     [int]$Port = 5000,
 
+    [switch]$UseHttps,
+
+    [ValidateRange(1, 65535)]
+    [int]$HttpsPort = 5443,
+
+    [string]$CertificatePath,
+
+    [string]$CertificatePassword,
+
     [string]$DataDirectory = (Join-Path $PSScriptRoot 'Data'),
 
     [string]$Environment = 'Production',
@@ -36,6 +45,7 @@ if (-not (Test-Path -LiteralPath $DataDirectory)) {
 $dbPath = Join-Path $DataDirectory 'timekeeper.db'
 $pidFilePath = Join-Path $DataDirectory 'timekeeper-api.pid'
 $apiUrl = 'http://{0}:{1}' -f $BindAddress, $Port
+$httpsUrl = 'https://{0}:{1}' -f $BindAddress, $HttpsPort
 
 function Get-ListeningConnection {
     param([int]$TargetPort)
@@ -105,6 +115,45 @@ function Wait-ForPortListening {
 $existingConnection = Get-ListeningConnection -TargetPort $Port
 $knownPid = Get-ScriptPid -Path $pidFilePath
 
+if ($UseHttps -and $HttpsPort -eq $Port) {
+    throw 'HttpsPort must be different from Port.'
+}
+
+if ($UseHttps) {
+    if ([string]::IsNullOrWhiteSpace($CertificatePath)) {
+        throw 'UseHttps requires -CertificatePath to a .pfx file.'
+    }
+
+    if (-not [System.IO.Path]::IsPathRooted($CertificatePath)) {
+        $CertificatePath = Join-Path $repoRoot $CertificatePath
+    }
+
+    $CertificatePath = [System.IO.Path]::GetFullPath($CertificatePath)
+    if (-not (Test-Path -LiteralPath $CertificatePath)) {
+        throw "Certificate file not found: $CertificatePath"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($CertificatePassword)) {
+        throw 'UseHttps requires -CertificatePassword for the .pfx file.'
+    }
+
+    $httpsInUse = Get-ListeningConnection -TargetPort $HttpsPort
+    if ($httpsInUse) {
+        $ownerPid = [int]$httpsInUse.OwningProcess
+        if (-not $ForceRestart) {
+            $ownerProcessName = (Get-Process -Id $ownerPid -ErrorAction SilentlyContinue).ProcessName
+            if ([string]::IsNullOrWhiteSpace($ownerProcessName)) {
+                $ownerProcessName = 'unknown'
+            }
+            throw "HTTPS port $HttpsPort is already in use by PID $ownerPid ($ownerProcessName). Stop that process or rerun with -ForceRestart."
+        }
+
+        Write-Host "HTTPS port $HttpsPort is in use by PID $ownerPid. ForceRestart enabled, stopping process..." -ForegroundColor Yellow
+        Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+    }
+}
+
 if ($existingConnection) {
     $ownerPid = [int]$existingConnection.OwningProcess
 
@@ -133,9 +182,20 @@ if ($existingConnection) {
 
 $env:ConnectionStrings__DefaultConnection = "Data Source=$dbPath"
 $env:ASPNETCORE_ENVIRONMENT = $Environment
-$env:ASPNETCORE_URLS = $apiUrl
+$env:ASPNETCORE_URLS = if ($UseHttps) { "$apiUrl;$httpsUrl" } else { $apiUrl }
+
+if ($UseHttps) {
+    $env:ASPNETCORE_Kestrel__Certificates__Default__Path = $CertificatePath
+    $env:ASPNETCORE_Kestrel__Certificates__Default__Password = $CertificatePassword
+} else {
+    Remove-Item Env:ASPNETCORE_Kestrel__Certificates__Default__Path -ErrorAction SilentlyContinue
+    Remove-Item Env:ASPNETCORE_Kestrel__Certificates__Default__Password -ErrorAction SilentlyContinue
+}
 
 Write-Host "Effective URL: $apiUrl" -ForegroundColor Cyan
+if ($UseHttps) {
+    Write-Host "Effective HTTPS URL: $httpsUrl" -ForegroundColor Cyan
+}
 Write-Host "Database Path: $dbPath" -ForegroundColor Cyan
 Write-Host "PID File: $pidFilePath" -ForegroundColor Cyan
 Write-Host "Environment: $Environment" -ForegroundColor Cyan
