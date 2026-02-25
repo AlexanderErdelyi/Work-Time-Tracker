@@ -1,7 +1,20 @@
 import { format, parseISO, startOfWeek, endOfWeek, addDays, differenceInCalendarDays } from 'date-fns'
+import { parseApiDateTime } from './timeUtils'
+
+function parseDateValue(date: string | Date): Date {
+  if (typeof date !== 'string') {
+    return date
+  }
+
+  if (date.includes('T')) {
+    return parseApiDateTime(date)
+  }
+
+  return parseISO(date)
+}
 
 export function formatDate(date: string | Date, formatStr: string = 'yyyy-MM-dd'): string {
-  const dateObj = typeof date === 'string' ? parseISO(date) : date
+  const dateObj = parseDateValue(date)
   return format(dateObj, formatStr)
 }
 
@@ -40,7 +53,7 @@ export function getWeekdaysInRange(startDate: Date, endDate: Date): number {
 }
 
 export function isToday(date: string | Date): boolean {
-  const dateObj = typeof date === 'string' ? parseISO(date) : date
+  const dateObj = parseDateValue(date)
   const today = new Date()
   return differenceInCalendarDays(today, dateObj) === 0
 }

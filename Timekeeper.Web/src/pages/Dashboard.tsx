@@ -334,7 +334,7 @@ export function Dashboard() {
 
   const activeBreakMinutes = useMemo(() => {
     if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) return 0
-    const start = new Date(breakStatus.breakStartTime)
+    const start = parseApiDateTime(breakStatus.breakStartTime)
     const now = new Date()
     return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 60000))
   }, [breakStatus])
@@ -344,8 +344,8 @@ export function Dashboard() {
   const todayWorkedMinutes = useMemo(() => {
     const checkInTime = workDayStatus?.workDay?.checkInTime || workDayStatus?.checkInTime
     if (!checkInTime) return 0
-    const start = new Date(checkInTime)
-    const end = workDayStatus?.workDay?.checkOutTime ? new Date(workDayStatus.workDay.checkOutTime) : new Date()
+    const start = parseApiDateTime(checkInTime)
+    const end = workDayStatus?.workDay?.checkOutTime ? parseApiDateTime(workDayStatus.workDay.checkOutTime) : new Date()
     const totalMinutes = Math.floor((end.getTime() - start.getTime()) / 60000)
     return Math.max(0, totalMinutes - totalBreakMinutesToday)
   }, [workDayStatus, totalBreakMinutesToday])

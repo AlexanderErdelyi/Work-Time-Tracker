@@ -144,7 +144,7 @@ export function TopBar() {
 
   const formatCheckInTime = (value?: string) => {
     if (!value) return '—'
-    const date = new Date(value)
+    const date = parseApiDateTime(value)
     if (Number.isNaN(date.getTime())) return '—'
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   }
@@ -159,7 +159,7 @@ export function TopBar() {
 
   const activeBreakSeconds = (() => {
     if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) return 0
-    const start = new Date(breakStatus.breakStartTime)
+    const start = parseApiDateTime(breakStatus.breakStartTime)
     const now = new Date(breakNow)
     return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 1000))
   })()
