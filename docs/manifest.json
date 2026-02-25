@@ -39,6 +39,12 @@
       "file": "/docs/settings.md"
     },
     {
+      "slug": "support",
+      "title": "Support",
+      "summary": "Create support tickets in-app and send them to GitHub Issues.",
+      "file": "/docs/support.md"
+    },
+    {
       "slug": "troubleshooting",
       "title": "Troubleshooting",
       "summary": "Common problems and practical recovery steps.",

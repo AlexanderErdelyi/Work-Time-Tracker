@@ -27,6 +27,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IWorkspaceContext, HttpWorkspaceContext>();
 builder.Services.AddScoped<IWindowsDirectoryAuthService, WindowsDirectoryAuthService>();
+builder.Services.AddSingleton<ISupportTokenProtector, SupportTokenProtector>();
+builder.Services.Configure<SupportIssueOptions>(builder.Configuration.GetSection("SupportIssues"));
+builder.Services.AddHttpClient(nameof(GitHubIssueService), client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["SupportIssues:GitHubApiBaseUrl"] ?? "https://api.github.com");
+});
+builder.Services.AddScoped<IGitHubIssueService, GitHubIssueService>();
 
 var authenticationBuilder = builder.Services.AddAuthentication(options =>
 {

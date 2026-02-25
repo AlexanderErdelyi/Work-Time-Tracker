@@ -14,6 +14,11 @@
 3. Verify in-app rendering and links
 4. Include docs updates in PR summary
 
+## Validation commands
+
+- `npm run sync-docs`
+- `npm run check-docs-sync`
+
 ## Review checklist
 
 - Accurate feature names

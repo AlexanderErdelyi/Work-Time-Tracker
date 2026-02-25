@@ -18,15 +18,18 @@ public class WorkspacesController : ControllerBase
     private readonly TimekeeperContext _context;
     private readonly IWorkspaceContext _workspaceContext;
     private readonly IPasswordHashService _passwordHashService;
+    private readonly ISupportTokenProtector _supportTokenProtector;
 
     public WorkspacesController(
         TimekeeperContext context,
         IWorkspaceContext workspaceContext,
-        IPasswordHashService passwordHashService)
+        IPasswordHashService passwordHashService,
+        ISupportTokenProtector supportTokenProtector)
     {
         _context = context;
         _workspaceContext = workspaceContext;
         _passwordHashService = passwordHashService;
+        _supportTokenProtector = supportTokenProtector;
     }
 
     [HttpGet("current")]
@@ -85,10 +88,118 @@ public class WorkspacesController : ControllerBase
             {
                 Id = workspace.Id,
                 Name = workspace.Name,
+                GitHubIssueOwner = workspace.GitHubIssueOwner,
+                GitHubIssueRepo = workspace.GitHubIssueRepo,
+                HasGitHubIssueToken = !string.IsNullOrWhiteSpace(workspace.GitHubIssueTokenProtected),
                 IsActive = workspace.IsActive,
                 CreatedAt = workspace.CreatedAt
             },
             CurrentUser = currentUser
+        });
+    }
+
+    [HttpPut("current/support-repository")]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
+    public async Task<ActionResult<WorkspaceDto>> UpdateCurrentWorkspaceSupportRepository([FromBody] UpdateWorkspaceSupportRepositoryDto dto)
+    {
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == _workspaceContext.WorkspaceId);
+
+        if (workspace == null)
+        {
+            return NotFound("Workspace not found.");
+        }
+
+        var owner = NormalizeOptionalValue(dto.GitHubIssueOwner);
+        var repo = NormalizeOptionalValue(dto.GitHubIssueRepo);
+        var token = NormalizeOptionalValue(dto.GitHubIssueToken);
+
+        if (dto.ClearGitHubIssueToken && token is not null)
+        {
+            return BadRequest("Provide either a new token or clear the existing token, not both.");
+        }
+
+        if (owner is not null && string.IsNullOrWhiteSpace(repo))
+        {
+            return BadRequest("GitHub repository name is required when owner is provided.");
+        }
+
+        if (repo is not null && string.IsNullOrWhiteSpace(owner))
+        {
+            return BadRequest("GitHub owner is required when repository name is provided.");
+        }
+
+        workspace.GitHubIssueOwner = owner;
+        workspace.GitHubIssueRepo = repo;
+
+        if (dto.ClearGitHubIssueToken)
+        {
+            workspace.GitHubIssueTokenProtected = null;
+        }
+        else if (token is not null)
+        {
+            workspace.GitHubIssueTokenProtected = _supportTokenProtector.Protect(token);
+        }
+
+        workspace.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new WorkspaceDto
+        {
+            Id = workspace.Id,
+            Name = workspace.Name,
+            GitHubIssueOwner = workspace.GitHubIssueOwner,
+            GitHubIssueRepo = workspace.GitHubIssueRepo,
+            HasGitHubIssueToken = !string.IsNullOrWhiteSpace(workspace.GitHubIssueTokenProtected),
+            IsActive = workspace.IsActive,
+            CreatedAt = workspace.CreatedAt
+        });
+    }
+
+    [HttpPost("current/support-repository/test")]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
+    public async Task<ActionResult<TestWorkspaceSupportRepositoryResultDto>> TestCurrentWorkspaceSupportRepository(
+        [FromBody] TestWorkspaceSupportRepositoryDto dto,
+        [FromServices] IGitHubIssueService gitHubIssueService,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == _workspaceContext.WorkspaceId, cancellationToken);
+
+        if (workspace == null)
+        {
+            return NotFound("Workspace not found.");
+        }
+
+        var owner = NormalizeOptionalValue(dto.GitHubIssueOwner) ?? workspace.GitHubIssueOwner;
+        var repo = NormalizeOptionalValue(dto.GitHubIssueRepo) ?? workspace.GitHubIssueRepo;
+
+        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+        {
+            return BadRequest("GitHub owner and repository are required to test connection.");
+        }
+
+        var result = await gitHubIssueService.TestConnectionAsync(
+            owner,
+            repo,
+            workspace.GitHubIssueTokenProtected,
+            NormalizeOptionalValue(dto.GitHubIssueToken),
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return BadRequest(new TestWorkspaceSupportRepositoryResultDto
+            {
+                Success = false,
+                Message = result.Message
+            });
+        }
+
+        return Ok(new TestWorkspaceSupportRepositoryResultDto
+        {
+            Success = true,
+            Message = result.Message
         });
     }
 
@@ -279,5 +390,15 @@ public class WorkspacesController : ControllerBase
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
+    }
+
+    private static string? NormalizeOptionalValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim();
     }
 }

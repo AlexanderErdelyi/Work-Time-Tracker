@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { 
   LayoutDashboard, 
   Clock,
@@ -10,14 +11,17 @@ import {
   BarChart3, 
   Server,
   BookOpenText,
+  LifeBuoy,
   Settings,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
+import { Badge } from '../ui/Badge'
 import { useState } from 'react'
 import { useWorkspaceContext } from '../../hooks/useWorkspaceContext'
+import { supportApi } from '../../api'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -29,6 +33,7 @@ const navigation = [
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Service Manager', href: '/service', icon: Server },
   { name: 'Documentation', href: '/docs', icon: BookOpenText },
+  { name: 'Support', href: '/support', icon: LifeBuoy },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -37,6 +42,14 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const { data: workspaceContext } = useWorkspaceContext()
   const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
+
+  const unreadQuery = useQuery({
+    queryKey: ['support', 'unread-count'],
+    queryFn: supportApi.getUnreadCount,
+    refetchInterval: 20000,
+  })
+
+  const unreadCount = unreadQuery.data?.unreadCount ?? 0
 
   const navigationItems = isAdminUser
     ? [...navigation, { name: 'Users', href: '/users', icon: User }]
@@ -90,7 +103,14 @@ export function Sidebar() {
               title={collapsed ? item.name : undefined}
             >
               <Icon className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
+              {!collapsed && (
+                <div className="flex items-center justify-between w-full gap-2">
+                  <span>{item.name}</span>
+                  {item.href === '/support' && unreadCount > 0 && (
+                    <Badge className="min-w-5 justify-center px-1.5 py-0">{unreadCount}</Badge>
+                  )}
+                </div>
+              )}
             </Link>
           )
         })}

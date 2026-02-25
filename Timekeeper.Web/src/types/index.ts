@@ -153,6 +153,9 @@ export type UserRole = 'Admin' | 'Manager' | 'Member'
 export interface WorkspaceInfo {
   id: number
   name: string
+  gitHubIssueOwner?: string
+  gitHubIssueRepo?: string
+  hasGitHubIssueToken?: boolean
   isActive: boolean
   createdAt: string
 }
@@ -188,4 +191,60 @@ export interface AuthResponseDto {
   role: UserRole
   workspaceId: number
   method: 'email' | 'github' | 'microsoft' | 'windows' | 'windowsCredentials' | string
+}
+
+export interface CreateSupportIssueRequest {
+  title: string
+  category: string
+  severity: string
+  description: string
+  stepsToReproduce?: string
+  expectedBehavior?: string
+  actualBehavior?: string
+  browser?: string
+  operatingSystem?: string
+  appVersion?: string
+  contactEmail?: string
+}
+
+export interface CreateSupportIssueResponse {
+  issueNumber: number
+  issueUrl: string
+  title: string
+}
+
+export interface SupportTicketSummary {
+  id: number
+  issueNumber: number
+  issueUrl: string
+  title: string
+  category: string
+  severity: string
+  state: string
+  hasUnreadUpdates: boolean
+  createdAt: string
+  lastIssueUpdatedAt?: string
+  lastCommentAt?: string
+}
+
+export interface SupportTicketComment {
+  author: string
+  body: string
+  createdAt: string
+  updatedAt?: string
+  url: string
+  isResponseFromOthers: boolean
+}
+
+export interface SupportTicketDetail {
+  ticket: SupportTicketSummary
+  comments: SupportTicketComment[]
+}
+
+export interface SupportTicketUnreadCount {
+  unreadCount: number
+}
+
+export interface UploadSupportImageResponse {
+  url: string
 }

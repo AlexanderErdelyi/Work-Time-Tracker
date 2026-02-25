@@ -27,6 +27,7 @@ public class TimekeeperContext : DbContext
     public DbSet<Break> Breaks { get; set; } = null!;
     public DbSet<WorkDay> WorkDays { get; set; } = null!;
     public DbSet<QuickAction> QuickActions { get; set; } = null!;
+    public DbSet<SupportTicket> SupportTickets { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -36,6 +37,9 @@ public class TimekeeperContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.GitHubIssueOwner).HasMaxLength(100);
+            entity.Property(e => e.GitHubIssueRepo).HasMaxLength(100);
+            entity.Property(e => e.GitHubIssueTokenProtected).HasMaxLength(4000);
             entity.HasIndex(e => e.Name).IsUnique();
             entity.HasQueryFilter(e => e.Id == CurrentWorkspaceId);
         });
@@ -216,6 +220,29 @@ public class TimekeeperContext : DbContext
             entity.HasOne(e => e.Task)
                 .WithMany()
                 .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.CreatedByEmail).IsRequired().HasMaxLength(320);
+            entity.Property(e => e.SupportRepositoryOwner).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.SupportRepositoryRepo).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.IssueUrl).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(300);
+            entity.Property(e => e.Category).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.Severity).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.GitHubState).IsRequired().HasMaxLength(40);
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.CreatedByEmail, e.CreatedAt });
+            entity.HasIndex(e => new { e.WorkspaceId, e.IssueNumber });
+            entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
+
+            entity.HasOne<Workspace>()
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

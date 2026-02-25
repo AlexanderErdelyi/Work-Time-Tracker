@@ -19,3 +19,6 @@
 ## Admin note
 
 User and role management is available to admins.
+
+Admins can also configure the support destination repository (`GitHub owner/repo`) used by the in-app Support page.
+Admins can manage the support token lifecycle directly in the UI (set, rotate, remove) without editing server files.

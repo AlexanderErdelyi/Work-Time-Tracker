@@ -17,6 +17,7 @@ This folder contains the **source documentation** for Timekeeper.
 - `work-days.md`
 - `reports.md`
 - `settings.md`
+- `support.md`
 - `troubleshooting.md`
 - `faq.md`
 

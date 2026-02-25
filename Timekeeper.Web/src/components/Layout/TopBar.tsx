@@ -1,4 +1,4 @@
-import { BookOpenText, Coffee, LogOut, Moon, Sun } from 'lucide-react'
+import { BookOpenText, Coffee, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
@@ -269,6 +269,16 @@ export function TopBar() {
         >
           <BookOpenText className="h-4 w-4" />
           Help
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/support')}
+          className="gap-2"
+        >
+          <LifeBuoy className="h-4 w-4" />
+          Support
         </Button>
 
         <Button

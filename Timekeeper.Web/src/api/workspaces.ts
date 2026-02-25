@@ -23,6 +23,24 @@ interface UpdateWorkspaceUserPasswordDto {
   newPassword: string
 }
 
+interface UpdateWorkspaceSupportRepositoryDto {
+  gitHubIssueOwner?: string
+  gitHubIssueRepo?: string
+  gitHubIssueToken?: string
+  clearGitHubIssueToken?: boolean
+}
+
+interface TestWorkspaceSupportRepositoryDto {
+  gitHubIssueOwner?: string
+  gitHubIssueRepo?: string
+  gitHubIssueToken?: string
+}
+
+interface TestWorkspaceSupportRepositoryResultDto {
+  success: boolean
+  message: string
+}
+
 export const workspacesApi = {
   getCurrentContext: () => fetchApi<CurrentWorkspaceContext>('/workspaces/current'),
   getCurrentUsers: () => fetchApi<WorkspaceUser[]>('/workspaces/current/users'),
@@ -49,5 +67,15 @@ export const workspacesApi = {
   deleteUser: (id: number) =>
     fetchApi<void>(`/workspaces/current/users/${id}`, {
       method: 'DELETE',
+    }),
+  updateCurrentSupportRepository: (dto: UpdateWorkspaceSupportRepositoryDto) =>
+    fetchApi<CurrentWorkspaceContext['workspace']>('/workspaces/current/support-repository', {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    }),
+  testCurrentSupportRepository: (dto: TestWorkspaceSupportRepositoryDto) =>
+    fetchApi<TestWorkspaceSupportRepositoryResultDto>('/workspaces/current/support-repository/test', {
+      method: 'POST',
+      body: JSON.stringify(dto),
     }),
 }
