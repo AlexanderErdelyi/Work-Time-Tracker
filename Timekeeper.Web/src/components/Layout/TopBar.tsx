@@ -1,7 +1,8 @@
-import { Coffee, LogOut, Moon, Sun } from 'lucide-react'
+import { BookOpenText, Coffee, LogOut, Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useRunningTimer } from '../../hooks/useTimeEntries'
 import { useWorkDayStatus, useCheckIn, useCheckOut } from '../../hooks/useWorkDays'
 import { useBreakStatus, useStartBreak, useEndBreak } from '../../hooks/useBreaks'
@@ -9,6 +10,7 @@ import { QuickActionsDropdown } from '../QuickActionsDropdown'
 import { parseApiDateTime } from '../../lib/timeUtils'
 
 export function TopBar() {
+  const navigate = useNavigate()
   const [darkMode, setDarkMode] = useState(false)
   const { data: runningTimer } = useRunningTimer()
   const { data: workDayStatus } = useWorkDayStatus()
@@ -258,6 +260,16 @@ export function TopBar() {
             {breakStatus?.isOnBreak ? 'End Break' : 'Start Break'}
           </Button>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/docs')}
+          className="gap-2"
+        >
+          <BookOpenText className="h-4 w-4" />
+          Help
+        </Button>
 
         <Button
           variant="ghost"

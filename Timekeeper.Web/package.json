@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "sync-docs": "node scripts/sync-docs.mjs",
+    "check-docs-sync": "node scripts/check-docs-sync.mjs",
+    "prebuild": "npm run sync-docs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"

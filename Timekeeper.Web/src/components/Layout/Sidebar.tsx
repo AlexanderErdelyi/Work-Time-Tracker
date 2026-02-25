@@ -9,6 +9,7 @@ import {
   ListTodo, 
   BarChart3, 
   Server,
+  BookOpenText,
   Settings,
   ChevronLeft,
   ChevronRight
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Tasks', href: '/tasks', icon: ListTodo },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Service Manager', href: '/service', icon: Server },
+  { name: 'Documentation', href: '/docs', icon: BookOpenText },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

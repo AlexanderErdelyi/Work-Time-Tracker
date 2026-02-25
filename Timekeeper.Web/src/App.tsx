@@ -11,6 +11,7 @@ const Projects = lazy(() => import('./pages/Projects').then(module => ({ default
 const Tasks = lazy(() => import('./pages/Tasks').then(module => ({ default: module.Tasks })))
 const Reports = lazy(() => import('./pages/Reports').then(module => ({ default: module.Reports })))
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
+const Documentation = lazy(() => import('./pages/Documentation').then(module => ({ default: module.Documentation })))
 const Users = lazy(() => import('./pages/Users').then(module => ({ default: module.Users })))
 const WorkDays = lazy(() => import('./pages/WorkDays').then(module => ({ default: module.WorkDays })))
 const ServiceManager = lazy(() => import('./pages/ServiceManager').then(module => ({ default: module.ServiceManager })))
@@ -39,6 +40,7 @@ function App() {
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/service" element={<ServiceManager />} />
+            <Route path="/docs" element={<Documentation />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/users" element={<Users />} />
           </Routes>
