@@ -8,7 +8,7 @@ import type { UserRole } from '../types'
 
 type AuthMode = 'signin' | 'signup'
 type AuthMethod = 'email' | 'microsoft' | 'google' | 'github' | 'windows' | 'windowsCredentials'
-type SelectableMethod = 'email' | 'microsoft' | 'github' | 'windows' | 'windowsIntegrated'
+type SelectableMethod = 'email' | 'microsoft' | 'github' | 'windowsCredentials' | 'windowsIntegrated'
 
 interface LoginProps {
   onLogin: () => void
@@ -228,7 +228,7 @@ export function Login({ onLogin }: LoginProps) {
       return providers.github
     }
 
-    if (method === 'windows') {
+    if (method === 'windowsCredentials') {
       return providers.windowsCredentials ?? false
     }
 
@@ -243,7 +243,7 @@ export function Login({ onLogin }: LoginProps) {
     if (method === 'email') return 'Email'
     if (method === 'microsoft') return 'Microsoft'
     if (method === 'github') return 'GitHub'
-    if (method === 'windows') return 'Windows'
+    if (method === 'windowsCredentials') return 'Windows Credentials'
     return 'Windows Integrated'
   }
 
@@ -498,7 +498,7 @@ export function Login({ onLogin }: LoginProps) {
               <div className="space-y-2">
                 <Label>Choose method</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['email', 'microsoft', 'github', 'windows'] as const).map((method) => {
+                  {(['email', 'microsoft', 'github', 'windowsCredentials'] as const).map((method) => {
                     const available = isMethodAvailable(method)
                     return (
                       <Button
@@ -590,7 +590,7 @@ export function Login({ onLogin }: LoginProps) {
                 </div>
               )}
 
-              {selectedMethod === 'windows' && (
+              {selectedMethod === 'windowsCredentials' && (
                 <div className="space-y-3 rounded-md border p-4">
                   <p className="text-sm font-medium">Windows credentials</p>
                   <p className="text-xs text-muted-foreground">
@@ -679,7 +679,7 @@ export function Login({ onLogin }: LoginProps) {
                 <div className="space-y-3 rounded-md border p-4">
                   <p className="text-sm font-medium">Windows integrated sign-in</p>
                   <p className="text-xs text-muted-foreground">
-                    Uses your current domain session when network and browser policy allow integrated auth.
+                    Uses your current domain session when network and browser policy allow integrated auth. If credentials login fails with 401, try this option.
                   </p>
                   <Button type="button" className="w-full" disabled={isSubmitting} onClick={() => handleExternalLogin('windows')}>
                     Continue with Windows Integrated

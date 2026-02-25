@@ -364,6 +364,15 @@ public class AuthController : ControllerBase
         var validation = await _windowsDirectoryAuthService.ValidateCredentialsAsync(dto.Username, dto.Password, dto.Domain);
         if (!validation.Success)
         {
+            if (!string.IsNullOrWhiteSpace(validation.Error)
+                && (validation.Error.Contains("unavailable", StringComparison.OrdinalIgnoreCase)
+                    || validation.Error.Contains("certificate", StringComparison.OrdinalIgnoreCase)
+                    || validation.Error.Contains("tls", StringComparison.OrdinalIgnoreCase)
+                    || validation.Error.Contains("ssl", StringComparison.OrdinalIgnoreCase)))
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, validation.Error);
+            }
+
             return Unauthorized(validation.Error ?? "Windows credentials authentication failed.");
         }
 
