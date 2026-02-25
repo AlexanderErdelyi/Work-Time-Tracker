@@ -1,5 +1,5 @@
 // Service Worker for Timekeeper PWA
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const CACHE_NAME = `timekeeper-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install
@@ -66,6 +66,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  if (request.method !== 'GET') {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Never intercept Vite dev module/HMR traffic
   if (

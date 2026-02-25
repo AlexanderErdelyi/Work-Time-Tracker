@@ -46,7 +46,7 @@ public class ImportController : ControllerBase
     }
 
     [HttpGet("tasks/template")]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    [AllowAnonymous]
     public IActionResult GetTaskImportTemplate()
     {
         var template = _importService.GenerateTaskImportTemplate();

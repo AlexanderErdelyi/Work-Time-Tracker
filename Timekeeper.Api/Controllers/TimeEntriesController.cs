@@ -119,27 +119,28 @@ public class TimeEntriesController : ControllerBase
                 ProjectNo = e.Task != null ? e.Task.Project.No : null,
                 CustomerName = e.Task != null ? e.Task.Project.Customer.Name : null,
                 CustomerNo = e.Task != null ? e.Task.Project.Customer.No : null,
-                StartTime = e.StartTime,
-                EndTime = e.EndTime,
-                PausedAt = e.PausedAt,
+                StartTime = ToUtc(e.StartTime),
+                EndTime = ToUtc(e.EndTime),
+                PausedAt = ToUtc(e.PausedAt),
                 TotalPausedSeconds = e.TotalPausedSeconds,
                 Status = e.Status.ToString(),
-                SubmittedAt = e.SubmittedAt,
+                SubmittedAt = ToUtc(e.SubmittedAt),
                 SubmittedByUserId = e.SubmittedByUserId,
-                ApprovedAt = e.ApprovedAt,
+                ApprovedAt = ToUtc(e.ApprovedAt),
                 ApprovedByUserId = e.ApprovedByUserId,
-                RejectedAt = e.RejectedAt,
+                RejectedAt = ToUtc(e.RejectedAt),
                 RejectedByUserId = e.RejectedByUserId,
                 RejectionReason = e.RejectionReason,
-                LockedAt = e.LockedAt,
+                LockedAt = ToUtc(e.LockedAt),
                 LockedByUserId = e.LockedByUserId,
                 IsPaused = e.PausedAt.HasValue && !e.EndTime.HasValue,
                 Notes = e.Notes,
                 DurationMinutes = e.EndTime.HasValue ? ((e.EndTime.Value - e.StartTime).TotalMinutes - (e.TotalPausedSeconds / 60.0)) : null,
                 BilledHours = e.BilledHours,
                 IsRunning = e.EndTime == null && !e.PausedAt.HasValue,
-                CreatedAt = e.CreatedAt,
-                UpdatedAt = e.UpdatedAt
+                ServerNowUtc = DateTime.UtcNow,
+                CreatedAt = ToUtc(e.CreatedAt),
+                UpdatedAt = ToUtc(e.UpdatedAt)
             })
             .ToListAsync();
 
@@ -794,28 +795,44 @@ public class TimeEntriesController : ControllerBase
             ProjectNo = entry.Task?.Project?.No,
             CustomerName = entry.Task?.Project?.Customer?.Name,
             CustomerNo = entry.Task?.Project?.Customer?.No,
-            StartTime = entry.StartTime,
-            EndTime = entry.EndTime,
-            PausedAt = entry.PausedAt,
+            StartTime = ToUtc(entry.StartTime),
+            EndTime = ToUtc(entry.EndTime),
+            PausedAt = ToUtc(entry.PausedAt),
             TotalPausedSeconds = entry.TotalPausedSeconds,
             Status = entry.Status.ToString(),
-            SubmittedAt = entry.SubmittedAt,
+            SubmittedAt = ToUtc(entry.SubmittedAt),
             SubmittedByUserId = entry.SubmittedByUserId,
-            ApprovedAt = entry.ApprovedAt,
+            ApprovedAt = ToUtc(entry.ApprovedAt),
             ApprovedByUserId = entry.ApprovedByUserId,
-            RejectedAt = entry.RejectedAt,
+            RejectedAt = ToUtc(entry.RejectedAt),
             RejectedByUserId = entry.RejectedByUserId,
             RejectionReason = entry.RejectionReason,
-            LockedAt = entry.LockedAt,
+            LockedAt = ToUtc(entry.LockedAt),
             LockedByUserId = entry.LockedByUserId,
             IsPaused = entry.IsPaused,
             Notes = entry.Notes,
             DurationMinutes = entry.Duration?.TotalMinutes,
             BilledHours = entry.BilledHours,
             IsRunning = entry.IsRunning,
-            CreatedAt = entry.CreatedAt,
-            UpdatedAt = entry.UpdatedAt
+            ServerNowUtc = DateTime.UtcNow,
+            CreatedAt = ToUtc(entry.CreatedAt),
+            UpdatedAt = ToUtc(entry.UpdatedAt)
         };
+    }
+
+    private static DateTime ToUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
+
+    private static DateTime? ToUtc(DateTime? value)
+    {
+        return value.HasValue ? ToUtc(value.Value) : null;
     }
 
     private decimal CalculateBilledHours(DateTime startTime, DateTime endTime, int totalPausedSeconds)

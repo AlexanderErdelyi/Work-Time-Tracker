@@ -31,6 +31,7 @@ public class TimeEntryDto
     public double? DurationMinutes { get; set; }
     public decimal? BilledHours { get; set; }
     public bool IsRunning { get; set; }
+    public DateTime ServerNowUtc { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

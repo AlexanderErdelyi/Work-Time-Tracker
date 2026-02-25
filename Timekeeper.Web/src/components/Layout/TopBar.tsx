@@ -1,13 +1,16 @@
-import { Coffee, LogOut, Moon, Sun } from 'lucide-react'
+import { BookOpenText, Coffee, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useRunningTimer } from '../../hooks/useTimeEntries'
 import { useWorkDayStatus, useCheckIn, useCheckOut } from '../../hooks/useWorkDays'
 import { useBreakStatus, useStartBreak, useEndBreak } from '../../hooks/useBreaks'
 import { QuickActionsDropdown } from '../QuickActionsDropdown'
+import { parseApiDateTime } from '../../lib/timeUtils'
 
 export function TopBar() {
+  const navigate = useNavigate()
   const [darkMode, setDarkMode] = useState(false)
   const { data: runningTimer } = useRunningTimer()
   const { data: workDayStatus } = useWorkDayStatus()
@@ -39,20 +42,27 @@ export function TopBar() {
       return
     }
 
+    const baselineClientNowMs = Date.now()
+    const baselineServerNowMs = runningTimer.serverNowUtc
+      ? parseApiDateTime(runningTimer.serverNowUtc).getTime()
+      : null
+
     const updateElapsed = () => {
       // Calculate elapsed time for paused and running timers
       let totalSeconds = 0
       
       if (runningTimer.isPaused && runningTimer.pausedAt) {
         // When paused: Calculate from start to pause time
-        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
-        const pause = new Date(runningTimer.pausedAt + (runningTimer.pausedAt.endsWith('Z') ? '' : 'Z'))
+        const start = parseApiDateTime(runningTimer.startTime)
+        const pause = parseApiDateTime(runningTimer.pausedAt)
         totalSeconds = Math.floor((pause.getTime() - start.getTime()) / 1000)
       } else {
         // When running: Calculate from start to now
-        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
-        const now = new Date()
-        totalSeconds = Math.floor((now.getTime() - start.getTime()) / 1000)
+        const start = parseApiDateTime(runningTimer.startTime)
+        const nowMs = baselineServerNowMs !== null
+          ? baselineServerNowMs + (Date.now() - baselineClientNowMs)
+          : Date.now()
+        totalSeconds = Math.floor((nowMs - start.getTime()) / 1000)
       }
       
       // Subtract total paused time
@@ -134,7 +144,7 @@ export function TopBar() {
 
   const formatCheckInTime = (value?: string) => {
     if (!value) return '—'
-    const date = new Date(value)
+    const date = parseApiDateTime(value)
     if (Number.isNaN(date.getTime())) return '—'
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   }
@@ -149,7 +159,7 @@ export function TopBar() {
 
   const activeBreakSeconds = (() => {
     if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) return 0
-    const start = new Date(breakStatus.breakStartTime)
+    const start = parseApiDateTime(breakStatus.breakStartTime)
     const now = new Date(breakNow)
     return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 1000))
   })()
@@ -250,6 +260,26 @@ export function TopBar() {
             {breakStatus?.isOnBreak ? 'End Break' : 'Start Break'}
           </Button>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/docs')}
+          className="gap-2"
+        >
+          <BookOpenText className="h-4 w-4" />
+          Help
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/support')}
+          className="gap-2"
+        >
+          <LifeBuoy className="h-4 w-4" />
+          Support
+        </Button>
 
         <Button
           variant="ghost"

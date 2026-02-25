@@ -1,4 +1,4 @@
-import { fetchApi, buildQueryString } from './client'
+import { fetchApi, fetchApiResponse, buildQueryString } from './client'
 import type { TaskItem, TaskDto, FilterParams, ImportResult } from '../types'
 
 export const tasksApi = {
@@ -31,21 +31,25 @@ export const importApi = {
   importTasks: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    
-    const response = await fetch('/api/import/tasks', {
+
+    const response = await fetchApiResponse('/import/tasks', {
       method: 'POST',
       body: formData,
     })
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(errorText || `HTTP error! status: ${response.status}`)
-    }
-    
+
     return response.json() as Promise<ImportResult>
   },
 
-  downloadTemplate: () => {
-    window.open('/api/import/tasks/template', '_blank')
+  downloadTemplate: async () => {
+    const response = await fetchApiResponse('/import/tasks/template')
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'task-import-template.xlsx'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.URL.revokeObjectURL(url)
   },
 }

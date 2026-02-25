@@ -17,8 +17,6 @@ import {
 import { useStartTimer } from '../hooks/useTimeEntries'
 import { useTasks } from '../hooks/useTasks'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
 export function QuickActionsDropdown() {
   const startTimer = useStartTimer()
   const [isExporting, setIsExporting] = useState(false)
@@ -46,7 +44,7 @@ export function QuickActionsDropdown() {
   const handleExportTodayExcel = async () => {
     try {
       setIsExporting(true)
-      const response = await fetch(`${API_URL}/api/export/today/xlsx`, {
+      const response = await fetch('/api/export/today/xlsx', {
         method: 'GET',
       })
       

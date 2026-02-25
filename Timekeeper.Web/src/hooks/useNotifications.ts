@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '../api/client';
+import { supportApi } from '../api';
 import { notificationService } from '../services/notificationService';
 
 interface WorkDayStatus {
@@ -28,6 +29,8 @@ interface ActiveTimer {
  * Checks work status periodically and triggers appropriate notifications
  */
 export function useNotifications() {
+    const previousSupportUnreadCount = useRef<number>(0)
+
   // Check if notifications are enabled
   const notificationsEnabled = localStorage.getItem('timekeeper_enableNotifications') === 'true';
 
@@ -61,6 +64,13 @@ export function useNotifications() {
     refetchInterval: notificationsEnabled ? 10000 : false, // Check every 10 seconds for testing
     enabled: notificationsEnabled,
   });
+
+  const { data: unreadSupport } = useQuery({
+    queryKey: ['support', 'unread-count'],
+    queryFn: supportApi.getUnreadCount,
+    refetchInterval: notificationsEnabled ? 20000 : false,
+    enabled: notificationsEnabled,
+  })
 
   // Run notification checks
   useEffect(() => {
@@ -104,6 +114,25 @@ export function useNotifications() {
       totalWorkedMinutesToday,
     });
   }, [notificationsEnabled, workDayStatus, breakStatus, activeTimer]);
+
+  useEffect(() => {
+    if (!notificationsEnabled || !unreadSupport) {
+      return
+    }
+
+    if (
+      unreadSupport.unreadCount > 0
+      && unreadSupport.unreadCount > previousSupportUnreadCount.current
+    ) {
+      notificationService.showNotification(
+        'Support Update',
+        `You have ${unreadSupport.unreadCount} ticket update${unreadSupport.unreadCount === 1 ? '' : 's'}.`,
+        'support-updates'
+      )
+    }
+
+    previousSupportUnreadCount.current = unreadSupport.unreadCount
+  }, [notificationsEnabled, unreadSupport])
 
   // Request permission on mount
   useEffect(() => {

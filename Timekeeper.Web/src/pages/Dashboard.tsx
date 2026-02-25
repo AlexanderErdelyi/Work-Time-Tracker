@@ -8,20 +8,20 @@ import { Play, Square, Clock, Search, Edit, RefreshCw, Pause, Monitor, Activity,
 import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries, useCreateTimeEntry, useDeleteTimeEntry } from '../hooks/useTimeEntries'
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
+import { workDaysApi } from '../api/workDays'
 import { useState, useEffect, useMemo } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
+import { parseApiDateTime } from '../lib/timeUtils'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
 import { useBreakStatus } from '../hooks/useBreaks'
 import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy'
-import axios from 'axios'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const ResponsiveGridLayout = WidthProvider(Responsive)
 const DASHBOARD_LAYOUTS_KEY = 'timekeeper_dashboard_layouts_v1'
 const RECENT_ENTRIES_MODE_KEY = 'timekeeper_recent_entries_mode'
@@ -236,20 +236,27 @@ export function Dashboard() {
     // Set running notes from timer
     setRunningNotes(runningTimer.notes || '')
 
+    const baselineClientNowMs = Date.now()
+    const baselineServerNowMs = runningTimer.serverNowUtc
+      ? parseApiDateTime(runningTimer.serverNowUtc).getTime()
+      : null
+
     const updateElapsed = () => {
       // Calculate elapsed time
       let totalSeconds = 0
       
       if (runningTimer.isPaused && runningTimer.pausedAt) {
         // When paused: Calculate from start to pause time
-        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
-        const pause = new Date(runningTimer.pausedAt + (runningTimer.pausedAt.endsWith('Z') ? '' : 'Z'))
+        const start = parseApiDateTime(runningTimer.startTime)
+        const pause = parseApiDateTime(runningTimer.pausedAt)
         totalSeconds = Math.floor((pause.getTime() - start.getTime()) / 1000)
       } else {
         // When running: Calculate from start to now
-        const start = new Date(runningTimer.startTime + (runningTimer.startTime.endsWith('Z') ? '' : 'Z'))
-        const now = new Date()
-        totalSeconds = Math.floor((now.getTime() - start.getTime()) / 1000)
+        const start = parseApiDateTime(runningTimer.startTime)
+        const nowMs = baselineServerNowMs !== null
+          ? baselineServerNowMs + (Date.now() - baselineClientNowMs)
+          : Date.now()
+        totalSeconds = Math.floor((nowMs - start.getTime()) / 1000)
       }
       
       // Subtract total paused time
@@ -327,7 +334,7 @@ export function Dashboard() {
 
   const activeBreakMinutes = useMemo(() => {
     if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) return 0
-    const start = new Date(breakStatus.breakStartTime)
+    const start = parseApiDateTime(breakStatus.breakStartTime)
     const now = new Date()
     return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 60000))
   }, [breakStatus])
@@ -337,8 +344,8 @@ export function Dashboard() {
   const todayWorkedMinutes = useMemo(() => {
     const checkInTime = workDayStatus?.workDay?.checkInTime || workDayStatus?.checkInTime
     if (!checkInTime) return 0
-    const start = new Date(checkInTime)
-    const end = workDayStatus?.workDay?.checkOutTime ? new Date(workDayStatus.workDay.checkOutTime) : new Date()
+    const start = parseApiDateTime(checkInTime)
+    const end = workDayStatus?.workDay?.checkOutTime ? parseApiDateTime(workDayStatus.workDay.checkOutTime) : new Date()
     const totalMinutes = Math.floor((end.getTime() - start.getTime()) / 60000)
     return Math.max(0, totalMinutes - totalBreakMinutesToday)
   }, [workDayStatus, totalBreakMinutesToday])
@@ -391,14 +398,12 @@ export function Dashboard() {
   const handleQuickStart = async () => {
     // First, check in if not already checked in
     try {
-      const statusResponse = await axios.get(`${API_URL}/api/workdays/status`);
-      if (!statusResponse.data.isCheckedIn) {
-        await axios.post(`${API_URL}/api/workdays/checkin`, {
-          notes: 'Auto check-in from Quick Start'
-        });
+      const statusResponse = await workDaysApi.getStatus()
+      if (!statusResponse.isCheckedIn) {
+        await workDaysApi.checkIn('Auto check-in from Quick Start')
       }
     } catch (error) {
-      console.error('Error checking in:', error);
+      console.error('Error checking in:', error)
     }
     
     // Then start the timer

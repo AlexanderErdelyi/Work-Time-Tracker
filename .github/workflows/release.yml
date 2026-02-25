@@ -29,6 +29,26 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        shell: pwsh
+        run: |
+          Push-Location "${{ github.workspace }}\Timekeeper.Web"
+          try {
+            if (Test-Path -LiteralPath '.\package-lock.json') {
+              npm ci
+            } else {
+              npm install
+            }
+          }
+          finally {
+            Pop-Location
+          }
       
       - name: Setup Inno Setup
         shell: pwsh
@@ -417,6 +437,20 @@ jobs:
             Write-Host "Installer build failed!" -ForegroundColor Red
             exit 1
           }
+
+      - name: Build shared host package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          .\package-shared-host.ps1 -Version $version
+
+          $sharedZipPath = ".\Release\Timekeeper-Shared-Host-v$version.zip"
+          if (-not (Test-Path -LiteralPath $sharedZipPath)) {
+            throw "Shared host package not found: $sharedZipPath"
+          }
+
+          $hash = Get-FileHash -LiteralPath $sharedZipPath -Algorithm SHA256
+          "SHA256  $($hash.Hash)  Timekeeper-Shared-Host-v$version.zip" | Set-Content -LiteralPath ".\Release\Timekeeper-Shared-Host-v$version.sha256.txt" -Encoding ASCII
       
       - name: Generate release notes
         id: release_notes
@@ -500,6 +534,8 @@ jobs:
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64.zip
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.exe
             Release/Timekeeper-v${{ steps.get_version.outputs.VERSION }}-win-x64-installer.zip
+            Release/Timekeeper-Shared-Host-v${{ steps.get_version.outputs.VERSION }}.zip
+            Release/Timekeeper-Shared-Host-v${{ steps.get_version.outputs.VERSION }}.sha256.txt
           draft: false
           prerelease: false
         env:

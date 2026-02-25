@@ -4,6 +4,9 @@ public class WorkspaceDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? GitHubIssueOwner { get; set; }
+    public string? GitHubIssueRepo { get; set; }
+    public bool HasGitHubIssueToken { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -47,4 +50,25 @@ public class UpdateWorkspaceUserStatusDto
 public class UpdateWorkspaceUserPasswordDto
 {
     public string NewPassword { get; set; } = string.Empty;
+}
+
+public class UpdateWorkspaceSupportRepositoryDto
+{
+    public string? GitHubIssueOwner { get; set; }
+    public string? GitHubIssueRepo { get; set; }
+    public string? GitHubIssueToken { get; set; }
+    public bool ClearGitHubIssueToken { get; set; }
+}
+
+public class TestWorkspaceSupportRepositoryDto
+{
+    public string? GitHubIssueOwner { get; set; }
+    public string? GitHubIssueRepo { get; set; }
+    public string? GitHubIssueToken { get; set; }
+}
+
+public class TestWorkspaceSupportRepositoryResultDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
 }

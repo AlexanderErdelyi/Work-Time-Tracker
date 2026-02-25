@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-02-25",
+  "sections": [
+    {
+      "slug": "getting-started",
+      "title": "Getting Started",
+      "summary": "First login, check-in, first timer, and daily closeout.",
+      "file": "/docs/getting-started.md"
+    },
+    {
+      "slug": "daily-workflow",
+      "title": "Daily Workflow",
+      "summary": "Recommended day-to-day sequence for reliable tracking.",
+      "file": "/docs/daily-workflow.md"
+    },
+    {
+      "slug": "time-entries",
+      "title": "Time Entries",
+      "summary": "Filtering, editing, submitting, and exporting entries.",
+      "file": "/docs/time-entries.md"
+    },
+    {
+      "slug": "work-days",
+      "title": "Work Days & Breaks",
+      "summary": "Attendance records, check-in/out, and break behavior.",
+      "file": "/docs/work-days.md"
+    },
+    {
+      "slug": "reports",
+      "title": "Reports",
+      "summary": "KPIs, trends, filters, and export usage.",
+      "file": "/docs/reports.md"
+    },
+    {
+      "slug": "settings",
+      "title": "Settings",
+      "summary": "User preferences, notifications, and core defaults.",
+      "file": "/docs/settings.md"
+    },
+    {
+      "slug": "support",
+      "title": "Support",
+      "summary": "Create support tickets in-app and send them to GitHub Issues.",
+      "file": "/docs/support.md"
+    },
+    {
+      "slug": "troubleshooting",
+      "title": "Troubleshooting",
+      "summary": "Common problems and practical recovery steps.",
+      "file": "/docs/troubleshooting.md"
+    },
+    {
+      "slug": "faq",
+      "title": "FAQ",
+      "summary": "Common questions and quick answers.",
+      "file": "/docs/faq.md"
+    }
+  ]
+}

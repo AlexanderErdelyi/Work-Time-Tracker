@@ -41,7 +41,7 @@ export function usePWA(): UsePWAReturn {
 
     // Check if PWA installation is supported
     const checkSupport = () => {
-      return 'serviceWorker' in navigator && 'BeforeInstallPromptEvent' in window;
+      return 'serviceWorker' in navigator && window.isSecureContext;
     };
 
     setIsSupported(checkSupport());

@@ -1,14 +1,32 @@
-import { buildQueryString } from './client'
+import { buildQueryString, fetchApiResponse } from './client'
 import type { FilterParams } from '../types'
 
+async function downloadFile(endpoint: string, fallbackFileName: string) {
+  const response = await fetchApiResponse(endpoint)
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const fileNameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)
+  const serverFileName = fileNameMatch?.[1] ?? fileNameMatch?.[2]
+  const fileName = serverFileName ? decodeURIComponent(serverFileName) : fallbackFileName
+
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  window.URL.revokeObjectURL(url)
+}
+
 export const exportApi = {
-  exportCsv: (params?: FilterParams) => {
+  exportCsv: async (params?: FilterParams) => {
     const query = params ? buildQueryString(params) : ''
-    window.open(`/api/export/csv${query}`, '_blank')
+    await downloadFile(`/export/csv${query}`, 'timekeeper-export.csv')
   },
 
-  exportExcel: (params?: FilterParams) => {
+  exportExcel: async (params?: FilterParams) => {
     const query = params ? buildQueryString(params) : ''
-    window.open(`/api/export/xlsx${query}`, '_blank')
+    await downloadFile(`/export/xlsx${query}`, 'timekeeper-export.xlsx')
   },
 }

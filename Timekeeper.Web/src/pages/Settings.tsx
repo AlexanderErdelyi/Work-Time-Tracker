@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import SoundSelectionModal from '../components/SoundSelectionModal'
 import { useTasks } from '../hooks/useTasks'
 import { usePWA } from '../hooks/usePWA'
-import { useWorkspaceContext } from '../hooks/useWorkspaceContext'
+import { useWorkspaceContext, workspaceKeys } from '../hooks/useWorkspaceContext'
 import { SystemIdleDetectionService } from '../services/systemIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
 import { workspacesApi } from '../api'
@@ -30,6 +30,7 @@ import {
   Check,
   AlertCircle,
   Smartphone,
+  LifeBuoy,
 } from 'lucide-react'
 
 export function Settings() {
@@ -40,6 +41,21 @@ export function Settings() {
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserRole, setNewUserRole] = useState<UserRole>('Member')
+  const [supportRepoOwner, setSupportRepoOwner] = useState('')
+  const [supportRepoName, setSupportRepoName] = useState('')
+  const [supportRepoToken, setSupportRepoToken] = useState('')
+  const [hasSupportRepoToken, setHasSupportRepoToken] = useState(false)
+  const [supportConnectionStatus, setSupportConnectionStatus] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
+
+  useEffect(() => {
+    setSupportRepoOwner(workspaceContext?.workspace.gitHubIssueOwner || '')
+    setSupportRepoName(workspaceContext?.workspace.gitHubIssueRepo || '')
+    setHasSupportRepoToken(workspaceContext?.workspace.hasGitHubIssueToken === true)
+    setSupportRepoToken('')
+  }, [workspaceContext?.workspace.gitHubIssueOwner, workspaceContext?.workspace.gitHubIssueRepo, workspaceContext?.workspace.hasGitHubIssueToken])
 
   const { data: workspaceUsers = [] } = useQuery({
     queryKey: ['workspace-users'],
@@ -88,6 +104,71 @@ export function Settings() {
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not update status.'
       alert(message)
+    },
+  })
+
+  const updateSupportRepositoryMutation = useMutation({
+    mutationFn: () =>
+      workspacesApi.updateCurrentSupportRepository({
+        gitHubIssueOwner: supportRepoOwner.trim() || undefined,
+        gitHubIssueRepo: supportRepoName.trim() || undefined,
+        gitHubIssueToken: supportRepoToken.trim() || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.current() })
+      setSupportRepoToken('')
+      setSupportConnectionStatus(null)
+      alert('Support repository updated.')
+    },
+    onError: (error: unknown) => {
+      setSupportConnectionStatus(null)
+      const message = error instanceof Error ? error.message : 'Could not update support repository.'
+      alert(message)
+    },
+  })
+
+  const clearSupportTokenMutation = useMutation({
+    mutationFn: () =>
+      workspacesApi.updateCurrentSupportRepository({
+        gitHubIssueOwner: supportRepoOwner.trim() || undefined,
+        gitHubIssueRepo: supportRepoName.trim() || undefined,
+        clearGitHubIssueToken: true,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.current() })
+      setSupportRepoToken('')
+      setSupportConnectionStatus(null)
+      alert('Support token removed.')
+    },
+    onError: (error: unknown) => {
+      setSupportConnectionStatus(null)
+      const message = error instanceof Error ? error.message : 'Could not remove support token.'
+      alert(message)
+    },
+  })
+
+  const testSupportRepositoryMutation = useMutation({
+    onMutate: () => {
+      setSupportConnectionStatus(null)
+    },
+    mutationFn: () =>
+      workspacesApi.testCurrentSupportRepository({
+        gitHubIssueOwner: supportRepoOwner.trim() || undefined,
+        gitHubIssueRepo: supportRepoName.trim() || undefined,
+        gitHubIssueToken: supportRepoToken.trim() || undefined,
+      }),
+    onSuccess: (result) => {
+      setSupportConnectionStatus({
+        type: 'success',
+        message: result.message,
+      })
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Connection test failed.'
+      setSupportConnectionStatus({
+        type: 'error',
+        message,
+      })
     },
   })
 
@@ -510,6 +591,101 @@ export function Settings() {
                 ))
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdminUser && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <LifeBuoy className="h-5 w-5" />
+              <CardTitle>Support Repository</CardTitle>
+            </div>
+            <CardDescription>
+              Configure where Support tickets are created as GitHub Issues.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="supportRepoOwner">GitHub Owner</Label>
+                <Input
+                  id="supportRepoOwner"
+                  value={supportRepoOwner}
+                  onChange={(e) => setSupportRepoOwner(e.target.value)}
+                  placeholder="owner-or-org"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supportRepoName">GitHub Repository</Label>
+                <Input
+                  id="supportRepoName"
+                  value={supportRepoName}
+                  onChange={(e) => setSupportRepoName(e.target.value)}
+                  placeholder="repo-name"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="supportRepoToken">GitHub Token</Label>
+              <Input
+                id="supportRepoToken"
+                type="password"
+                value={supportRepoToken}
+                onChange={(e) => setSupportRepoToken(e.target.value)}
+                placeholder={hasSupportRepoToken ? 'Saved token is configured. Enter new token to rotate.' : 'Paste token to enable in-app issue creation'}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">
+                Token status: {hasSupportRepoToken ? 'Configured (hidden)' : 'Not configured'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => updateSupportRepositoryMutation.mutate()}
+                disabled={updateSupportRepositoryMutation.isPending || clearSupportTokenMutation.isPending || testSupportRepositoryMutation.isPending}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {updateSupportRepositoryMutation.isPending ? 'Saving...' : 'Save Support Repository'}
+              </Button>
+
+              <Button
+                variant="secondary"
+                onClick={() => testSupportRepositoryMutation.mutate()}
+                disabled={updateSupportRepositoryMutation.isPending || clearSupportTokenMutation.isPending || testSupportRepositoryMutation.isPending}
+              >
+                {testSupportRepositoryMutation.isPending ? 'Testing...' : 'Test GitHub Connection'}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => clearSupportTokenMutation.mutate()}
+                disabled={!hasSupportRepoToken || updateSupportRepositoryMutation.isPending || clearSupportTokenMutation.isPending || testSupportRepositoryMutation.isPending}
+              >
+                {clearSupportTokenMutation.isPending ? 'Removing...' : 'Remove Saved Token'}
+              </Button>
+            </div>
+
+            {supportConnectionStatus && (
+              <div
+                className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                  supportConnectionStatus.type === 'success'
+                    ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300'
+                    : 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
+                }`}
+              >
+                {supportConnectionStatus.type === 'success' ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <AlertCircle className="h-4 w-4" />
+                )}
+                <span>{supportConnectionStatus.message}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

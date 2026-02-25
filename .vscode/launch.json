@@ -6,7 +6,7 @@
       "type": "node-terminal",
       "request": "launch",
       "command": "echo 'Timekeeper is starting... Browser will open automatically at http://localhost:5173'",
-      "preLaunchTask": "launch-app",
+      "preLaunchTask": "launch-app-with-package",
       "presentation": {
         "hidden": false,
         "group": "1_run",
@@ -15,6 +15,41 @@
     },
     {
       "name": "Launch API Only",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "start-app-with-package",
+      "program": "${workspaceFolder}/Timekeeper.Api/bin/Debug/net8.0/Timekeeper.Api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/Timekeeper.Api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 2
+      }
+    },
+    {
+      "name": "Launch Timekeeper Fast (No Package)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "echo 'Timekeeper fast start... Browser will open automatically at http://localhost:5173'",
+      "preLaunchTask": "launch-app",
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 3
+      }
+    },
+    {
+      "name": "Launch API Only Fast (No Package)",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "start-app",
@@ -33,7 +68,19 @@
       "presentation": {
         "hidden": false,
         "group": "1_run",
-        "order": 2
+        "order": 4
+      }
+    },
+    {
+      "name": "Generate Shared Host Package Only",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "echo 'Shared host package generation completed.'",
+      "preLaunchTask": "package-shared-host",
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 5
       }
     }
   ],
@@ -46,6 +93,16 @@
         "hidden": false,
         "group": "1_run",
         "order": 0
+      }
+    },
+    {
+      "name": "Full Stack Debug Fast (No Package)",
+      "configurations": ["Launch API Only Fast (No Package)", "Launch Timekeeper Fast (No Package)"],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "1_run",
+        "order": 1
       }
     }
   ]
