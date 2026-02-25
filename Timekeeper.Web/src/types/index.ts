@@ -92,6 +92,7 @@ export interface TimeEntry {
   durationMinutes?: number
   billedHours?: number
   isRunning: boolean
+  serverNowUtc?: string
   createdAt: string
   updatedAt?: string
 }

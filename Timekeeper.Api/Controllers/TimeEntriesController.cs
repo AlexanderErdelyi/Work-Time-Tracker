@@ -138,6 +138,7 @@ public class TimeEntriesController : ControllerBase
                 DurationMinutes = e.EndTime.HasValue ? ((e.EndTime.Value - e.StartTime).TotalMinutes - (e.TotalPausedSeconds / 60.0)) : null,
                 BilledHours = e.BilledHours,
                 IsRunning = e.EndTime == null && !e.PausedAt.HasValue,
+                ServerNowUtc = DateTime.UtcNow,
                 CreatedAt = ToUtc(e.CreatedAt),
                 UpdatedAt = ToUtc(e.UpdatedAt)
             })
@@ -813,6 +814,7 @@ public class TimeEntriesController : ControllerBase
             DurationMinutes = entry.Duration?.TotalMinutes,
             BilledHours = entry.BilledHours,
             IsRunning = entry.IsRunning,
+            ServerNowUtc = DateTime.UtcNow,
             CreatedAt = ToUtc(entry.CreatedAt),
             UpdatedAt = ToUtc(entry.UpdatedAt)
         };

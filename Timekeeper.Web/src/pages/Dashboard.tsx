@@ -236,6 +236,11 @@ export function Dashboard() {
     // Set running notes from timer
     setRunningNotes(runningTimer.notes || '')
 
+    const baselineClientNowMs = Date.now()
+    const baselineServerNowMs = runningTimer.serverNowUtc
+      ? parseApiDateTime(runningTimer.serverNowUtc).getTime()
+      : null
+
     const updateElapsed = () => {
       // Calculate elapsed time
       let totalSeconds = 0
@@ -248,8 +253,10 @@ export function Dashboard() {
       } else {
         // When running: Calculate from start to now
         const start = parseApiDateTime(runningTimer.startTime)
-        const now = new Date()
-        totalSeconds = Math.floor((now.getTime() - start.getTime()) / 1000)
+        const nowMs = baselineServerNowMs !== null
+          ? baselineServerNowMs + (Date.now() - baselineClientNowMs)
+          : Date.now()
+        totalSeconds = Math.floor((nowMs - start.getTime()) / 1000)
       }
       
       // Subtract total paused time

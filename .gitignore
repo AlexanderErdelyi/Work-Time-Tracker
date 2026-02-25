@@ -86,6 +86,9 @@ cert-base64.txt
 .ntvs_analysis.dat
 node_modules/
 
+# Generated frontend bundles (Vite build output)
+Timekeeper.Api/wwwroot/assets/
+
 # Visual Studio 6 build log
 *.plg
 
