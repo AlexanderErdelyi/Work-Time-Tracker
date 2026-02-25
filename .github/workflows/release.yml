@@ -2,14 +2,23 @@ name: Create Release
 
 'on':
   push:
-    tags:
-      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+    branches:
+      - main
   workflow_dispatch:  # Allows manual triggering
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
-        required: true
+        description: 'Optional explicit tag (e.g., v1.0.0). Leave empty to auto-increment patch version from latest tag.'
+        required: false
         type: string
+      release_type:
+        description: 'Version increment when tag is not provided'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
       auto_deploy:
         description: 'Automatically deploy to shared host after release build'
         required: true
@@ -19,6 +28,7 @@ name: Create Release
 jobs:
   build-and-release:
     name: Build and Release
+    if: github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     outputs:
       version: ${{ steps.get_version.outputs.VERSION }}
@@ -30,8 +40,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # For workflow_dispatch, checkout main and create tag; for push, checkout the tag
+          # For workflow_dispatch, checkout main; for push, checkout the pushed branch ref
           ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          fetch-depth: 0
       
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -76,24 +87,61 @@ jobs:
           
           Write-Host "Inno Setup installed successfully"
       
-      - name: Extract version from tag
+      - name: Determine release version and tag
         id: get_version
         shell: pwsh
         run: |
-          # Get tag name from either push event or manual input
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $tagName = "${{ inputs.tag }}"
-          } else {
-            $tagName = "${{ github.ref_name }}"
+          git fetch --tags --force
+
+          $manualTag = "${{ inputs.tag }}"
+          $releaseType = "${{ inputs.release_type }}"
+          if ([string]::IsNullOrWhiteSpace($releaseType)) {
+            $releaseType = 'patch'
           }
-          
+
+          $releaseType = $releaseType.ToLowerInvariant()
+          if ($releaseType -notin @('patch', 'minor', 'major')) {
+            throw "Invalid release_type '$releaseType'. Allowed values: patch, minor, major."
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($manualTag)) {
+            $tagName = $manualTag
+            if (-not $tagName.StartsWith('v')) {
+              $tagName = "v$tagName"
+            }
+          }
+          else {
+            $latestTag = git tag --sort=-version:refname | Select-Object -First 1
+
+            if ([string]::IsNullOrWhiteSpace($latestTag)) {
+              $nextVersion = '1.0.0'
+            }
+            else {
+              $baseVersionText = $latestTag.TrimStart('v').Split('-')[0]
+              $semver = [System.Version]::Parse($baseVersionText)
+
+              switch ($releaseType) {
+                'major' {
+                  $nextVersion = "{0}.0.0" -f ($semver.Major + 1)
+                }
+                'minor' {
+                  $nextVersion = "{0}.{1}.0" -f $semver.Major, ($semver.Minor + 1)
+                }
+                default {
+                  $nextVersion = "{0}.{1}.{2}" -f $semver.Major, $semver.Minor, ($semver.Build + 1)
+                }
+              }
+            }
+
+            $tagName = "v$nextVersion"
+          }
+
           $version = $tagName -replace '^v', ''
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
           echo "TAG_NAME=$tagName" >> $env:GITHUB_OUTPUT
           echo "Building version: $version"
       
-      - name: Create and push tag (workflow_dispatch only)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Create and push release tag
         shell: pwsh
         run: |
           $tagName = "${{ steps.get_version.outputs.TAG_NAME }}"
@@ -108,7 +156,13 @@ jobs:
           # Check if tag exists (redirect stderr to avoid noise)
           git rev-parse "$tagName" 2>$null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Tag $tagName already exists, skipping creation"
+            Write-Host "Tag $tagName already exists"
+
+            # If this was an explicit manual tag, allow rebuilding; otherwise fail to avoid duplicate auto-release versions.
+            $manualTag = "${{ inputs.tag }}"
+            if ([string]::IsNullOrWhiteSpace($manualTag)) {
+              throw "Auto-generated tag $tagName already exists. Please rerun workflow."
+            }
           }
           else {
             # Tag doesn't exist, create and push it

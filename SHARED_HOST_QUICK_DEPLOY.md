@@ -39,9 +39,11 @@ Open: `https://srvbc2506.applabs.local:5443/`
 	Get the token in GitHub: **Settings → Actions → Runners → New self-hosted runner**.
 2. Create GitHub Environment `production` with required approval.
 3. Add secret `SHARED_HOST_CERT_PASSWORD` (optional if password file exists on host).
-4. Run release workflow: `.github/workflows/release.yml`.
-5. Keep `auto_deploy = true` (default) to automatically start deployment after release succeeds.
-6. If needed, set `auto_deploy = false` to create release only, then run `.github/workflows/deploy-shared-host.yml` manually.
+4. Merge your feature branch into `main`.
+5. Push to `main` automatically starts `.github/workflows/release.yml`.
+6. Release workflow auto-increments **patch** version from latest tag (for example `v3.0.2` → `v3.0.3`), creates release, then deploys automatically.
+7. For manual workflow runs, you can choose `release_type` = `patch` / `minor` / `major` (ignored if `tag` is explicitly provided).
+8. Keep `auto_deploy = true` (default) for manual runs; set `auto_deploy = false` to create release only, then run `.github/workflows/deploy-shared-host.yml` manually.
 
 Deploy uses `deploy-shared-host-release.ps1` for stop → backup → deploy → start → verify (auto rollback on failure).
 
