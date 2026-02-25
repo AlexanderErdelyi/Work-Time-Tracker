@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Image from '@tiptap/extension-image'
+import TurndownService from 'turndown'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -17,6 +18,7 @@ import type { CreateSupportIssueResponse } from '../types'
 import {
   AlertCircle,
   Bug,
+  Check,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -26,6 +28,7 @@ import {
   MessageSquare,
   Pencil,
   PlusCircle,
+  Trash2,
 } from 'lucide-react'
 
 const APP_VERSION =
@@ -51,6 +54,23 @@ function formatDate(value?: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
 }
 
+function getTicketStateLabel(state: string) {
+  return state.toLowerCase() === 'closed' ? 'Completed' : 'Open'
+}
+
+function getGitHubLabelStyle(color?: string): CSSProperties | undefined {
+  if (!color) {
+    return undefined
+  }
+
+  const normalized = color.startsWith('#') ? color : `#${color}`
+  return {
+    backgroundColor: `${normalized}22`,
+    borderColor: `${normalized}66`,
+    color: normalized,
+  }
+}
+
 export function Support() {
   const queryClient = useQueryClient()
   const { data: workspaceContext } = useWorkspaceContext()
@@ -72,9 +92,10 @@ export function Support() {
   const [contactEmail, setContactEmail] = useState('')
   const [createdIssue, setCreatedIssue] = useState<CreateSupportIssueResponse | null>(null)
   const [selectedIssueNumber, setSelectedIssueNumber] = useState<number | null>(null)
-  const [commentText, setCommentText] = useState('')
+  const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'closed'>('open')
 
   const imageInputId = 'support-editor-image-upload'
+  const commentImageInputId = 'support-comment-editor-image-upload'
 
   useEffect(() => {
     if (!contactEmail && workspaceContext?.currentUser.email) {
@@ -105,14 +126,32 @@ export function Support() {
     },
   })
 
-  const descriptionHtml = editor?.getHTML() ?? ''
-  const plainDescription = useMemo(() => {
-    if (!editor) {
-      return ''
-    }
+  const commentEditor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        bulletList: { keepMarks: true },
+        orderedList: { keepMarks: true },
+      }),
+      Image,
+      Placeholder.configure({
+        placeholder: 'Write a reply that will be posted to GitHub...',
+      }),
+    ],
+    content: '',
+    editorProps: {
+      attributes: {
+        class: 'min-h-[140px] p-3 text-sm focus:outline-none [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_p]:my-1',
+      },
+    },
+  })
 
-    return editor.getText().trim()
-  }, [editor, descriptionHtml])
+  const markdownConverter = useMemo(() => {
+    return new TurndownService({
+      headingStyle: 'atx',
+      bulletListMarker: '-',
+      codeBlockStyle: 'fenced',
+    })
+  }, [])
 
   const unreadQuery = useQuery({
     queryKey: ['support', 'unread-count'],
@@ -137,8 +176,8 @@ export function Support() {
   const detailQuery = useQuery({
     queryKey: ['support', 'issue-detail', selectedIssueNumber],
     queryFn: () => supportApi.getIssueDetail(selectedIssueNumber ?? 0),
-    enabled: supportTargetConfigured && !!selectedIssueNumber,
-    refetchInterval: selectedIssueNumber ? 20000 : false,
+    enabled: supportTargetConfigured && activeView === 'tickets' && !!selectedIssueNumber,
+    refetchInterval: selectedIssueNumber && activeView === 'tickets' ? 20000 : false,
   })
 
   const markReadMutation = useMutation({
@@ -149,10 +188,35 @@ export function Support() {
     },
   })
 
+  const closeIssueMutation = useMutation({
+    mutationFn: (issueNumber: number) => supportApi.closeIssue(issueNumber),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['support', 'my-issues'] }),
+        queryClient.invalidateQueries({ queryKey: ['support', 'issue-detail', selectedIssueNumber] }),
+        queryClient.invalidateQueries({ queryKey: ['support', 'unread-count'] }),
+      ])
+    },
+  })
+
+  const deleteIssueMutation = useMutation({
+    mutationFn: (issueNumber: number) => supportApi.deleteIssue(issueNumber),
+    onSuccess: async (_data, issueNumber) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['support', 'my-issues'] }),
+        queryClient.invalidateQueries({ queryKey: ['support', 'unread-count'] }),
+      ])
+
+      if (selectedIssueNumber === issueNumber) {
+        setSelectedIssueNumber(null)
+      }
+    },
+  })
+
   const addCommentMutation = useMutation({
     mutationFn: (payload: { issueNumber: number; body: string }) => supportApi.addIssueComment(payload.issueNumber, payload.body),
     onSuccess: async () => {
-      setCommentText('')
+      commentEditor?.commands.clearContent()
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['support', 'issue-detail', selectedIssueNumber] }),
         queryClient.invalidateQueries({ queryKey: ['support', 'my-issues'] }),
@@ -165,20 +229,7 @@ export function Support() {
   })
 
   const createIssueMutation = useMutation({
-    mutationFn: () =>
-      supportApi.createIssue({
-        title,
-        category,
-        severity,
-        description: descriptionHtml.trim(),
-        stepsToReproduce: stepsToReproduce.trim() || undefined,
-        expectedBehavior: expectedBehavior.trim() || undefined,
-        actualBehavior: actualBehavior.trim() || undefined,
-        browser: browser.trim() || undefined,
-        operatingSystem: operatingSystem.trim() || undefined,
-        appVersion: appVersion.trim() || undefined,
-        contactEmail: contactEmail.trim() || undefined,
-      }),
+    mutationFn: supportApi.createIssue,
     onSuccess: async (result) => {
       setCreatedIssue(result)
       setTitle('')
@@ -204,12 +255,29 @@ export function Support() {
   })
 
   const handleSubmit = () => {
-    if (!title.trim() || !plainDescription) {
+    const currentDescriptionText = editor?.getText().trim() ?? ''
+    const currentDescriptionMarkdown = markdownConverter
+      .turndown(editor?.getHTML() ?? '')
+      .trim()
+
+    if (!title.trim() || !currentDescriptionText) {
       alert('Please provide a title and description.')
       return
     }
 
-    createIssueMutation.mutate()
+    createIssueMutation.mutate({
+      title,
+      category,
+      severity,
+      description: currentDescriptionMarkdown,
+      stepsToReproduce: stepsToReproduce.trim() || undefined,
+      expectedBehavior: expectedBehavior.trim() || undefined,
+      actualBehavior: actualBehavior.trim() || undefined,
+      browser: browser.trim() || undefined,
+      operatingSystem: operatingSystem.trim() || undefined,
+      appVersion: appVersion.trim() || undefined,
+      contactEmail: contactEmail.trim() || undefined,
+    })
   }
 
   const handleImageUpload = async (file: File) => {
@@ -217,16 +285,89 @@ export function Support() {
     editor?.chain().focus().setImage({ src: result.url }).run()
   }
 
-  const handleSelectTicket = async (issueNumber: number) => {
-    setSelectedIssueNumber(issueNumber)
-    const selectedTicket = ticketsQuery.data?.find((t) => t.issueNumber === issueNumber)
-    if (selectedTicket?.hasUnreadUpdates) {
-      markReadMutation.mutate(issueNumber)
+  const handleCommentImageUpload = async (file: File) => {
+    const result = await supportApi.uploadImage(file)
+    commentEditor?.chain().focus().setImage({ src: result.url }).run()
+  }
+
+  const handlePasteImage = async (
+    event: React.ClipboardEvent,
+    upload: (file: File) => Promise<void>
+  ) => {
+    const items = event.clipboardData?.items
+    if (!items) {
+      return
+    }
+
+    const imageItem = Array.from(items).find((item) => item.type.startsWith('image/'))
+    if (!imageItem) {
+      return
+    }
+
+    const file = imageItem.getAsFile()
+    if (!file) {
+      return
+    }
+
+    event.preventDefault()
+
+    try {
+      await upload(file)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not paste image.'
+      alert(message)
     }
   }
 
+  const handleSelectTicket = async (issueNumber: number) => {
+    setSelectedIssueNumber(issueNumber)
+
+    queryClient.setQueryData(['support', 'my-issues'], (existing: typeof ticketsQuery.data) =>
+      (existing ?? []).map((ticket) =>
+        ticket.issueNumber === issueNumber
+          ? { ...ticket, hasUnreadUpdates: false }
+          : ticket
+      )
+    )
+
+    markReadMutation.mutate(issueNumber)
+  }
+
   const tickets = ticketsQuery.data ?? []
+  const filteredTickets = useMemo(() => {
+    if (ticketFilter === 'all') {
+      return tickets
+    }
+
+    return tickets.filter((ticket) =>
+      ticketFilter === 'open' ? ticket.state.toLowerCase() !== 'closed' : ticket.state.toLowerCase() === 'closed'
+    )
+  }, [ticketFilter, tickets])
+
   const unreadCount = unreadQuery.data?.unreadCount ?? 0
+
+  useEffect(() => {
+    if (!selectedIssueNumber || filteredTickets.some((ticket) => ticket.issueNumber === selectedIssueNumber)) {
+      return
+    }
+
+    setSelectedIssueNumber(filteredTickets[0]?.issueNumber ?? null)
+  }, [filteredTickets, selectedIssueNumber])
+
+  useEffect(() => {
+    if (!detailQuery.isError || !selectedIssueNumber) {
+      return
+    }
+
+    const message = detailQuery.error instanceof Error ? detailQuery.error.message.toLowerCase() : ''
+    if (message.includes('no longer exists') || message.includes('not found')) {
+      setSelectedIssueNumber(null)
+      queryClient.invalidateQueries({ queryKey: ['support', 'my-issues'] })
+      queryClient.invalidateQueries({ queryKey: ['support', 'unread-count'] })
+    }
+  }, [detailQuery.error, detailQuery.isError, queryClient, selectedIssueNumber])
+
+  const selectedTicket = detailQuery.data?.ticket
 
   return (
     <div className="space-y-6">
@@ -325,7 +466,12 @@ export function Support() {
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Description *</Label>
-                <div className="border rounded-md overflow-hidden">
+                <div
+                  className="border rounded-md overflow-hidden"
+                  onPaste={(event) => {
+                    void handlePasteImage(event, handleImageUpload)
+                  }}
+                >
                   <div className="flex flex-wrap items-center gap-2 border-b p-2 bg-muted/40">
                     <Button type="button" variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleBold().run()}>
                       B
@@ -490,17 +636,32 @@ export function Support() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
-              <CardTitle>My Tickets</CardTitle>
-              <CardDescription>Newest activity first</CardDescription>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle>My Tickets</CardTitle>
+                  <CardDescription>Newest activity first</CardDescription>
+                </div>
+                <div className="inline-flex rounded-md border bg-muted p-1">
+                  <Button variant={ticketFilter === 'open' ? 'default' : 'ghost'} size="sm" onClick={() => setTicketFilter('open')}>
+                    Open
+                  </Button>
+                  <Button variant={ticketFilter === 'closed' ? 'default' : 'ghost'} size="sm" onClick={() => setTicketFilter('closed')}>
+                    Completed
+                  </Button>
+                  <Button variant={ticketFilter === 'all' ? 'default' : 'ghost'} size="sm" onClick={() => setTicketFilter('all')}>
+                    All
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {!supportTargetConfigured && <p className="text-sm text-muted-foreground">Support repository is not configured.</p>}
               {supportTargetConfigured && ticketsQuery.isLoading && <p className="text-sm text-muted-foreground">Loading tickets...</p>}
-              {supportTargetConfigured && !ticketsQuery.isLoading && tickets.length === 0 && (
+              {supportTargetConfigured && !ticketsQuery.isLoading && filteredTickets.length === 0 && (
                 <p className="text-sm text-muted-foreground">No tickets found yet.</p>
               )}
 
-              {tickets.map((ticket) => (
+              {filteredTickets.map((ticket) => (
                 <button
                   key={ticket.issueNumber}
                   type="button"
@@ -510,7 +671,14 @@ export function Support() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-medium">#{ticket.issueNumber} {ticket.title}</p>
-                      <p className="text-xs text-muted-foreground">{ticket.category} · {ticket.severity} · {ticket.state}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {ticket.labels.map((label) => (
+                          <Badge key={`${ticket.issueNumber}-${label.name}`} variant="outline" style={getGitHubLabelStyle(label.color)}>
+                            {label.name}
+                          </Badge>
+                        ))}
+                        <Badge variant="secondary">{getTicketStateLabel(ticket.state)}</Badge>
+                      </div>
                     </div>
                     {ticket.hasUnreadUpdates && <Badge>New</Badge>}
                   </div>
@@ -537,6 +705,58 @@ export function Support() {
 
               {!detailQuery.isLoading && !detailQuery.isError && (
                 <>
+                  {detailQuery.data?.ticket && (
+                    <div className="rounded-md border p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium">#{detailQuery.data.ticket.issueNumber} {detailQuery.data.ticket.title}</p>
+                        <Badge variant="secondary">{getTicketStateLabel(detailQuery.data.ticket.state)}</Badge>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {detailQuery.data.ticket.labels.map((label) => (
+                          <Badge key={`detail-${label.name}`} variant="outline" style={getGitHubLabelStyle(label.color)}>
+                            {label.name}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="gap-1"
+                          disabled={closeIssueMutation.isPending || detailQuery.data.ticket.state.toLowerCase() === 'closed'}
+                          onClick={() => {
+                            closeIssueMutation.mutate(detailQuery.data!.ticket.issueNumber)
+                          }}
+                        >
+                          <Check className="h-4 w-4" />
+                          Close
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          className="gap-1"
+                          disabled={deleteIssueMutation.isPending}
+                          onClick={() => {
+                            if (!selectedTicket) {
+                              return
+                            }
+
+                            if (!confirm(`Delete ticket #${selectedTicket.issueNumber} from this app?`)) {
+                              return
+                            }
+
+                            deleteIssueMutation.mutate(selectedTicket.issueNumber)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {(detailQuery.data?.comments.length ?? 0) === 0 ? (
                     <p className="text-sm text-muted-foreground">No content yet.</p>
                   ) : (
@@ -547,7 +767,7 @@ export function Support() {
                           {comment.isResponseFromOthers && <Badge variant="secondary">GitHub</Badge>}
                         </div>
                         <p className="text-xs text-muted-foreground">{formatDate(comment.updatedAt || comment.createdAt)}</p>
-                        <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+                        <div className="text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: comment.body }} />
                       </div>
                     ))
                   )}
@@ -558,23 +778,70 @@ export function Support() {
                         <Pencil className="h-4 w-4" />
                         Add comment
                       </Label>
-                      <Textarea
-                        id="support-new-comment"
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        rows={4}
-                        placeholder="Write a reply that will be posted to GitHub..."
-                      />
+                      <div
+                        className="border rounded-md overflow-hidden"
+                        onPaste={(event) => {
+                          void handlePasteImage(event, handleCommentImageUpload)
+                        }}
+                      >
+                        <div className="flex flex-wrap items-center gap-2 border-b p-2 bg-muted/40">
+                          <Button type="button" variant="outline" size="sm" onClick={() => commentEditor?.chain().focus().toggleBold().run()}>
+                            B
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => commentEditor?.chain().focus().toggleItalic().run()}>
+                            I
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => commentEditor?.chain().focus().toggleBulletList().run()}>
+                            <List className="h-4 w-4 mr-1" />
+                            Bullet
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => commentEditor?.chain().focus().toggleOrderedList().run()}>
+                            <ListOrdered className="h-4 w-4 mr-1" />
+                            Numbered
+                          </Button>
+                          <Label htmlFor={commentImageInputId} className="inline-flex cursor-pointer border border-input rounded-md h-9 px-3 items-center text-sm hover:bg-accent hover:text-accent-foreground">
+                            <ImagePlus className="h-4 w-4 mr-1" />
+                            Image
+                          </Label>
+                          <input
+                            id={commentImageInputId}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) {
+                                return
+                              }
+
+                              try {
+                                await handleCommentImageUpload(file)
+                              } catch (error) {
+                                const message = error instanceof Error ? error.message : 'Could not upload image.'
+                                alert(message)
+                              } finally {
+                                e.currentTarget.value = ''
+                              }
+                            }}
+                          />
+                        </div>
+                        <EditorContent editor={commentEditor} />
+                      </div>
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           onClick={() => {
-                            if (!selectedIssueNumber || !commentText.trim()) {
+                            const currentCommentText = commentEditor?.getText().trim() ?? ''
+                            if (!selectedIssueNumber || !currentCommentText) {
                               return
                             }
-                            addCommentMutation.mutate({ issueNumber: selectedIssueNumber, body: commentText })
+
+                            addCommentMutation.mutate({
+                              issueNumber: selectedIssueNumber,
+                              body: markdownConverter.turndown(commentEditor?.getHTML() ?? '').trim(),
+                            })
                           }}
-                          disabled={addCommentMutation.isPending || !commentText.trim()}
+                          disabled={addCommentMutation.isPending}
                           className="gap-2"
                         >
                           {addCommentMutation.isPending ? 'Posting...' : 'Post Comment'}

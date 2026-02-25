@@ -76,7 +76,7 @@ public class SupportController : ControllerBase
         }
 
         var now = DateTime.UtcNow;
-        var normalizedCategory = string.IsNullOrWhiteSpace(request.Category) ? "bug" : request.Category.Trim();
+        var normalizedCategory = NormalizeCategory(request.Category);
         var normalizedSeverity = string.IsNullOrWhiteSpace(request.Severity) ? "medium" : request.Severity.Trim();
 
         _context.SupportTickets.Add(new SupportTicket
@@ -126,12 +126,16 @@ public class SupportController : ControllerBase
             return Ok(Array.Empty<SupportTicketSummaryDto>());
         }
 
-        await SyncTicketsAsync(tickets, cancellationToken);
+        var labelsByIssue = await SyncTicketsAsync(tickets, userEmail, cancellationToken);
 
         var result = tickets
             .OrderByDescending(t => t.LastIssueUpdatedAt ?? t.CreatedAt)
             .ThenByDescending(t => t.CreatedAt)
-            .Select(MapSummary)
+            .Select(t =>
+            {
+                labelsByIssue.TryGetValue(t.IssueNumber, out var labels);
+                return MapSummary(t, labels);
+            })
             .ToList();
 
         return Ok(result);
@@ -170,18 +174,22 @@ public class SupportController : ControllerBase
 
         if (!details.Success)
         {
+            if (details.IssueNotFound)
+            {
+                _context.SupportTickets.Remove(ticket);
+                await _context.SaveChangesAsync(cancellationToken);
+                return NotFound("Support ticket no longer exists on GitHub.");
+            }
+
             return StatusCode(StatusCodes.Status502BadGateway, details.Error ?? "Could not load issue details at this time.");
         }
 
-        ApplySyncResult(ticket, details);
-        ticket.LastViewedAt = DateTime.UtcNow;
-        ticket.HasUnreadUpdates = false;
-        ticket.UpdatedAt = DateTime.UtcNow;
+        ApplySyncResult(ticket, details, userEmail);
         await _context.SaveChangesAsync(cancellationToken);
 
         var payload = new SupportTicketDetailDto
         {
-            Ticket = MapSummary(ticket),
+            Ticket = MapSummary(ticket, MapLabels(details.Labels, ticket.Category)),
             Comments = details.Comments
                 .Select(c => new SupportTicketCommentDto
                 {
@@ -190,7 +198,7 @@ public class SupportController : ControllerBase
                     CreatedAt = c.CreatedAt,
                     UpdatedAt = c.UpdatedAt,
                     Url = c.Url,
-                    IsResponseFromOthers = true
+                    IsResponseFromOthers = !string.Equals(c.Author, userEmail, StringComparison.OrdinalIgnoreCase)
                 })
                 .ToList()
         };
@@ -248,7 +256,7 @@ public class SupportController : ControllerBase
             ticket.SupportRepositoryOwner,
             ticket.SupportRepositoryRepo,
             ticket.IssueNumber,
-            request.Body,
+            $"<!-- tk-user:{userEmail} -->\n{request.Body.Trim()}",
             workspace.GitHubIssueTokenProtected,
             cancellationToken);
 
@@ -291,6 +299,87 @@ public class SupportController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("issues/{issueNumber:int}/close")]
+    public async Task<ActionResult> CloseIssue(int issueNumber, CancellationToken cancellationToken)
+    {
+        var userEmail = GetCurrentUserEmail();
+        var ticket = await _context.SupportTickets
+            .FirstOrDefaultAsync(t =>
+                t.WorkspaceId == _workspaceContext.WorkspaceId
+                && t.IssueNumber == issueNumber
+                && t.CreatedByEmail == userEmail,
+                cancellationToken);
+
+        if (ticket == null)
+        {
+            return NotFound("Support ticket not found.");
+        }
+
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == _workspaceContext.WorkspaceId, cancellationToken);
+
+        if (workspace == null)
+        {
+            return NotFound("Workspace not found.");
+        }
+
+        var closeResult = await _gitHubIssueService.CloseIssueAsync(
+            ticket.SupportRepositoryOwner,
+            ticket.SupportRepositoryRepo,
+            ticket.IssueNumber,
+            workspace.GitHubIssueTokenProtected,
+            cancellationToken);
+
+        if (!closeResult.Success && !closeResult.IssueNotFound)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, closeResult.Error ?? "Could not close issue at this time.");
+        }
+
+        var now = DateTime.UtcNow;
+        ticket.GitHubState = "closed";
+        ticket.LastIssueUpdatedAt = now;
+        ticket.LastViewedAt = now;
+        ticket.HasUnreadUpdates = false;
+        ticket.UpdatedAt = now;
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("issues/{issueNumber:int}")]
+    public async Task<ActionResult> DeleteIssue(int issueNumber, CancellationToken cancellationToken)
+    {
+        var userEmail = GetCurrentUserEmail();
+        var ticket = await _context.SupportTickets
+            .FirstOrDefaultAsync(t =>
+                t.WorkspaceId == _workspaceContext.WorkspaceId
+                && t.IssueNumber == issueNumber
+                && t.CreatedByEmail == userEmail,
+                cancellationToken);
+
+        if (ticket == null)
+        {
+            return NotFound("Support ticket not found.");
+        }
+
+        var workspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == _workspaceContext.WorkspaceId, cancellationToken);
+
+        if (workspace != null)
+        {
+            _ = await _gitHubIssueService.CloseIssueAsync(
+                ticket.SupportRepositoryOwner,
+                ticket.SupportRepositoryRepo,
+                ticket.IssueNumber,
+                workspace.GitHubIssueTokenProtected,
+                cancellationToken);
+        }
+
+        _context.SupportTickets.Remove(ticket);
+        await _context.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     [HttpGet("issues/unread-count")]
     public async Task<ActionResult<SupportTicketUnreadCountDto>> GetUnreadCount(CancellationToken cancellationToken)
     {
@@ -301,7 +390,7 @@ public class SupportController : ControllerBase
 
         if (tickets.Count > 0)
         {
-            await SyncTicketsAsync(tickets, cancellationToken);
+            await SyncTicketsAsync(tickets, userEmail, cancellationToken);
         }
 
         var count = tickets.Count(t => t.HasUnreadUpdates);
@@ -376,17 +465,22 @@ public class SupportController : ControllerBase
         return PhysicalFile(fullPath, contentType);
     }
 
-    private async Task SyncTicketsAsync(List<SupportTicket> tickets, CancellationToken cancellationToken)
+    private async Task<Dictionary<int, IReadOnlyList<SupportTicketLabelDto>>> SyncTicketsAsync(
+        List<SupportTicket> tickets,
+        string userEmail,
+        CancellationToken cancellationToken)
     {
+        var labelsByIssue = new Dictionary<int, IReadOnlyList<SupportTicketLabelDto>>();
         var workspace = await _context.Workspaces
             .FirstOrDefaultAsync(w => w.Id == _workspaceContext.WorkspaceId, cancellationToken);
 
         if (workspace == null)
         {
-            return;
+            return labelsByIssue;
         }
 
         var hasChanges = false;
+        var removedTickets = new List<SupportTicket>();
         foreach (var ticket in tickets)
         {
             var details = await _gitHubIssueService.GetIssueDetailsAsync(
@@ -396,23 +490,43 @@ public class SupportController : ControllerBase
                 workspace.GitHubIssueTokenProtected,
                 cancellationToken);
 
+            if (!details.Success && details.IssueNotFound)
+            {
+                _context.SupportTickets.Remove(ticket);
+                removedTickets.Add(ticket);
+                hasChanges = true;
+                continue;
+            }
+
             if (!details.Success)
             {
                 continue;
             }
 
             hasChanges = true;
-            ApplySyncResult(ticket, details);
+            ApplySyncResult(ticket, details, userEmail);
+            labelsByIssue[ticket.IssueNumber] = MapLabels(details.Labels, ticket.Category);
+        }
+
+        if (removedTickets.Count > 0)
+        {
+            foreach (var removed in removedTickets)
+            {
+                tickets.Remove(removed);
+            }
         }
 
         if (hasChanges)
         {
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        return labelsByIssue;
     }
 
-    private static void ApplySyncResult(SupportTicket ticket, GitHubIssueDetailsResult details)
+    private static void ApplySyncResult(SupportTicket ticket, GitHubIssueDetailsResult details, string currentUserEmail)
     {
+        var oldState = ticket.GitHubState;
         ticket.GitHubState = details.State;
 
         if (!string.IsNullOrWhiteSpace(details.Title))
@@ -430,13 +544,27 @@ public class SupportController : ControllerBase
         ticket.LastSyncedAt = DateTime.UtcNow;
         ticket.UpdatedAt = DateTime.UtcNow;
 
-        var latestActivity = ticket.LastCommentAt ?? ticket.LastIssueUpdatedAt;
+        var latestExternalCommentAt = details.Comments
+            .Where(c => !string.Equals(c.Author, currentUserEmail, StringComparison.OrdinalIgnoreCase))
+            .Select(c => (DateTime?)c.CreatedAt)
+            .Max();
+
+        var stateChanged = !string.Equals(oldState, details.State, StringComparison.OrdinalIgnoreCase);
+        var latestStateActivity = stateChanged ? details.UpdatedAt : null;
+
+        var latestActivity = new[] { latestExternalCommentAt, latestStateActivity }
+            .Where(d => d.HasValue)
+            .Select(d => d!.Value)
+            .DefaultIfEmpty()
+            .Max();
+
+        var latestActivityUtc = latestActivity == default ? (DateTime?)null : latestActivity;
         var effectiveLastViewedAt = ticket.LastViewedAt?.AddSeconds(2);
-        ticket.HasUnreadUpdates = latestActivity.HasValue
-            && (!effectiveLastViewedAt.HasValue || latestActivity.Value > effectiveLastViewedAt.Value);
+        ticket.HasUnreadUpdates = latestActivityUtc.HasValue
+            && (!effectiveLastViewedAt.HasValue || latestActivityUtc.Value > effectiveLastViewedAt.Value);
     }
 
-    private static SupportTicketSummaryDto MapSummary(SupportTicket ticket)
+    private static SupportTicketSummaryDto MapSummary(SupportTicket ticket, IReadOnlyList<SupportTicketLabelDto>? labels = null)
     {
         return new SupportTicketSummaryDto
         {
@@ -450,7 +578,56 @@ public class SupportController : ControllerBase
             HasUnreadUpdates = ticket.HasUnreadUpdates,
             CreatedAt = ticket.CreatedAt,
             LastIssueUpdatedAt = ticket.LastIssueUpdatedAt,
-            LastCommentAt = ticket.LastCommentAt
+            LastCommentAt = ticket.LastCommentAt,
+            Labels = labels ??
+                [
+                    new SupportTicketLabelDto
+                    {
+                        Name = NormalizeCategory(ticket.Category),
+                        Color = string.Empty
+                    }
+                ]
+        };
+    }
+
+    private static IReadOnlyList<SupportTicketLabelDto> MapLabels(
+        IReadOnlyList<GitHubIssueLabelResult> labels,
+        string fallbackCategory)
+    {
+        if (labels.Count > 0)
+        {
+            return labels
+                .Select(l => new SupportTicketLabelDto
+                {
+                    Name = l.Name,
+                    Color = l.Color
+                })
+                .ToList();
+        }
+
+        return
+        [
+            new SupportTicketLabelDto
+            {
+                Name = NormalizeCategory(fallbackCategory),
+                Color = string.Empty
+            }
+        ];
+    }
+
+    private static string NormalizeCategory(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return "bug";
+        }
+
+        return category.Trim().ToLowerInvariant() switch
+        {
+            "feature" => "enhancement",
+            "enhancement" => "enhancement",
+            "question" => "question",
+            _ => "bug"
         };
     }
 

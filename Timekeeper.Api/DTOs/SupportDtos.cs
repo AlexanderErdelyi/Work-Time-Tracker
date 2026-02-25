@@ -35,6 +35,13 @@ public class SupportTicketSummaryDto
     public DateTime CreatedAt { get; set; }
     public DateTime? LastIssueUpdatedAt { get; set; }
     public DateTime? LastCommentAt { get; set; }
+    public IReadOnlyList<SupportTicketLabelDto> Labels { get; set; } = [];
+}
+
+public class SupportTicketLabelDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
 }
 
 public class SupportTicketCommentDto

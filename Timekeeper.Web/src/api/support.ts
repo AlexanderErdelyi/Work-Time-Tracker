@@ -29,6 +29,16 @@ export const supportApi = {
       method: 'POST',
     }),
 
+  closeIssue: (issueNumber: number) =>
+    fetchApi<void>(`/support/issues/${issueNumber}/close`, {
+      method: 'POST',
+    }),
+
+  deleteIssue: (issueNumber: number) =>
+    fetchApi<void>(`/support/issues/${issueNumber}`, {
+      method: 'DELETE',
+    }),
+
   addIssueComment: (issueNumber: number, body: string) =>
     fetchApi<void>(`/support/issues/${issueNumber}/comments`, {
       method: 'POST',

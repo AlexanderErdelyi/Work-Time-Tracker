@@ -225,6 +225,12 @@ export interface SupportTicketSummary {
   createdAt: string
   lastIssueUpdatedAt?: string
   lastCommentAt?: string
+  labels: SupportTicketLabel[]
+}
+
+export interface SupportTicketLabel {
+  name: string
+  color: string
 }
 
 export interface SupportTicketComment {

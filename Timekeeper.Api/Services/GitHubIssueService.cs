@@ -1,4 +1,6 @@
 using System.Net.Http.Headers;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -15,18 +17,22 @@ public class SupportIssueOptions
 public record GitHubIssueCreateResult(bool Success, int IssueNumber, string IssueUrl, string? Error);
 public record GitHubConnectionTestResult(bool Success, string Message);
 public record GitHubIssueCommentResult(string Author, string Body, DateTime CreatedAt, DateTime? UpdatedAt, string Url);
+public record GitHubIssueLabelResult(string Name, string Color);
 public record GitHubIssueDetailsResult(
     bool Success,
     string? Error,
+    bool IssueNotFound,
     string State,
     string Title,
     string Body,
     string HtmlUrl,
     DateTime? CreatedAt,
     DateTime? UpdatedAt,
+    IReadOnlyList<GitHubIssueLabelResult> Labels,
     IReadOnlyList<GitHubIssueCommentResult> Comments);
 
 public record GitHubIssueAddCommentResult(bool Success, string? Error);
+public record GitHubIssueStateUpdateResult(bool Success, bool IssueNotFound, string? Error);
 
 public interface IGitHubIssueService
 {
@@ -62,6 +68,13 @@ public interface IGitHubIssueService
         string body,
         string? workspaceTokenProtected,
         CancellationToken cancellationToken = default);
+
+    Task<GitHubIssueStateUpdateResult> CloseIssueAsync(
+        string owner,
+        string repo,
+        int issueNumber,
+        string? workspaceTokenProtected,
+        CancellationToken cancellationToken = default);
 }
 
 public class GitHubIssueService : IGitHubIssueService
@@ -70,6 +83,7 @@ public class GitHubIssueService : IGitHubIssueService
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+    private static readonly Regex CommentAuthorMarkerRegex = new("<!--\\s*tk-user:(.*?)\\s*-->", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SupportIssueOptions _options;
@@ -110,7 +124,7 @@ public class GitHubIssueService : IGitHubIssueService
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Timekeeper-Support");
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
-        var labels = BuildLabels(request.Category, request.Severity);
+        var labels = BuildLabels(request.Category);
         var payload = new
         {
             title = request.Title.Trim(),
@@ -157,27 +171,30 @@ public class GitHubIssueService : IGitHubIssueService
         }
     }
 
-    private static string[] BuildLabels(string category, string severity)
+    private static string[] BuildLabels(string category)
     {
-        var normalizedCategory = NormalizeForLabel(category, "bug");
-        var normalizedSeverity = NormalizeForLabel(severity, "medium");
+        var normalizedCategory = MapCategoryToGitHubLabel(category);
 
         return
         [
-            "support",
-            $"category:{normalizedCategory}",
-            $"severity:{normalizedSeverity}"
+            normalizedCategory
         ];
     }
 
-    private static string NormalizeForLabel(string? value, string fallback)
+    private static string MapCategoryToGitHubLabel(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return fallback;
+            return "bug";
         }
 
-        return value.Trim().ToLowerInvariant().Replace(' ', '-');
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "feature" => "enhancement",
+            "enhancement" => "enhancement",
+            "question" => "question",
+            _ => "bug"
+        };
     }
 
     private static string BuildIssueBody(
@@ -310,7 +327,7 @@ public class GitHubIssueService : IGitHubIssueService
         var token = ResolveToken(workspaceTokenProtected);
         if (string.IsNullOrWhiteSpace(token))
         {
-            return new GitHubIssueDetailsResult(false, "No GitHub token configured.", string.Empty, string.Empty, string.Empty, string.Empty, null, null, []);
+            return new GitHubIssueDetailsResult(false, "No GitHub token configured.", false, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
         }
 
         var client = _httpClientFactory.CreateClient(nameof(GitHubIssueService));
@@ -321,9 +338,15 @@ public class GitHubIssueService : IGitHubIssueService
         try
         {
             var issueResponse = await client.GetAsync($"/repos/{owner}/{repo}/issues/{issueNumber}", cancellationToken);
+            if (IsIssueMissingStatusCode(issueResponse.StatusCode)
+                || await ResponseIndicatesIssueMissingAsync(issueResponse, cancellationToken))
+            {
+                return new GitHubIssueDetailsResult(false, "Issue was not found on GitHub.", true, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
+            }
+
             if (!issueResponse.IsSuccessStatusCode)
             {
-                return new GitHubIssueDetailsResult(false, "Could not load issue details from GitHub.", string.Empty, string.Empty, string.Empty, string.Empty, null, null, []);
+                return new GitHubIssueDetailsResult(false, "Could not load issue details from GitHub.", false, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
             }
 
             using var issueDoc = JsonDocument.Parse(await issueResponse.Content.ReadAsStringAsync(cancellationToken));
@@ -341,32 +364,36 @@ public class GitHubIssueService : IGitHubIssueService
                 ? htmlUrlElement.GetString() ?? string.Empty
                 : string.Empty;
 
-            var body = issueRoot.TryGetProperty("body", out var bodyElement)
+            var bodyHtml = issueRoot.TryGetProperty("body_html", out var bodyHtmlElement)
+                ? bodyHtmlElement.GetString() ?? string.Empty
+                : string.Empty;
+
+            var bodyMarkdown = issueRoot.TryGetProperty("body", out var bodyElement)
                 ? bodyElement.GetString() ?? string.Empty
                 : string.Empty;
 
-            DateTime? createdAt = null;
-            if (issueRoot.TryGetProperty("created_at", out var createdAtElement)
-                && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt))
-            {
-                createdAt = DateTime.SpecifyKind(parsedCreatedAt, DateTimeKind.Utc);
-            }
+            var body = !string.IsNullOrWhiteSpace(bodyHtml)
+                ? CleanIssueHtmlForApp(bodyHtml)
+                : ConvertMarkdownToSafeHtml(bodyMarkdown);
 
-            DateTime? updatedAt = null;
-            if (issueRoot.TryGetProperty("updated_at", out var updatedAtElement)
-                && DateTime.TryParse(updatedAtElement.GetString(), out var parsedUpdatedAt))
-            {
-                updatedAt = DateTime.SpecifyKind(parsedUpdatedAt, DateTimeKind.Utc);
-            }
+            var labels = ParseIssueLabels(issueRoot);
+
+            DateTime? createdAt = issueRoot.TryGetProperty("created_at", out var createdAtElement)
+                ? ParseGitHubDateTime(createdAtElement.GetString())
+                : null;
+
+            DateTime? updatedAt = issueRoot.TryGetProperty("updated_at", out var updatedAtElement)
+                ? ParseGitHubDateTime(updatedAtElement.GetString())
+                : null;
 
             var comments = await GetIssueCommentsAsync(client, owner, repo, issueNumber, cancellationToken);
 
-            return new GitHubIssueDetailsResult(true, null, state, title, body, htmlUrl, createdAt, updatedAt, comments);
+            return new GitHubIssueDetailsResult(true, null, false, state, title, body, htmlUrl, createdAt, updatedAt, labels, comments);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to fetch issue details for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
-            return new GitHubIssueDetailsResult(false, "Could not load issue details from GitHub.", string.Empty, string.Empty, string.Empty, string.Empty, null, null, []);
+            return new GitHubIssueDetailsResult(false, "Could not load issue details from GitHub.", false, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
         }
     }
 
@@ -409,6 +436,49 @@ public class GitHubIssueService : IGitHubIssueService
         }
     }
 
+    public async Task<GitHubIssueStateUpdateResult> CloseIssueAsync(
+        string owner,
+        string repo,
+        int issueNumber,
+        string? workspaceTokenProtected,
+        CancellationToken cancellationToken = default)
+    {
+        var token = ResolveToken(workspaceTokenProtected);
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return new GitHubIssueStateUpdateResult(false, false, "No GitHub token configured.");
+        }
+
+        var client = _httpClientFactory.CreateClient(nameof(GitHubIssueService));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Timekeeper-Support");
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+
+        var payload = new { state = "closed" };
+        var content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json");
+
+        try
+        {
+            var response = await client.PatchAsync($"/repos/{owner}/{repo}/issues/{issueNumber}", content, cancellationToken);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return new GitHubIssueStateUpdateResult(false, true, "Issue was not found on GitHub.");
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                return new GitHubIssueStateUpdateResult(true, false, null);
+            }
+
+            return new GitHubIssueStateUpdateResult(false, false, "Could not close issue on GitHub.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to close issue for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
+            return new GitHubIssueStateUpdateResult(false, false, "Could not close issue on GitHub.");
+        }
+    }
+
     private static async Task<IReadOnlyList<GitHubIssueCommentResult>> GetIssueCommentsAsync(
         HttpClient client,
         string owner,
@@ -427,32 +497,35 @@ public class GitHubIssueService : IGitHubIssueService
 
         foreach (var comment in commentsDoc.RootElement.EnumerateArray())
         {
-            var author = comment.TryGetProperty("user", out var user)
+            var githubAuthor = comment.TryGetProperty("user", out var user)
                 && user.TryGetProperty("login", out var login)
                 ? login.GetString() ?? "unknown"
                 : "unknown";
 
-            var body = comment.TryGetProperty("body", out var bodyElement)
+            var rawBody = comment.TryGetProperty("body", out var bodyElement)
                 ? bodyElement.GetString() ?? string.Empty
                 : string.Empty;
 
-            DateTime createdAt = DateTime.UtcNow;
-            if (comment.TryGetProperty("created_at", out var createdAtElement)
-                && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt))
-            {
-                createdAt = DateTime.SpecifyKind(parsedCreatedAt, DateTimeKind.Utc);
-            }
+            var bodyHtml = comment.TryGetProperty("body_html", out var bodyHtmlElement)
+                ? bodyHtmlElement.GetString() ?? string.Empty
+                : string.Empty;
 
-            DateTime? updatedAt = null;
-            if (comment.TryGetProperty("updated_at", out var updatedAtElement)
-                && DateTime.TryParse(updatedAtElement.GetString(), out var parsedUpdatedAt))
-            {
-                updatedAt = DateTime.SpecifyKind(parsedUpdatedAt, DateTimeKind.Utc);
-            }
+            DateTime createdAt = comment.TryGetProperty("created_at", out var createdAtElement)
+                ? ParseGitHubDateTime(createdAtElement.GetString()) ?? DateTime.UtcNow
+                : DateTime.UtcNow;
+
+            DateTime? updatedAt = comment.TryGetProperty("updated_at", out var updatedAtElement)
+                ? ParseGitHubDateTime(updatedAtElement.GetString())
+                : null;
 
             var url = comment.TryGetProperty("html_url", out var urlElement)
                 ? urlElement.GetString() ?? string.Empty
                 : string.Empty;
+
+            var (author, cleanedBody) = ExtractAuthorAndBody(rawBody, githubAuthor);
+            var body = string.IsNullOrWhiteSpace(bodyHtml)
+                ? ConvertMarkdownToSafeHtml(cleanedBody)
+                : bodyHtml;
 
             comments.Add(new GitHubIssueCommentResult(author, body, createdAt, updatedAt, url));
         }
@@ -460,5 +533,151 @@ public class GitHubIssueService : IGitHubIssueService
         return comments
             .OrderBy(c => c.CreatedAt)
             .ToList();
+    }
+
+    private static IReadOnlyList<GitHubIssueLabelResult> ParseIssueLabels(JsonElement issueRoot)
+    {
+        if (!issueRoot.TryGetProperty("labels", out var labelsElement)
+            || labelsElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var labels = new List<GitHubIssueLabelResult>();
+        foreach (var label in labelsElement.EnumerateArray())
+        {
+            var name = label.TryGetProperty("name", out var nameElement)
+                ? nameElement.GetString() ?? string.Empty
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            var color = label.TryGetProperty("color", out var colorElement)
+                ? colorElement.GetString() ?? string.Empty
+                : string.Empty;
+
+            labels.Add(new GitHubIssueLabelResult(name.Trim(), color.Trim()));
+        }
+
+        return labels;
+    }
+
+    private static string CleanIssueHtmlForApp(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = Regex.Replace(
+            html,
+            "<h2[^>]*>\\s*Support Ticket\\s*</h2>\\s*<ul>.*?</ul>",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        cleaned = Regex.Replace(
+            cleaned,
+            "<h3[^>]*>\\s*Environment\\s*</h3>\\s*<ul>.*?</ul>",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        return cleaned.Trim();
+    }
+
+    private static string ConvertMarkdownToSafeHtml(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return string.Empty;
+        }
+
+        return WebUtility.HtmlEncode(markdown).Replace("\n", "<br/>");
+    }
+
+    private static DateTime? ParseGitHubDateTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (DateTimeOffset.TryParse(
+            value,
+            null,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+            out var parsed))
+        {
+            return parsed.UtcDateTime;
+        }
+
+        return null;
+    }
+
+    private static bool IsIssueMissingStatusCode(HttpStatusCode statusCode)
+    {
+        return statusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone;
+    }
+
+    private static async Task<bool> ResponseIndicatesIssueMissingAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("message", out var messageElement))
+            {
+                return false;
+            }
+
+            var message = messageElement.GetString();
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            var normalized = message.ToLowerInvariant();
+            return normalized.Contains("not found")
+                || normalized.Contains("no issue")
+                || normalized.Contains("issue does not exist")
+                || normalized.Contains("was deleted");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static (string Author, string Body) ExtractAuthorAndBody(string rawBody, string fallbackAuthor)
+    {
+        if (string.IsNullOrWhiteSpace(rawBody))
+        {
+            return (fallbackAuthor, string.Empty);
+        }
+
+        var match = CommentAuthorMarkerRegex.Match(rawBody);
+        if (!match.Success)
+        {
+            return (fallbackAuthor, rawBody);
+        }
+
+        var logicalAuthor = match.Groups[1].Value.Trim();
+        var cleanedBody = CommentAuthorMarkerRegex.Replace(rawBody, string.Empty, 1).Trim();
+
+        return (
+            string.IsNullOrWhiteSpace(logicalAuthor) ? fallbackAuthor : logicalAuthor,
+            cleanedBody);
     }
 }
