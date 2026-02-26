@@ -105,8 +105,12 @@ public class ExportController : ControllerBase
         // For regular users (non-Manager/Admin), restrict to their own entries
         if (!IsManagerOrAdmin())
         {
-            var currentUserId = _workspaceContext.UserId ?? 1;
-            query = query.Where(e => e.UserId == currentUserId);
+            var currentUserId = _workspaceContext.UserId;
+            if (!currentUserId.HasValue)
+            {
+                throw new UnauthorizedAccessException("User ID not found in context");
+            }
+            query = query.Where(e => e.UserId == currentUserId.Value);
         }
 
         if (startDate.HasValue)
