@@ -233,8 +233,10 @@ export function Dashboard() {
       return
     }
 
-    // Set running notes from timer
-    setRunningNotes(runningTimer.notes || '')
+    // Only update running notes if the user is not currently editing them
+    if (!editingNotes) {
+      setRunningNotes(runningTimer.notes || '')
+    }
 
     const baselineClientNowMs = Date.now()
     const baselineServerNowMs = runningTimer.serverNowUtc
@@ -279,7 +281,7 @@ export function Dashboard() {
       const interval = setInterval(updateElapsed, 1000)
       return () => clearInterval(interval)
     }
-  }, [runningTimer])
+  }, [runningTimer, editingNotes])
 
   useEffect(() => {
     localStorage.setItem(DASHBOARD_LAYOUTS_KEY, JSON.stringify(dashboardLayouts))
