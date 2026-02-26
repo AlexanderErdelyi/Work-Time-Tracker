@@ -107,8 +107,8 @@ export function Reports() {
   // Calculate billable vs non-billable hours
   const billableData = useMemo(() => {
     const billable = entries.reduce((sum, entry) => {
-      return sum + ((entry.billedHours || 0) * 60)
-    }, 0) / 60
+      return sum + (entry.billedHours || 0)
+    }, 0)
     
     const total = entries.reduce((sum, entry) => {
       return sum + (entry.durationMinutes || 0)
