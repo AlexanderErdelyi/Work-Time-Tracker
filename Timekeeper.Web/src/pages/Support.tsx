@@ -280,16 +280,21 @@ export function Support() {
     })
   }
 
+  const toAbsoluteUrl = (url: string): string => {
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
+      return url
+    }
+    return `${window.location.origin}${url}`
+  }
+
   const handleImageUpload = async (file: File) => {
     const result = await supportApi.uploadImage(file)
-    const absoluteUrl = result.url.startsWith('http') ? result.url : `${window.location.origin}${result.url}`
-    editor?.chain().focus().setImage({ src: absoluteUrl }).run()
+    editor?.chain().focus().setImage({ src: toAbsoluteUrl(result.url) }).run()
   }
 
   const handleCommentImageUpload = async (file: File) => {
     const result = await supportApi.uploadImage(file)
-    const absoluteUrl = result.url.startsWith('http') ? result.url : `${window.location.origin}${result.url}`
-    commentEditor?.chain().focus().setImage({ src: absoluteUrl }).run()
+    commentEditor?.chain().focus().setImage({ src: toAbsoluteUrl(result.url) }).run()
   }
 
   const handlePasteImage = async (
