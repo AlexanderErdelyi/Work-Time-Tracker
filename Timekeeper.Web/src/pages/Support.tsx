@@ -282,12 +282,14 @@ export function Support() {
 
   const handleImageUpload = async (file: File) => {
     const result = await supportApi.uploadImage(file)
-    editor?.chain().focus().setImage({ src: result.url }).run()
+    const absoluteUrl = result.url.startsWith('http') ? result.url : `${window.location.origin}${result.url}`
+    editor?.chain().focus().setImage({ src: absoluteUrl }).run()
   }
 
   const handleCommentImageUpload = async (file: File) => {
     const result = await supportApi.uploadImage(file)
-    commentEditor?.chain().focus().setImage({ src: result.url }).run()
+    const absoluteUrl = result.url.startsWith('http') ? result.url : `${window.location.origin}${result.url}`
+    commentEditor?.chain().focus().setImage({ src: absoluteUrl }).run()
   }
 
   const handlePasteImage = async (
