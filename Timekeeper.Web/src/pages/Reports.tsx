@@ -192,8 +192,8 @@ export function Reports() {
 
   const handleLast30Days = () => {
     const today = new Date()
-    const thirtyDaysAgo = subDays(today, 29) // 29 days ago + today = 30 days
-    setDateRange(startOfDay(thirtyDaysAgo), endOfDay(today))
+    const startDate = subDays(today, 29) // Start of 30-day range: 29 days ago through today
+    setDateRange(startOfDay(startDate), endOfDay(today))
   }
 
   return (
