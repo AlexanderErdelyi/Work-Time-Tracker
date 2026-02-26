@@ -9,7 +9,7 @@ import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseT
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
@@ -184,6 +184,9 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
+  // Ref to track if user is currently editing notes (avoids stale closure in useEffect)
+  const isEditingNotesRef = useRef(false)
+
   // Idle detection
   const {
     dialogState,
@@ -226,6 +229,11 @@ export function Dashboard() {
     [displayedRecentEntries.length, recentEntriesMode, totalRecentEntriesPages]
   )
 
+  // Sync ref with editing state to avoid stale closures
+  useEffect(() => {
+    isEditingNotesRef.current = editingNotes
+  }, [editingNotes])
+
   useEffect(() => {
     if (!runningTimer) {
       setElapsed('00:00:00')
@@ -234,8 +242,8 @@ export function Dashboard() {
     }
 
     // Only update running notes if the user is not currently editing them
-    // Check editingNotes directly without adding it to dependencies to avoid unnecessary re-runs
-    if (!editingNotes) {
+    // Use ref to avoid stale closure and dependency issues
+    if (!isEditingNotesRef.current) {
       setRunningNotes(runningTimer.notes || '')
     }
 
