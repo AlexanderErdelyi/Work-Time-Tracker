@@ -10,6 +10,7 @@ import { useTasks } from '../hooks/useTasks'
 import { usePWA } from '../hooks/usePWA'
 import { useWorkspaceContext, workspaceKeys } from '../hooks/useWorkspaceContext'
 import { useQuickActions, useCreateQuickAction, useUpdateQuickAction, useDeleteQuickAction, useReorderQuickActions } from '../hooks/useQuickActions'
+import type { QuickAction } from '../api/quickActions'
 import { SystemIdleDetectionService } from '../services/systemIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
 import { workspacesApi } from '../api'
@@ -303,7 +304,7 @@ export function Settings() {
   const reorderQuickActions = useReorderQuickActions()
   
   const [newQuickActionName, setNewQuickActionName] = useState('')
-  const [newQuickActionType, setNewQuickActionType] = useState<string>('StartTimer')
+  const [newQuickActionType, setNewQuickActionType] = useState<QuickAction['actionType']>('StartTimer')
   const [newQuickActionTaskId, setNewQuickActionTaskId] = useState<string>('')
   const [editingQuickActionId, setEditingQuickActionId] = useState<number | null>(null)
   const [editingQuickActionName, setEditingQuickActionName] = useState('')
@@ -439,7 +440,7 @@ export function Settings() {
 
     createQuickAction.mutate({
       name: newQuickActionName.trim(),
-      actionType: newQuickActionType as any,
+      actionType: newQuickActionType,
       taskId,
       sortOrder: maxSortOrder + 1,
     }, {
@@ -1039,7 +1040,7 @@ export function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="newQuickActionType">Action Type</Label>
-                  <Select value={newQuickActionType} onValueChange={setNewQuickActionType}>
+                  <Select value={newQuickActionType} onValueChange={(value) => setNewQuickActionType(value as QuickAction['actionType'])}>
                     <SelectTrigger id="newQuickActionType">
                       <SelectValue />
                     </SelectTrigger>
