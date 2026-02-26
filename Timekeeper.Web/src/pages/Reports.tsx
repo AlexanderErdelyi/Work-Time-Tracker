@@ -3,11 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import { Download, Calendar, TrendingUp } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTimeEntries } from '../hooks/useTimeEntries'
+import { useCustomers } from '../hooks/useCustomers'
+import { useProjects } from '../hooks/useProjects'
+import { useTasks } from '../hooks/useTasks'
 import { exportApi } from '../api'
 import { formatDate } from '../lib/dateUtils'
+import { startOfWeek, parseISO, format } from 'date-fns'
 
 const ReportsCharts = lazy(() => import('../components/Reports/ReportsCharts').then(module => ({ default: module.ReportsCharts })))
 
@@ -15,10 +20,26 @@ export function Reports() {
   const navigate = useNavigate()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [customerId, setCustomerId] = useState<number | undefined>(undefined)
+  const [projectId, setProjectId] = useState<number | undefined>(undefined)
+  const [taskId, setTaskId] = useState<number | undefined>(undefined)
+
+  const { data: customers = [] } = useCustomers({ isActive: true })
+  const { data: projects = [] } = useProjects({ 
+    isActive: true,
+    customerId: customerId || undefined
+  })
+  const { data: tasks = [] } = useTasks({ 
+    isActive: true,
+    projectId: projectId || undefined
+  })
 
   const { data: entries = [] } = useTimeEntries({
     startDate: startDate || undefined,
     endDate: endDate || undefined,
+    customerId: customerId || undefined,
+    projectId: projectId || undefined,
+    taskId: taskId || undefined,
   })
 
   // Calculate total hours per customer
@@ -62,6 +83,45 @@ export function Reports() {
       .slice(0, 10) // Top 10 projects
   }, [entries])
 
+  // Calculate total hours per task
+  const taskData = useMemo(() => {
+    const grouped = entries.reduce((acc, entry) => {
+      const task = entry.taskName || 'Unknown'
+      if (!acc[task]) {
+        acc[task] = 0
+      }
+      const hours = (entry.durationMinutes || 0) / 60
+      acc[task] += hours
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(grouped)
+      .map(([name, hours]) => ({
+        name,
+        hours: parseFloat(hours.toFixed(2)),
+      }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 10) // Top 10 tasks
+  }, [entries])
+
+  // Calculate billable vs non-billable hours
+  const billableData = useMemo(() => {
+    const billable = entries.reduce((sum, entry) => {
+      return sum + ((entry.billedHours || 0) * 60)
+    }, 0) / 60
+    
+    const total = entries.reduce((sum, entry) => {
+      return sum + (entry.durationMinutes || 0)
+    }, 0) / 60
+    
+    const nonBillable = total - billable
+
+    return [
+      { name: 'Billable', hours: parseFloat(billable.toFixed(2)) },
+      { name: 'Non-Billable', hours: parseFloat(nonBillable.toFixed(2)) },
+    ]
+  }, [entries])
+
   // Calculate daily hours
   const dailyData = useMemo(() => {
     const grouped = entries.reduce((acc, entry) => {
@@ -82,7 +142,31 @@ export function Reports() {
       .slice(-30) // Last 30 days
   }, [entries])
 
-  const hasChartData = customerData.length > 0 || projectData.length > 0 || dailyData.length > 0
+  // Calculate weekly hours
+  const weeklyData = useMemo(() => {
+    if (!startDate || !endDate || entries.length === 0) return []
+    
+    const grouped = entries.reduce((acc, entry) => {
+      const entryDate = parseISO(entry.startTime)
+      const weekStart = startOfWeek(entryDate, { weekStartsOn: 1 })
+      const weekLabel = format(weekStart, 'MMM d')
+      
+      if (!acc[weekLabel]) {
+        acc[weekLabel] = 0
+      }
+      const hours = (entry.durationMinutes || 0) / 60
+      acc[weekLabel] += hours
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(grouped)
+      .map(([date, hours]) => ({
+        date,
+        hours: parseFloat(hours.toFixed(2)),
+      }))
+  }, [entries, startDate, endDate])
+
+  const hasChartData = customerData.length > 0 || projectData.length > 0 || dailyData.length > 0 || taskData.length > 0
 
   // Calculate summary statistics
   const stats = useMemo(() => {
@@ -109,6 +193,9 @@ export function Reports() {
       await exportApi.exportExcel({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        customerId: customerId || undefined,
+        projectId: projectId || undefined,
+        taskId: taskId || undefined,
       })
     } catch (error) {
       console.error('Export failed:', error)
@@ -130,15 +217,15 @@ export function Reports() {
         </Button>
       </div>
 
-      {/* Date Filters */}
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Time Period</CardTitle>
-          <CardDescription>Filter reports by date range</CardDescription>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>Filter reports by date range and project details</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1 space-y-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
               <Label htmlFor="startDate">Start Date</Label>
               <Input
                 id="startDate"
@@ -147,7 +234,7 @@ export function Reports() {
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
-            <div className="flex-1 space-y-2">
+            <div className="space-y-2">
               <Label htmlFor="endDate">End Date</Label>
               <Input
                 id="endDate"
@@ -156,15 +243,85 @@ export function Reports() {
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="customer">Customer</Label>
+              <Select
+                value={customerId?.toString() || ''}
+                onValueChange={(value) => {
+                  setCustomerId(value ? parseInt(value) : undefined)
+                  setProjectId(undefined)
+                  setTaskId(undefined)
+                }}
+              >
+                <SelectTrigger id="customer">
+                  <SelectValue placeholder="All Customers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Customers</SelectItem>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id.toString()}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project">Project</Label>
+              <Select
+                value={projectId?.toString() || ''}
+                onValueChange={(value) => {
+                  setProjectId(value ? parseInt(value) : undefined)
+                  setTaskId(undefined)
+                }}
+                disabled={!customerId}
+              >
+                <SelectTrigger id="project" disabled={!customerId}>
+                  <SelectValue placeholder="All Projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Projects</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id.toString()}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task">Task</Label>
+              <Select
+                value={taskId?.toString() || ''}
+                onValueChange={(value) => setTaskId(value ? parseInt(value) : undefined)}
+                disabled={!projectId}
+              >
+                <SelectTrigger id="task" disabled={!projectId}>
+                  <SelectValue placeholder="All Tasks" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Tasks</SelectItem>
+                  {tasks.map((task) => (
+                    <SelectItem key={task.id} value={task.id.toString()}>
+                      {task.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-end">
               <Button
                 variant="outline"
+                className="w-full"
                 onClick={() => {
                   setStartDate('')
                   setEndDate('')
+                  setCustomerId(undefined)
+                  setProjectId(undefined)
+                  setTaskId(undefined)
                 }}
               >
-                Clear
+                Clear Filters
               </Button>
             </div>
           </div>
@@ -250,6 +407,9 @@ export function Reports() {
             customerData={customerData}
             projectData={projectData}
             dailyData={dailyData}
+            weeklyData={weeklyData}
+            taskData={taskData}
+            billableData={billableData}
           />
         </Suspense>
       ) : (
