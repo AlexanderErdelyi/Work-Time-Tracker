@@ -234,6 +234,7 @@ export function Dashboard() {
     }
 
     // Only update running notes if the user is not currently editing them
+    // Check editingNotes directly without adding it to dependencies to avoid unnecessary re-runs
     if (!editingNotes) {
       setRunningNotes(runningTimer.notes || '')
     }
@@ -281,7 +282,7 @@ export function Dashboard() {
       const interval = setInterval(updateElapsed, 1000)
       return () => clearInterval(interval)
     }
-  }, [runningTimer, editingNotes])
+  }, [runningTimer])
 
   useEffect(() => {
     localStorage.setItem(DASHBOARD_LAYOUTS_KEY, JSON.stringify(dashboardLayouts))
