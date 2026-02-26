@@ -17,6 +17,11 @@ param(
 
     [string]$CertificatePassword,
 
+    # Optional: folder containing the cert (.pfx) and password file (.pfx.password.txt).
+    # If provided and the cert is not yet in $DeployRoot\certs\, it will be copied there
+    # so subsequent deployments work without this parameter.
+    [string]$CertDirectory,
+
     [ValidateRange(1, 20)]
     [int]$KeepBackups = 3
 )
@@ -204,7 +209,8 @@ if (-not (Test-Path -LiteralPath $backupRoot)) {
     New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
 }
 
-$tempExtractRoot = Join-Path $env:RUNNER_TEMP ("timekeeper-deploy-" + [Guid]::NewGuid().ToString('N'))
+$tempBase = if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
+$tempExtractRoot = Join-Path $tempBase ("timekeeper-deploy-" + [Guid]::NewGuid().ToString('N'))
 $backupDir = $null
 $attemptedRestore = $false
 
@@ -228,6 +234,37 @@ try {
     Invoke-RoboCopy -Source $tempExtractRoot -Destination $DeployRoot -Mirror -ExcludeDirs $excludeDirectories
 
     if ($UseHttps) {
+        # --- Cert directory seeding ---
+        # If the caller pointed us at an external CertDirectory (e.g. from a previous
+        # installation or a manual cert-generation run), copy the cert and its password
+        # file into $DeployRoot\certs\ so the standard auto-detect works now and on
+        # future deployments (certs\ is excluded from backup/overwrite by design).
+        if (-not [string]::IsNullOrWhiteSpace($CertDirectory)) {
+            $certDirectory = [System.IO.Path]::GetFullPath($CertDirectory)
+            if (-not (Test-Path -LiteralPath $certDirectory)) {
+                throw "CertDirectory does not exist: $certDirectory"
+            }
+
+            $deployedCertsDir = Join-Path $DeployRoot 'certs'
+            if (-not (Test-Path -LiteralPath $deployedCertsDir)) {
+                New-Item -ItemType Directory -Path $deployedCertsDir -Force | Out-Null
+            }
+
+            # Copy every .pfx and matching .password.txt from the provided directory.
+            Get-ChildItem -LiteralPath $certDirectory -Filter '*.pfx' -File | ForEach-Object {
+                $destPfx = Join-Path $deployedCertsDir $_.Name
+                Copy-Item -LiteralPath $_.FullName -Destination $destPfx -Force
+                Write-Host "Seeded cert: $($_.Name) -> $deployedCertsDir" -ForegroundColor Cyan
+
+                $srcPassword = "$($_.FullName).password.txt"
+                if (Test-Path -LiteralPath $srcPassword) {
+                    Copy-Item -LiteralPath $srcPassword -Destination "$destPfx.password.txt" -Force
+                    Write-Host "Seeded password file: $($_.Name).password.txt -> $deployedCertsDir" -ForegroundColor Cyan
+                }
+            }
+        }
+
+        # --- Cert path resolution ---
         if ([string]::IsNullOrWhiteSpace($CertificatePath)) {
             $candidatePaths = @(
                 (Join-Path $DeployRoot 'certs\timekeeper-https-fqdn.pfx'),
@@ -237,7 +274,17 @@ try {
         }
 
         if ([string]::IsNullOrWhiteSpace($CertificatePath)) {
-            throw 'UseHttps is enabled but no certificate path could be resolved.'
+            throw @"
+UseHttps is enabled but no certificate could be found.
+Looked in:
+  $DeployRoot\certs\timekeeper-https-fqdn.pfx
+  $DeployRoot\certs\timekeeper-https.pfx
+
+To fix this, either:
+  a) Run create-shared-https-cert.ps1 on the host first, then re-run this
+     script with -CertDirectory pointing to the folder containing the .pfx file.
+  b) Pass -CertificatePath with the explicit path to your .pfx file.
+"@
         }
 
         if (-not [System.IO.Path]::IsPathRooted($CertificatePath)) {
@@ -251,7 +298,11 @@ try {
         }
 
         if ([string]::IsNullOrWhiteSpace($CertificatePassword)) {
-            throw 'UseHttps is enabled but certificate password is missing. Provide it explicitly or ensure .password.txt exists.'
+            throw @"
+UseHttps is enabled but the certificate password is missing.
+Expected password file: $CertificatePath.password.txt (line format: 'Password: <value>')
+Alternatively pass -CertificatePassword explicitly or set the SHARED_HOST_CERT_PASSWORD secret.
+"@
         }
     }
 
