@@ -193,3 +193,6 @@ StyleCopReport.xml
 *.svclog
 *.scc
 test-results.txt
+
+# Local MCP config (contains secrets)
+.vscode/mcp.json
