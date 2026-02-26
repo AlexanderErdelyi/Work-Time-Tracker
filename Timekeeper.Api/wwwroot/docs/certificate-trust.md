@@ -2,18 +2,18 @@
 
 When accessing Timekeeper via HTTPS, you may need to trust the self-signed certificate to avoid browser security warnings. This guide provides step-by-step instructions for Windows users.
 
-## 📦 Quick Start - Download Trust Package
+## 📦 Quick Start - Download & Install
 
-Ask your administrator for the `timekeeper-cert-trust-package.zip` file, which contains:
-- The certificate file
-- PowerShell installation script
-- Complete instructions
+Download the required files directly from this page:
 
-**Installation:**
-1. Extract the ZIP file
-2. Right-click `trust-certificate.ps1`
-3. Select "Run with PowerShell"
-4. Follow the prompts
+- [⬇ Download Certificate (timekeeper-https.cer)](/api/cert/certificate)
+- [⬇ Download Trust Script (trust-certificate.ps1)](/api/cert/trust-script)
+
+**Installation (2 steps):**
+1. Download **both files** to the same folder
+2. Right-click `trust-certificate.ps1` → **"Run with PowerShell"** → Follow the prompts
+
+That's it — restart your browser and the security warning will be gone.
 
 ## 🔧 Manual Installation Methods
 
