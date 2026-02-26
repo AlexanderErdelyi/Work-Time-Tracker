@@ -1087,7 +1087,9 @@ export function Settings() {
             )}
             {quickActions.length > 0 && (
               <div className="space-y-2">
-                {[...quickActions].sort((a, b) => a.sortOrder - b.sortOrder).map((action, index) => (
+                {(() => {
+                  const sortedActions = [...quickActions].sort((a, b) => a.sortOrder - b.sortOrder)
+                  return sortedActions.map((action, index) => (
                   <div
                     key={action.id}
                     className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50"
@@ -1108,7 +1110,7 @@ export function Settings() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleMoveQuickAction(action.id, 'down')}
-                          disabled={index === quickActions.length - 1 || reorderQuickActions.isPending}
+                          disabled={index === sortedActions.length - 1 || reorderQuickActions.isPending}
                           className="h-6 w-6 p-0"
                         >
                           <ChevronDown className="h-4 w-4" />
@@ -1180,7 +1182,7 @@ export function Settings() {
                       </div>
                     )}
                   </div>
-                ))}
+                ))})()}
               </div>
             )}
           </div>
