@@ -281,10 +281,13 @@ export function Support() {
   }
 
   const toAbsoluteUrl = (url: string): string => {
+    // Already an absolute URL (http://, https://) or protocol-relative (//)
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
       return url
     }
-    return `${window.location.origin}${url}`
+    // Ensure the URL starts with a forward slash for proper concatenation
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`
+    return `${window.location.origin}${normalizedUrl}`
   }
 
   const handleImageUpload = async (file: File) => {
