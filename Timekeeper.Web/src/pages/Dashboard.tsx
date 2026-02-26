@@ -434,8 +434,7 @@ export function Dashboard() {
           setNotes('')
         },
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to start timer.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to start timer.'))
         }
       }
     )
