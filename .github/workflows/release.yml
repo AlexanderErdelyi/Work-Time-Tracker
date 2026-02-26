@@ -586,6 +586,7 @@ jobs:
           SHARED_HOST_HTTPS_PORT: ${{ vars.SHARED_HOST_HTTPS_PORT }}
           SHARED_HOST_USE_HTTPS: ${{ vars.SHARED_HOST_USE_HTTPS }}
           SHARED_HOST_CERT_PATH: ${{ vars.SHARED_HOST_CERT_PATH }}
+          SHARED_HOST_CERT_DIRECTORY: ${{ vars.SHARED_HOST_CERT_DIRECTORY }}
           SHARED_HOST_KEEP_BACKUPS: ${{ vars.SHARED_HOST_KEEP_BACKUPS }}
         run: |
           $version = "${{ needs.build-and-release.outputs.version }}"
@@ -595,7 +596,7 @@ jobs:
             throw "Package not found: $packagePath"
           }
 
-          $deployRoot = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_DEPLOY_ROOT)) { 'C:\Timekeeper-Shared-Host-v3.0.0-rc1' } else { $env:SHARED_HOST_DEPLOY_ROOT }
+          $deployRoot = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_DEPLOY_ROOT)) { 'C:\Timekeeper-Shared-Host' } else { $env:SHARED_HOST_DEPLOY_ROOT }
           $port = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_HTTP_PORT)) { 5001 } else { [int]$env:SHARED_HOST_HTTP_PORT }
           $httpsPort = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_HTTPS_PORT)) { 5443 } else { [int]$env:SHARED_HOST_HTTPS_PORT }
           $keepBackups = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_KEEP_BACKUPS)) { 3 } else { [int]$env:SHARED_HOST_KEEP_BACKUPS }
@@ -619,6 +620,10 @@ jobs:
 
           if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PATH)) {
             $params.CertificatePath = $env:SHARED_HOST_CERT_PATH
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_DIRECTORY)) {
+            $params.CertDirectory = $env:SHARED_HOST_CERT_DIRECTORY
           }
 
           if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PASSWORD)) {
