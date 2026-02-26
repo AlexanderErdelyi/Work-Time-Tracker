@@ -10,11 +10,17 @@ import { useWorkspaceContext } from '../hooks/useWorkspaceContext'
 import { workspacesApi } from '../api'
 import type { UserRole } from '../types'
 import { KeyRound, Trash2, User, UserPlus } from 'lucide-react'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 export function Users() {
   const queryClient = useQueryClient()
   const { data: workspaceContext, isLoading: isLoadingContext } = useWorkspaceContext()
   const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm: onConfirm, handleCancel: onCancelConfirm } = useConfirm()
 
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
@@ -43,11 +49,11 @@ export function Users() {
       setNewUserEmail('')
       setNewUserRole('Member')
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
-      alert('User account created.')
+      toast.success('User account created successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not create user.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -56,10 +62,11 @@ export function Users() {
       workspacesApi.updateUserRole(id, { role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+      toast.success('User role updated successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not update role.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -68,10 +75,11 @@ export function Users() {
       workspacesApi.updateUserStatus(id, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+      toast.success('User status updated successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not update status.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -80,11 +88,11 @@ export function Users() {
       workspacesApi.resetUserPassword(id, { newPassword }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
-      alert('Password has been reset.')
+      toast.success('Password has been reset successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not reset password.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -92,22 +100,22 @@ export function Users() {
     mutationFn: (id: number) => workspacesApi.deleteUser(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
-      alert('Account deleted.')
+      toast.success('Account deleted successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not delete account.'
-      alert(message)
+      toast.error(message)
     },
   })
 
   const handleCreateUser = () => {
     if (!newUserName.trim()) {
-      alert('Display name is required.')
+      toast.error('Display name is required.')
       return
     }
 
     if (!newUserEmail.trim()) {
-      alert('Email is required.')
+      toast.error('Email is required.')
       return
     }
 
@@ -121,15 +129,20 @@ export function Users() {
     }
 
     if (newPassword.length < 8) {
-      alert('Password must be at least 8 characters.')
+      toast.error('Password must be at least 8 characters.')
       return
     }
 
     resetPasswordMutation.mutate({ id, newPassword })
   }
 
-  const handleDeleteUser = (id: number, displayName: string) => {
-    const confirmed = window.confirm(`Delete account \"${displayName}\"? This cannot be undone.`)
+  const handleDeleteUser = async (id: number, displayName: string) => {
+    const confirmed = await confirm({
+      title: 'Delete User Account',
+      description: `Delete account "${displayName}"? This cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
     if (!confirmed) {
       return
     }
@@ -271,6 +284,17 @@ export function Users() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={onCancelConfirm}
+        onConfirm={onConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }

@@ -4,22 +4,33 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { useTodayBreaks, useDeleteBreak } from '../../hooks/useBreaks';
 import { formatTime } from '../../lib/dateUtils';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { useConfirm } from '../../hooks/useConfirm';
+import { toast } from 'sonner';
 
 export function BreaksList() {
   const { data: breaks = [], isLoading } = useTodayBreaks();
   const deleteBreak = useDeleteBreak();
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
 
   const handleDelete = async (breakId: number, startTime: string) => {
-    if (!confirm(`Are you sure you want to delete this break (${formatTime(startTime)})?`)) {
+    const confirmed = await confirm({
+      title: 'Delete Break',
+      description: `Are you sure you want to delete this break (${formatTime(startTime)})?`,
+      confirmText: 'Delete',
+      variant: 'destructive',
+    });
+    if (!confirmed) {
       return;
     }
     
     try {
       await deleteBreak.mutateAsync(breakId);
+      toast.success('Break deleted successfully');
     } catch (error) {
       console.error('Failed to delete break:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to delete break: ${errorMessage}`);
+      toast.error(`Failed to delete break: ${errorMessage}`);
     }
   };
 
@@ -127,6 +138,17 @@ export function BreaksList() {
           </div>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </Card>
   );
 }
