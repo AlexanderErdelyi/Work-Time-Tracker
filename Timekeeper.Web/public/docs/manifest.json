@@ -51,6 +51,12 @@
       "file": "/docs/troubleshooting.md"
     },
     {
+      "slug": "certificate-trust",
+      "title": "Certificate Trust",
+      "summary": "Trust the HTTPS certificate to access Timekeeper securely without browser warnings.",
+      "file": "/docs/certificate-trust.md"
+    },
+    {
       "slug": "faq",
       "title": "FAQ",
       "summary": "Common questions and quick answers.",

@@ -181,7 +181,23 @@ New-NetFirewallRule -DisplayName "Timekeeper API 5443" -Direction Inbound -Actio
 
 For self-signed certificates, clients must trust the certificate chain to avoid browser warnings.
 
-### 5) One-command trust setup for client PCs
+### 5) Certificate trust setup for client PCs
+
+For users accessing the shared Timekeeper instance via HTTPS, they need to trust the certificate to avoid browser warnings.
+
+**📦 Option 1: Use the Trust Package (Easiest for Distribution)**
+
+Create a complete trust package with certificate, script, and instructions:
+
+```powershell
+.\package-cert-trust.ps1
+```
+
+This creates `Release\timekeeper-cert-trust-package.zip` containing everything users need.
+
+Share this ZIP file with your team - they just extract and run the included script.
+
+**📋 Option 2: Manual Distribution**
 
 Copy `certs\timekeeper-https.cer` and `trust-shared-https-cert.ps1` to each client machine,
 then run:
@@ -197,6 +213,12 @@ Machine-wide trust (admin required):
 ```powershell
 .\trust-shared-https-cert.ps1 -TrustLocalMachine
 ```
+
+**📚 Complete Documentation**
+
+For detailed browser-specific instructions and troubleshooting, see:
+- [Certificate Trust Guide](CERTIFICATE_TRUST_GUIDE.md) - Comprehensive guide for end users
+- [Shared Host Certificate Trust](SHARED_HOST_CERT_TRUST.md) - Quick reference for administrators
 
 ## 4) User onboarding
 - Log in as admin on the shared URL
