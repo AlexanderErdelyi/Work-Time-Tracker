@@ -338,6 +338,12 @@ export function Support() {
   const handleSelectTicket = async (issueNumber: number) => {
     setSelectedIssueNumber(issueNumber)
 
+    // Check if the ticket currently has unread updates before updating
+    const currentTickets = queryClient.getQueryData<typeof ticketsQuery.data>(['support', 'my-issues'])
+    const selectedTicket = currentTickets?.find((t) => t.issueNumber === issueNumber)
+    const wasUnread = selectedTicket?.hasUnreadUpdates ?? false
+
+    // Optimistically update the ticket's hasUnreadUpdates flag
     queryClient.setQueryData(['support', 'my-issues'], (existing: typeof ticketsQuery.data) =>
       (existing ?? []).map((ticket) =>
         ticket.issueNumber === issueNumber
@@ -345,6 +351,17 @@ export function Support() {
           : ticket
       )
     )
+
+    // Optimistically decrement the unread counter if the ticket was unread
+    if (wasUnread) {
+      queryClient.setQueryData(['support', 'unread-count'], (existing: typeof unreadQuery.data) => {
+        if (!existing) return existing
+        return {
+          ...existing,
+          unreadCount: Math.max(0, existing.unreadCount - 1),
+        }
+      })
+    }
 
     markReadMutation.mutate(issueNumber)
   }
