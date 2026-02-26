@@ -418,7 +418,7 @@ export function Dashboard() {
         await workDaysApi.checkIn('Auto check-in from Quick Start')
       }
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to check in during quick start.'))
+      alert(getErrorMessage(error, 'Failed to check in during quick start'))
       return
     }
     
