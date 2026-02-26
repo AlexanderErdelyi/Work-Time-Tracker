@@ -101,7 +101,7 @@ export function WorkDays() {
   const [editForm, setEditForm] = useState({ checkInTime: '', checkOutTime: '', notes: '' });
 
   // Confirm dialog hook
-  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
 
   useEffect(() => {
     localStorage.setItem(WORKDAY_BREAK_SORT_KEY, breakSortOrder);

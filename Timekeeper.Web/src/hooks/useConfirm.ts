@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 interface ConfirmOptions {
   title: string
@@ -10,7 +10,6 @@ interface ConfirmOptions {
 
 interface ConfirmState extends ConfirmOptions {
   isOpen: boolean
-  resolve: ((value: boolean) => void) | null
 }
 
 export function useConfirm() {
@@ -21,31 +20,34 @@ export function useConfirm() {
     confirmText: 'Confirm',
     cancelText: 'Cancel',
     variant: 'default',
-    resolve: null,
   })
+  
+  const resolveRef = useRef<((value: boolean) => void) | null>(null)
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise((resolve) => {
+      resolveRef.current = resolve
       setState({
         isOpen: true,
         ...options,
         confirmText: options.confirmText || 'Confirm',
         cancelText: options.cancelText || 'Cancel',
         variant: options.variant || 'default',
-        resolve,
       })
     })
   }, [])
 
   const handleConfirm = useCallback(() => {
-    state.resolve?.(true)
-    setState((prev) => ({ ...prev, isOpen: false, resolve: null }))
-  }, [state.resolve])
+    resolveRef.current?.(true)
+    resolveRef.current = null
+    setState((prev) => ({ ...prev, isOpen: false }))
+  }, [])
 
   const handleCancel = useCallback(() => {
-    state.resolve?.(false)
-    setState((prev) => ({ ...prev, isOpen: false, resolve: null }))
-  }, [state.resolve])
+    resolveRef.current?.(false)
+    resolveRef.current = null
+    setState((prev) => ({ ...prev, isOpen: false }))
+  }, [])
 
   return {
     confirm,
