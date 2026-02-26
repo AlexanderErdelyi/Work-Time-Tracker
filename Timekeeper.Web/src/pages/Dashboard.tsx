@@ -13,6 +13,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
+import { getErrorMessage } from '../lib/utils'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
@@ -399,8 +400,7 @@ export function Dashboard() {
           setNotes('')
         },
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to start timer.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to start timer.'))
         }
       }
     )
@@ -418,8 +418,7 @@ export function Dashboard() {
         await workDaysApi.checkIn('Auto check-in from Quick Start')
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to auto check-in.'
-      alert(message)
+      alert(getErrorMessage(error, 'Failed to auto check-in.'))
       return
     }
     
@@ -462,8 +461,7 @@ export function Dashboard() {
           setNotes('')
         },
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to assign task to timer.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to assign task to timer.'))
         }
       }
     )
@@ -486,8 +484,7 @@ export function Dashboard() {
           setEditingNotes(false)
         },
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to update notes.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to update notes.'))
         }
       }
     )
@@ -502,21 +499,18 @@ export function Dashboard() {
         onSuccess: () => {
           resumeTimer.mutate(entryId, {
             onError: (error: unknown) => {
-              const message = error instanceof Error ? error.message : 'Failed to resume timer.'
-              alert(message)
+              alert(getErrorMessage(error, 'Failed to resume timer.'))
             }
           })
         },
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to stop running timer.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to stop running timer.'))
         }
       })
     } else {
       resumeTimer.mutate(entryId, {
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to resume timer.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to resume timer.'))
         }
       })
     }
@@ -526,8 +520,7 @@ export function Dashboard() {
     if (runningTimer) {
       stopTimer.mutate(runningTimer.id, {
         onError: (error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Failed to stop timer.'
-          alert(message)
+          alert(getErrorMessage(error, 'Failed to stop timer.'))
         }
       })
     }
@@ -1072,8 +1065,7 @@ export function Dashboard() {
                       size="lg"
                       onClick={() => resumeFromPause.mutate(runningTimer.id, {
                         onError: (error: unknown) => {
-                          const message = error instanceof Error ? error.message : 'Failed to resume timer.'
-                          alert(message)
+                          alert(getErrorMessage(error, 'Failed to resume timer.'))
                         }
                       })}
                       disabled={resumeFromPause.isPending}
@@ -1088,8 +1080,7 @@ export function Dashboard() {
                       variant="outline"
                       onClick={() => pauseTimer.mutate(runningTimer.id, {
                         onError: (error: unknown) => {
-                          const message = error instanceof Error ? error.message : 'Failed to pause timer.'
-                          alert(message)
+                          alert(getErrorMessage(error, 'Failed to pause timer.'))
                         }
                       })}
                       disabled={pauseTimer.isPending}
