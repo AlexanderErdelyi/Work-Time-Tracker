@@ -205,6 +205,7 @@ export function Dashboard() {
   const isIdleDetectionEnabled = localStorage.getItem('timekeeper_enableIdleDetection') === 'true'
 
   // Read daily and weekly targets from localStorage (defaults: 8h daily, 40h weekly)
+  // Note: Empty dependency array is intentional - Settings page alerts users to refresh to apply changes
   const dailyTargetHours = useMemo(() => {
     const value = parseFloat(localStorage.getItem('timekeeper_dailyTarget') || '8')
     return isNaN(value) || value <= 0 ? 8 : value

@@ -1,6 +1,12 @@
 import * as React from 'react'
 import { cn } from '../../lib/utils'
 
+/**
+ * Progress bar component for displaying progress toward a goal.
+ * @param value - Current progress value (unit-agnostic, e.g., minutes, hours, count)
+ * @param max - Maximum/target value (same unit as value)
+ * @returns A horizontal progress bar showing percentage completion
+ */
 interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   value?: number
   max?: number
