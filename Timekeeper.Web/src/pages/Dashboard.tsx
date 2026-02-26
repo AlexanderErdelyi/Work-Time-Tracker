@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
+import { Progress } from '../components/ui/Progress'
 import { Button } from '../components/ui/Button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/Dialog'
 import { Input } from '../components/ui/Input'
@@ -202,6 +203,10 @@ export function Dashboard() {
 
   // Check if idle detection is enabled
   const isIdleDetectionEnabled = localStorage.getItem('timekeeper_enableIdleDetection') === 'true'
+
+  // Read daily and weekly targets from localStorage (defaults: 8h daily, 40h weekly)
+  const dailyTargetHours = parseFloat(localStorage.getItem('timekeeper_dailyTarget') || '8')
+  const weeklyTargetHours = parseFloat(localStorage.getItem('timekeeper_weeklyTarget') || '40')
 
   // Update detection method when idle detection initializes
   useEffect(() => {
@@ -1301,7 +1306,12 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(todayWorkedMinutes)}</div>
-            <p className="text-xs text-muted-foreground">of 8.00h target</p>
+            <p className="text-xs text-muted-foreground">of {dailyTargetHours.toFixed(2)}h target</p>
+            <Progress 
+              value={todayWorkedMinutes} 
+              max={dailyTargetHours * 60} 
+              className="mt-2"
+            />
           </CardContent>
         </Card>
         
@@ -1311,7 +1321,12 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(thisWeekWorkedMinutes)}</div>
-            <p className="text-xs text-muted-foreground">of 40.00h target</p>
+            <p className="text-xs text-muted-foreground">of {weeklyTargetHours.toFixed(2)}h target</p>
+            <Progress 
+              value={thisWeekWorkedMinutes} 
+              max={weeklyTargetHours * 60} 
+              className="mt-2"
+            />
           </CardContent>
         </Card>
         
