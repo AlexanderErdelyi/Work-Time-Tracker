@@ -124,11 +124,13 @@ GitHub will automatically build:
 - **[⚡ Quick Release Guide](QUICK_RELEASE_GUIDE.md)** - Quick reference card for releasing
 - **[Distribution Guide](DISTRIBUTION_GUIDE.md)** - Advanced distribution strategies
 - **[Shared Dataset Setup](SHARED_DATASET_SETUP.md)** - Host one shared instance for your team
+- **[Certificate Trust Guide](CERTIFICATE_TRUST_GUIDE.md)** - Trust HTTPS certificates for shared hosting
 - **[GitHub Setup](GITHUB_SETUP_SUMMARY.md)** - GitHub configuration details
 
 ### For End Users 👥
 - **[Simple User Guide](SIMPLE_USER_GUIDE.md)** - Non-technical instructions (double-click to run!)
 - **[Setup Guide](SETUP_GUIDE.md)** - Detailed setup and troubleshooting
+- **[Certificate Trust Guide](CERTIFICATE_TRUST_GUIDE.md)** - Trust HTTPS certificates (for shared host users)
 
 ## Project Structure
 
@@ -162,8 +164,13 @@ Then colleagues open:
 http://<HOSTNAME>:5000
 ```
 
+**For HTTPS with certificate trust:**
+
+See the [Certificate Trust Guide](CERTIFICATE_TRUST_GUIDE.md) for detailed instructions on setting up HTTPS and distributing certificates to your team.
+
 For complete setup (firewall, backups, updates):
 - [SHARED_DATASET_SETUP.md](SHARED_DATASET_SETUP.md)
+- [Certificate Trust Guide](CERTIFICATE_TRUST_GUIDE.md) - Trust HTTPS certificates
 
 To prepare a host deployment bundle (ZIP) in one command:
 
