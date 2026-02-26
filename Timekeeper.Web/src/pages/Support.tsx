@@ -71,6 +71,22 @@ function getGitHubLabelStyle(color?: string): CSSProperties | undefined {
   }
 }
 
+/**
+ * Converts a relative URL returned by the API to an absolute URL using the current origin.
+ * Ensures images resolve correctly regardless of where the frontend is served.
+ */
+function toAbsoluteUrl(url: string): string {
+  // Already an absolute URL (http://, https://) or protocol-relative (//)
+  // Note: The API always returns relative paths like /api/support/images/{fileName},
+  // but we handle other cases for robustness and future-proofing
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
+    return url
+  }
+  // Ensure the URL starts with a forward slash for proper concatenation
+  const normalizedUrl = url.startsWith('/') ? url : `/${url}`
+  return `${window.location.origin}${normalizedUrl}`
+}
+
 export function Support() {
   const queryClient = useQueryClient()
   const { data: workspaceContext } = useWorkspaceContext()
@@ -278,18 +294,6 @@ export function Support() {
       appVersion: appVersion.trim() || undefined,
       contactEmail: contactEmail.trim() || undefined,
     })
-  }
-
-  const toAbsoluteUrl = (url: string): string => {
-    // Already an absolute URL (http://, https://) or protocol-relative (//)
-    // Note: The API always returns relative paths like /api/support/images/{fileName},
-    // but we handle other cases for robustness and future-proofing
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
-      return url
-    }
-    // Ensure the URL starts with a forward slash for proper concatenation
-    const normalizedUrl = url.startsWith('/') ? url : `/${url}`
-    return `${window.location.origin}${normalizedUrl}`
   }
 
   const handleImageUpload = async (file: File) => {
