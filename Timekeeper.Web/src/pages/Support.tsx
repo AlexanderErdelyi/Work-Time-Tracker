@@ -282,6 +282,8 @@ export function Support() {
 
   const toAbsoluteUrl = (url: string): string => {
     // Already an absolute URL (http://, https://) or protocol-relative (//)
+    // Note: The API always returns relative paths like /api/support/images/{fileName},
+    // but we handle other cases for robustness and future-proofing
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
       return url
     }
