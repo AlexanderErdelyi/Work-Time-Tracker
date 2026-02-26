@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
@@ -5,6 +6,8 @@ using Timekeeper.Api.Auth;
 using Timekeeper.Api.DTOs;
 using Timekeeper.Api.Services;
 using Timekeeper.Core.Data;
+using Timekeeper.Core.Models;
+using Timekeeper.Core.Services;
 
 namespace Timekeeper.Api.Controllers;
 
@@ -14,15 +17,23 @@ public class ExportController : ControllerBase
 {
     private readonly TimekeeperContext _context;
     private readonly IExportService _exportService;
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public ExportController(TimekeeperContext context, IExportService exportService)
+    public ExportController(TimekeeperContext context, IExportService exportService, IWorkspaceContext workspaceContext)
     {
         _context = context;
         _exportService = exportService;
+        _workspaceContext = workspaceContext;
+    }
+
+    private bool IsManagerOrAdmin()
+    {
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        return role == UserRole.Admin.ToString() || role == UserRole.Manager.ToString();
     }
 
     [HttpGet("csv")]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    [Authorize]
     public async Task<IActionResult> ExportCsv(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
@@ -37,7 +48,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("xlsx")]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    [Authorize]
     public async Task<IActionResult> ExportXlsx(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
@@ -53,7 +64,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("today/csv")]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    [Authorize]
     public async Task<IActionResult> ExportTodayCsv()
     {
         var today = DateTime.Today;
@@ -65,7 +76,7 @@ public class ExportController : ControllerBase
     }
 
     [HttpGet("today/xlsx")]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
+    [Authorize]
     public async Task<IActionResult> ExportTodayXlsx()
     {
         var today = DateTime.Today;
@@ -90,6 +101,13 @@ public class ExportController : ControllerBase
                     .ThenInclude(p => p.Customer)
             .Where(e => e.EndTime != null)
             .AsQueryable();
+
+        // For regular users (non-Manager/Admin), restrict to their own entries
+        if (!IsManagerOrAdmin())
+        {
+            var currentUserId = _workspaceContext.UserId ?? 1;
+            query = query.Where(e => e.UserId == currentUserId);
+        }
 
         if (startDate.HasValue)
         {
