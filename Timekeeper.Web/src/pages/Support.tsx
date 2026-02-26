@@ -71,6 +71,22 @@ function getGitHubLabelStyle(color?: string): CSSProperties | undefined {
   }
 }
 
+/**
+ * Converts a relative URL returned by the API to an absolute URL using the current origin.
+ * Ensures images resolve correctly regardless of where the frontend is served.
+ */
+function toAbsoluteUrl(url: string): string {
+  // Already an absolute URL (http://, https://) or protocol-relative (//)
+  // Note: The API always returns relative paths like /api/support/images/{fileName},
+  // but we handle other cases for robustness and future-proofing
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
+    return url
+  }
+  // Ensure the URL starts with a forward slash for proper concatenation
+  const normalizedUrl = url.startsWith('/') ? url : `/${url}`
+  return `${window.location.origin}${normalizedUrl}`
+}
+
 export function Support() {
   const queryClient = useQueryClient()
   const { data: workspaceContext } = useWorkspaceContext()
@@ -282,12 +298,12 @@ export function Support() {
 
   const handleImageUpload = async (file: File) => {
     const result = await supportApi.uploadImage(file)
-    editor?.chain().focus().setImage({ src: result.url }).run()
+    editor?.chain().focus().setImage({ src: toAbsoluteUrl(result.url) }).run()
   }
 
   const handleCommentImageUpload = async (file: File) => {
     const result = await supportApi.uploadImage(file)
-    commentEditor?.chain().focus().setImage({ src: result.url }).run()
+    commentEditor?.chain().focus().setImage({ src: toAbsoluteUrl(result.url) }).run()
   }
 
   const handlePasteImage = async (
