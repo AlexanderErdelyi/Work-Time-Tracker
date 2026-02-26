@@ -12,6 +12,9 @@ import { Textarea } from '../components/ui/Textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import type { Project, ProjectDto } from '../types'
 import { formatDate } from '../lib/dateUtils'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 export function Projects() {
   const [search, setSearch] = useState('')
@@ -23,6 +26,9 @@ export function Projects() {
   const createProject = useCreateProject()
   const updateProject = useUpdateProject()
   const deleteProject = useDeleteProject()
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   const [formData, setFormData] = useState<ProjectDto>({
     name: '',
@@ -65,23 +71,34 @@ export function Projects() {
           id: editingProject.id,
           data: formData,
         })
+        toast.success('Project updated successfully')
       } else {
         await createProject.mutateAsync(formData)
+        toast.success('Project created successfully')
       }
       setIsDialogOpen(false)
     } catch (error) {
       console.error('Failed to save project:', error)
+      toast.error('Failed to save project. Please try again.')
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this project?')) {
-      try {
-        await deleteProject.mutateAsync(id)
-      } catch (error) {
-        console.error('Failed to delete project:', error)
-        alert('Failed to delete project. It may have associated tasks.')
-      }
+    const confirmed = await confirm({
+      title: 'Delete Project',
+      description: 'Are you sure you want to delete this project? It may have associated tasks.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
+    }
+    try {
+      await deleteProject.mutateAsync(id)
+      toast.success('Project deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete project:', error)
+      toast.error('Failed to delete project. It may have associated tasks.')
     }
   }
 
@@ -94,8 +111,10 @@ export function Projects() {
           isActive: !project.isActive,
         },
       })
+      toast.success(`Project ${!project.isActive ? 'activated' : 'deactivated'} successfully`)
     } catch (error) {
       console.error('Failed to toggle project status:', error)
+      toast.error('Failed to update project status. Please try again.')
     }
   }
 
@@ -290,6 +309,17 @@ export function Projects() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }

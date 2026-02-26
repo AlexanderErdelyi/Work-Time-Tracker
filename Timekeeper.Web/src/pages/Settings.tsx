@@ -32,11 +32,17 @@ import {
   Smartphone,
   LifeBuoy,
 } from 'lucide-react'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 export function Settings() {
   const queryClient = useQueryClient()
   const { data: workspaceContext } = useWorkspaceContext()
   const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
@@ -75,11 +81,11 @@ export function Settings() {
       setNewUserEmail('')
       setNewUserRole('Member')
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
-      alert('User created.')
+      toast.success('User created successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not create user.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -88,10 +94,11 @@ export function Settings() {
       workspacesApi.updateUserRole(id, { role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+      toast.success('User role updated successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not update role.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -100,10 +107,11 @@ export function Settings() {
       workspacesApi.updateUserStatus(id, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-users'] })
+      toast.success('User status updated successfully')
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Could not update status.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -118,12 +126,12 @@ export function Settings() {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.current() })
       setSupportRepoToken('')
       setSupportConnectionStatus(null)
-      alert('Support repository updated.')
+      toast.success('Support repository updated successfully')
     },
     onError: (error: unknown) => {
       setSupportConnectionStatus(null)
       const message = error instanceof Error ? error.message : 'Could not update support repository.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -138,12 +146,12 @@ export function Settings() {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.current() })
       setSupportRepoToken('')
       setSupportConnectionStatus(null)
-      alert('Support token removed.')
+      toast.success('Support token removed successfully')
     },
     onError: (error: unknown) => {
       setSupportConnectionStatus(null)
       const message = error instanceof Error ? error.message : 'Could not remove support token.'
-      alert(message)
+      toast.error(message)
     },
   })
 
@@ -291,7 +299,7 @@ export function Settings() {
   const handleSaveUserSettings = () => {
     localStorage.setItem('timekeeper_userName', userName)
     localStorage.setItem('timekeeper_userEmail', userEmail)
-    alert('User settings saved!')
+    toast.success('User settings saved!')
   }
 
   const handleSaveDevelopmentIdentity = () => {
@@ -308,14 +316,14 @@ export function Settings() {
     setAuthUserEmail(normalizedEmail)
     setAuthWorkspaceId(normalizedWorkspaceId)
 
-    alert('Development identity saved! Refresh pages to apply across open tabs.')
+    toast.success('Development identity saved! Refresh pages to apply across open tabs.')
   }
 
   const handleSaveTrackingSettings = () => {
     localStorage.setItem('timekeeper_breakDuration', defaultBreakDuration)
     localStorage.setItem('timekeeper_weeklyTarget', weeklyHoursTarget)
     localStorage.setItem('timekeeper_dailyTarget', dailyHoursTarget)
-    alert('Time tracking settings saved!')
+    toast.success('Time tracking settings saved!')
   }
 
   const handleSaveBillingSettings = () => {
@@ -323,14 +331,14 @@ export function Settings() {
     localStorage.setItem('timekeeper_roundingThreshold', roundingThreshold)
     localStorage.setItem('timekeeper_billingIncrement', billingIncrement)
     localStorage.setItem('timekeeper_recentEntriesCount', recentEntriesCount)
-    alert('Billing settings saved! Refresh the page to see changes.')
+    toast.success('Billing settings saved! Refresh the page to see changes.')
   }
 
   const handleSaveDisplaySettings = () => {
     localStorage.setItem('timekeeper_dateFormat', dateFormat)
     localStorage.setItem('timekeeper_timeFormat', timeFormat)
     localStorage.setItem('timekeeper_entriesPerPage', entriesPerPage)
-    alert('Display settings saved! Refresh the page to see changes.')
+    toast.success('Display settings saved! Refresh the page to see changes.')
   }
 
   const handleSaveNotificationSettings = () => {
@@ -348,7 +356,7 @@ export function Settings() {
       Notification.requestPermission()
     }
     
-    alert('Notification settings saved!')
+    toast.success('Notification settings saved!')
   }
 
   const handleSoundSelect = (soundFileName: string) => {
@@ -360,7 +368,7 @@ export function Settings() {
     localStorage.setItem('timekeeper_enableIdleDetection', enableIdleDetection.toString())
     localStorage.setItem('timekeeper_idleThresholdMinutes', idleThresholdMinutes)
     localStorage.setItem('timekeeper_autoResumeOnActivity', autoResumeOnActivity.toString())
-    alert('Idle detection settings saved! Refresh the page to apply changes.')
+    toast.success('Idle detection settings saved! Refresh the page to apply changes.')
   }
 
   const handleRequestSystemIdlePermission = async () => {
@@ -370,7 +378,7 @@ export function Settings() {
       
       if (granted) {
         setSystemIdlePermission('granted')
-        alert('✅ System idle detection enabled!\n\nThe app can now detect activity across all applications and monitors.\n\nRestarting detection...')
+        toast.success('System idle detection enabled! The app can now detect activity across all applications and monitors. Restarting detection...')
         
         // Restart detection to use system-level method
         await activityDetectionService.restart()
@@ -380,11 +388,11 @@ export function Settings() {
         setDetectionMethod(method)
       } else {
         setSystemIdlePermission('denied')
-        alert('⚠️ Permission denied.\n\nFalling back to browser-only detection.\nThis only tracks activity within the browser tab.')
+        toast.warning('Permission denied. Falling back to browser-only detection. This only tracks activity within the browser tab.')
       }
     } catch (error) {
       console.error('Error requesting system idle permission:', error)
-      alert('❌ Error requesting permission. Please try again.')
+      toast.error('Error requesting permission. Please try again.')
     } finally {
       setIsRequestingPermission(false)
     }
@@ -418,30 +426,39 @@ export function Settings() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      toast.success('Data exported successfully')
     } catch (error) {
       console.error('Export failed:', error)
-      alert('Export failed. Please try again.')
+      toast.error('Export failed. Please try again.')
     }
   }
 
-  const handleClearLocalSettings = () => {
-    if (confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.')) {
-      const keysToRemove = [
-        'timekeeper_userName',
-        'timekeeper_userEmail',
-        'timekeeper_breakDuration',
-        'timekeeper_weeklyTarget',
-        'timekeeper_dailyTarget',
-        'timekeeper_dateFormat',
-        'timekeeper_timeFormat',
-        'timekeeper_entriesPerPage',
-        'timekeeper_notifications',
-        'timekeeper_reminderInterval',
-        'timekeeper_darkMode',
-      ]
-      keysToRemove.forEach(key => localStorage.removeItem(key))
-      alert('Settings reset! Refresh the page to see defaults.')
+  const handleClearLocalSettings = async () => {
+    const confirmed = await confirm({
+      title: 'Reset All Settings',
+      description: 'Are you sure you want to reset all settings to defaults? This cannot be undone.',
+      confirmText: 'Reset Settings',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
     }
+
+    const keysToRemove = [
+      'timekeeper_userName',
+      'timekeeper_userEmail',
+      'timekeeper_breakDuration',
+      'timekeeper_weeklyTarget',
+      'timekeeper_dailyTarget',
+      'timekeeper_dateFormat',
+      'timekeeper_timeFormat',
+      'timekeeper_entriesPerPage',
+      'timekeeper_notifications',
+      'timekeeper_reminderInterval',
+      'timekeeper_darkMode',
+    ]
+    keysToRemove.forEach(key => localStorage.removeItem(key))
+    toast.success('Settings reset! Refresh the page to see defaults.')
   }
 
   return (
@@ -541,7 +558,7 @@ export function Settings() {
             <Button
               onClick={() => {
                 if (!newUserName.trim() || !newUserEmail.trim()) {
-                  alert('Display name and email are required.')
+                  toast.error('Display name and email are required.')
                   return
                 }
                 createUserMutation.mutate()
@@ -746,10 +763,11 @@ export function Settings() {
               variant="outline"
               onClick={() => {
                 if (!userEmail.trim()) {
-                  alert('Set a User Profile email first.')
+                  toast.error('Set a User Profile email first.')
                   return
                 }
                 setAuthUserEmail(userEmail.trim())
+                toast.success('Profile email copied to development identity')
               }}
             >
               Use Profile Email
@@ -1217,7 +1235,7 @@ export function Settings() {
                   if (Notification.permission !== 'granted') {
                     const permission = await Notification.requestPermission();
                     if (permission !== 'granted') {
-                      alert('Please grant notification permission to test notifications');
+                      toast.error('Please grant notification permission to test notifications');
                       return;
                     }
                   }
@@ -1623,6 +1641,17 @@ export function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }

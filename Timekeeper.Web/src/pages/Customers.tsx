@@ -12,6 +12,9 @@ import { Label } from '../components/ui/Label'
 import { Textarea } from '../components/ui/Textarea'
 import type { Customer, CustomerDto } from '../types'
 import { formatDate } from '../lib/dateUtils'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 export function Customers() {
   const [search, setSearch] = useState('')
@@ -27,6 +30,9 @@ export function Customers() {
   const updateCustomer = useUpdateCustomer()
   const deleteCustomer = useDeleteCustomer()
   const bulkDeleteCustomers = useBulkDeleteCustomers()
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm: onConfirm, handleCancel: onCancelConfirm } = useConfirm()
 
   const [formData, setFormData] = useState<CustomerDto>({
     name: '',
@@ -66,23 +72,34 @@ export function Customers() {
           id: editingCustomer.id,
           data: formData,
         })
+        toast.success('Customer updated successfully')
       } else {
         await createCustomer.mutateAsync(formData)
+        toast.success('Customer created successfully')
       }
       setIsDialogOpen(false)
     } catch (error) {
       console.error('Failed to save customer:', error)
+      toast.error('Failed to save customer. Please try again.')
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this customer?')) {
-      try {
-        await deleteCustomer.mutateAsync(id)
-      } catch (error) {
-        console.error('Failed to delete customer:', error)
-        alert('Failed to delete customer. It may have associated projects.')
-      }
+    const confirmed = await confirm({
+      title: 'Delete Customer',
+      description: 'Are you sure you want to delete this customer? It may have associated projects.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
+    }
+    try {
+      await deleteCustomer.mutateAsync(id)
+      toast.success('Customer deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete customer:', error)
+      toast.error('Failed to delete customer. It may have associated projects.')
     }
   }
 
@@ -95,8 +112,10 @@ export function Customers() {
           isActive: !customer.isActive,
         },
       })
+      toast.success(`Customer ${!customer.isActive ? 'activated' : 'deactivated'} successfully`)
     } catch (error) {
       console.error('Failed to toggle customer status:', error)
+      toast.error('Failed to update customer status. Please try again.')
     }
   }
 
@@ -148,20 +167,28 @@ export function Customers() {
     const count = selectedCustomerIds.size
     if (count === 0) return
 
-    if (confirm(`Are you sure you want to delete ${count} customer${count > 1 ? 's' : ''}? This will also delete all associated projects, tasks, and time entries.`)) {
-      try {
-        const result = await bulkDeleteCustomers.mutateAsync(Array.from(selectedCustomerIds))
-        setSelectedCustomerIds(new Set())
-        
-        if (result.errors && result.errors.length > 0) {
-          alert(`Deleted ${result.deletedCount} customers.\n\nErrors:\n${result.errors.join('\n')}`)
-        } else {
-          // Success message is handled by the mutation
-        }
-      } catch (error) {
-        console.error('Failed to delete customers:', error)
-        alert('Failed to delete customers. Please try again.')
+    const confirmed = await confirm({
+      title: 'Delete Customers',
+      description: `Are you sure you want to delete ${count} customer${count > 1 ? 's' : ''}? This will also delete all associated projects, tasks, and time entries.`,
+      confirmText: 'Delete All',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const result = await bulkDeleteCustomers.mutateAsync(Array.from(selectedCustomerIds))
+      setSelectedCustomerIds(new Set())
+      
+      if (result.errors && result.errors.length > 0) {
+        toast.error(`Deleted ${result.deletedCount} customers with errors: ${result.errors.join(', ')}`)
+      } else {
+        toast.success(`Successfully deleted ${result.deletedCount} customer${result.deletedCount > 1 ? 's' : ''}`)
       }
+    } catch (error) {
+      console.error('Failed to delete customers:', error)
+      toast.error('Failed to delete customers. Please try again.')
     }
   }
 
@@ -417,6 +444,17 @@ export function Customers() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={onCancelConfirm}
+        onConfirm={onConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }

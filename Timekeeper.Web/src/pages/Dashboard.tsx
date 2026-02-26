@@ -21,6 +21,9 @@ import { useBreakStatus } from '../hooks/useBreaks'
 import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
 const DASHBOARD_LAYOUTS_KEY = 'timekeeper_dashboard_layouts_v1'
@@ -183,6 +186,9 @@ export function Dashboard() {
   const [dashboardLayouts, setDashboardLayouts] = useState<ResponsiveLayouts>(() => loadDashboardLayouts())
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   // Ref to track if user is currently editing notes (avoids stale closure in useEffect)
   const isEditingNotesRef = useRef(false)
@@ -469,9 +475,15 @@ export function Dashboard() {
     setEditingNotes(false)
   }
 
-  const handleRestartTimer = (entryId: number) => {
+  const handleRestartTimer = async (entryId: number) => {
     if (runningTimer) {
-      if (!confirm('A timer is already running. Stop it and resume this entry?')) {
+      const confirmed = await confirm({
+        title: 'Timer Already Running',
+        description: 'A timer is already running. Stop it and resume this entry?',
+        confirmText: 'Stop & Resume',
+        variant: 'default',
+      })
+      if (!confirmed) {
         return
       }
       stopTimer.mutate(runningTimer.id, {
@@ -491,15 +503,22 @@ export function Dashboard() {
   }
 
   const handleDeleteRecentEntry = async (entryId: number) => {
-    if (!confirm('Are you sure you want to delete this time entry?')) {
+    const confirmed = await confirm({
+      title: 'Delete Time Entry',
+      description: 'Are you sure you want to delete this time entry? This action cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
       return
     }
 
     try {
       await deleteEntry.mutateAsync(entryId)
+      toast.success('Time entry deleted successfully')
     } catch (error) {
       console.error('Failed to delete time entry:', error)
-      alert('Failed to delete time entry. Please try again.')
+      toast.error('Failed to delete time entry. Please try again.')
     }
   }
 
@@ -1647,6 +1666,17 @@ export function Dashboard() {
           onCancel={handleCancelResume}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }
