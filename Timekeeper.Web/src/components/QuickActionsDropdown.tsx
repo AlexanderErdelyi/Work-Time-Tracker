@@ -16,6 +16,7 @@ import {
 } from './ui/DropdownMenu'
 import { useStartTimer } from '../hooks/useTimeEntries'
 import { useTasks } from '../hooks/useTasks'
+import { exportApi } from '../api/export'
 
 export function QuickActionsDropdown() {
   const startTimer = useStartTimer()
@@ -44,24 +45,7 @@ export function QuickActionsDropdown() {
   const handleExportTodayExcel = async () => {
     try {
       setIsExporting(true)
-      const response = await fetch('/api/export/today/xlsx', {
-        method: 'GET',
-      })
-      
-      if (!response.ok) {
-        throw new Error('Failed to export')
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const today = new Date().toISOString().split('T')[0]
-      a.download = `timekeeper-today-${today}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      await exportApi.exportTodayExcel()
     } catch (error) {
       console.error('Export failed:', error)
       alert('Failed to export data')

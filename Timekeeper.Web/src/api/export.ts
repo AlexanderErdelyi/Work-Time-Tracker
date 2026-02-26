@@ -29,4 +29,9 @@ export const exportApi = {
     const query = params ? buildQueryString(params) : ''
     await downloadFile(`/export/xlsx${query}`, 'timekeeper-export.xlsx')
   },
+
+  exportTodayExcel: async () => {
+    const today = new Date().toISOString().split('T')[0]
+    await downloadFile(`/export/today/xlsx`, `timekeeper-today-${today}.xlsx`)
+  },
 }
