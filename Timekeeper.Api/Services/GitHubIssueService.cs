@@ -84,6 +84,8 @@ public class GitHubIssueService : IGitHubIssueService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
     private static readonly Regex CommentAuthorMarkerRegex = new("<!--\\s*tk-user:(.*?)\\s*-->", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex SupportTicketMetadataSectionRegex = new(@"^##\s+Support Ticket[\s\S]*?(?=^###|\z)", RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex EnvironmentSectionRegex = new(@"^###\s+Environment[\s\S]*", RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SupportIssueOptions _options;
@@ -333,7 +335,7 @@ public class GitHubIssueService : IGitHubIssueService
         var client = _httpClientFactory.CreateClient(nameof(GitHubIssueService));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Timekeeper-Support");
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github.full+json"));
 
         try
         {
@@ -374,7 +376,7 @@ public class GitHubIssueService : IGitHubIssueService
 
             var body = !string.IsNullOrWhiteSpace(bodyHtml)
                 ? CleanIssueHtmlForApp(bodyHtml)
-                : ConvertMarkdownToSafeHtml(bodyMarkdown);
+                : ConvertMarkdownToSafeHtml(StripSupportMetadataFromMarkdown(bodyMarkdown));
 
             var labels = ParseIssueLabels(issueRoot);
 
@@ -563,6 +565,22 @@ public class GitHubIssueService : IGitHubIssueService
         }
 
         return labels;
+    }
+
+    private static string StripSupportMetadataFromMarkdown(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return markdown;
+        }
+
+        // Remove "## Support Ticket" header and its bullet list (up to the first ### heading)
+        var result = SupportTicketMetadataSectionRegex.Replace(markdown, string.Empty);
+
+        // Remove "### Environment" header and its bullet list (to end of string)
+        result = EnvironmentSectionRegex.Replace(result, string.Empty);
+
+        return result.Trim();
     }
 
     private static string CleanIssueHtmlForApp(string html)
