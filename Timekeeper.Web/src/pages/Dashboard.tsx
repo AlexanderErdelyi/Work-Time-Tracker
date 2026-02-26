@@ -205,14 +205,14 @@ export function Dashboard() {
   const isIdleDetectionEnabled = localStorage.getItem('timekeeper_enableIdleDetection') === 'true'
 
   // Read daily and weekly targets from localStorage (defaults: 8h daily, 40h weekly)
-  const dailyTargetHours = (() => {
+  const dailyTargetHours = useMemo(() => {
     const value = parseFloat(localStorage.getItem('timekeeper_dailyTarget') || '8')
     return isNaN(value) || value <= 0 ? 8 : value
-  })()
-  const weeklyTargetHours = (() => {
+  }, [])
+  const weeklyTargetHours = useMemo(() => {
     const value = parseFloat(localStorage.getItem('timekeeper_weeklyTarget') || '40')
     return isNaN(value) || value <= 0 ? 40 : value
-  })()
+  }, [])
 
   // Update detection method when idle detection initializes
   useEffect(() => {
