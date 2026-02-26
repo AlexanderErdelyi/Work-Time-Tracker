@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTimeEntries } from '../hooks/useTimeEntries'
 import { exportApi } from '../api'
 import { formatDate } from '../lib/dateUtils'
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, subDays, eachDayOfInterval, parseISO, differenceInCalendarDays } from 'date-fns'
 
 const ReportsCharts = lazy(() => import('../components/Reports/ReportsCharts').then(module => ({ default: module.ReportsCharts })))
 
@@ -64,23 +65,56 @@ export function Reports() {
 
   // Calculate daily hours
   const dailyData = useMemo(() => {
+    // Determine the date range
+    let rangeStart: Date
+    let rangeEnd: Date
+    
+    if (startDate && endDate) {
+      // Use selected range
+      rangeStart = startOfDay(parseISO(startDate))
+      rangeEnd = endOfDay(parseISO(endDate))
+    } else if (startDate) {
+      // Start date only - go to today
+      rangeStart = startOfDay(parseISO(startDate))
+      rangeEnd = endOfDay(new Date())
+    } else if (endDate) {
+      // End date only - show 30 days before end date
+      rangeEnd = endOfDay(parseISO(endDate))
+      rangeStart = startOfDay(subDays(rangeEnd, 29))
+    } else if (entries.length > 0) {
+      // No date filters - use last 30 calendar days from the most recent entry
+      const latestEntryDate = new Date(Math.max(...entries.map(e => new Date(e.startTime).getTime())))
+      rangeEnd = endOfDay(latestEntryDate)
+      rangeStart = startOfDay(subDays(rangeEnd, 29))
+    } else {
+      // No entries at all
+      rangeEnd = endOfDay(new Date())
+      rangeStart = startOfDay(subDays(rangeEnd, 29))
+    }
+    
+    // Group entries by date
     const grouped = entries.reduce((acc, entry) => {
-      const date = formatDate(entry.startTime, 'MMM d')
-      if (!acc[date]) {
-        acc[date] = 0
+      const dateKey = formatDate(entry.startTime, 'yyyy-MM-dd')
+      if (!acc[dateKey]) {
+        acc[dateKey] = 0
       }
       const hours = (entry.durationMinutes || 0) / 60
-      acc[date] += hours
+      acc[dateKey] += hours
       return acc
     }, {} as Record<string, number>)
-
-    return Object.entries(grouped)
-      .map(([date, hours]) => ({
-        date,
-        hours: parseFloat(hours.toFixed(2)),
-      }))
-      .slice(-30) // Last 30 days
-  }, [entries])
+    
+    // Fill in all days in the range
+    const allDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
+    
+    return allDays.map(day => {
+      const dateKey = format(day, 'yyyy-MM-dd')
+      const displayDate = format(day, 'MMM d')
+      return {
+        date: displayDate,
+        hours: parseFloat((grouped[dateKey] || 0).toFixed(2)),
+      }
+    })
+  }, [entries, startDate, endDate])
 
   const hasChartData = customerData.length > 0 || projectData.length > 0 || dailyData.length > 0
 
@@ -91,9 +125,24 @@ export function Reports() {
     }, 0)
 
     const totalHours = totalMinutes / 60
-    const avgHoursPerDay = dailyData.length > 0 
-      ? totalHours / dailyData.length 
-      : 0
+    
+    // Calculate average using total calendar days in range (not just days with entries)
+    let totalDaysInRange = 1 // Default to 1 to avoid division by zero
+    if (startDate && endDate) {
+      const start = parseISO(startDate)
+      const end = parseISO(endDate)
+      totalDaysInRange = Math.max(1, differenceInCalendarDays(end, start) + 1)
+    } else if (startDate) {
+      const start = parseISO(startDate)
+      const today = new Date()
+      totalDaysInRange = Math.max(1, differenceInCalendarDays(today, start) + 1)
+    } else if (endDate) {
+      totalDaysInRange = 30 // Show 30 days before end date
+    } else {
+      totalDaysInRange = dailyData.length // Use the actual range calculated in dailyData
+    }
+    
+    const avgHoursPerDay = totalHours / totalDaysInRange
 
     return {
       totalHours: parseFloat(totalHours.toFixed(2)),
@@ -102,7 +151,7 @@ export function Reports() {
       uniqueCustomers: new Set(entries.map(e => e.customerName)).size,
       uniqueProjects: new Set(entries.map(e => e.projectName)).size,
     }
-  }, [entries, dailyData])
+  }, [entries, dailyData, startDate, endDate])
 
   const handleExport = async () => {
     try {
@@ -112,7 +161,39 @@ export function Reports() {
       })
     } catch (error) {
       console.error('Export failed:', error)
+      alert('Failed to export data. Please try again.')
     }
+  }
+
+  const setDateRange = (start: Date, end: Date) => {
+    setStartDate(format(start, 'yyyy-MM-dd'))
+    setEndDate(format(end, 'yyyy-MM-dd'))
+  }
+
+  const handleToday = () => {
+    const today = new Date()
+    setDateRange(startOfDay(today), endOfDay(today))
+  }
+
+  const handleThisWeek = () => {
+    const today = new Date()
+    setDateRange(startOfWeek(today, { weekStartsOn: 1 }), endOfWeek(today, { weekStartsOn: 1 }))
+  }
+
+  const handleThisMonth = () => {
+    const today = new Date()
+    setDateRange(startOfMonth(today), endOfMonth(today))
+  }
+
+  const handleLastMonth = () => {
+    const lastMonth = subMonths(new Date(), 1)
+    setDateRange(startOfMonth(lastMonth), endOfMonth(lastMonth))
+  }
+
+  const handleLast30Days = () => {
+    const today = new Date()
+    const thirtyDaysAgo = subDays(today, 29) // 29 days ago + today = 30 days
+    setDateRange(startOfDay(thirtyDaysAgo), endOfDay(today))
   }
 
   return (
@@ -137,35 +218,77 @@ export function Reports() {
           <CardDescription>Filter reports by date range</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="endDate">End Date</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            <div className="flex items-end">
+          <div className="space-y-4">
+            {/* Quick Date Shortcuts */}
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setStartDate('')
-                  setEndDate('')
-                }}
+                size="sm"
+                onClick={handleToday}
               >
-                Clear
+                Today
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleThisWeek}
+              >
+                This Week
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleThisMonth}
+              >
+                This Month
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLastMonth}
+              >
+                Last Month
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLast30Days}
+              >
+                Last 30 Days
+              </Button>
+            </div>
+            
+            {/* Date Range Inputs */}
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStartDate('')
+                    setEndDate('')
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
