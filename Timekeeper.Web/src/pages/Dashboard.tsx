@@ -9,7 +9,7 @@ import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseT
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
@@ -184,9 +184,6 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
-  // Ref to track if user is currently editing notes (avoids stale closure in useEffect)
-  const isEditingNotesRef = useRef(false)
-
   // Idle detection
   const {
     dialogState,
@@ -229,22 +226,20 @@ export function Dashboard() {
     [displayedRecentEntries.length, recentEntriesMode, totalRecentEntriesPages]
   )
 
-  // Sync ref with editing state to avoid stale closures
+  // Sync notes from server only when the timer ID or server-side notes change.
+  // Deliberately does NOT depend on the full runningTimer object so the 1-second
+  // refetch (which changes serverNowUtc every poll) never resets what the user typed.
   useEffect(() => {
-    isEditingNotesRef.current = editingNotes
-  }, [editingNotes])
+    if (editingNotes) return
+    setRunningNotes(runningTimer?.notes || '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningTimer?.id, runningTimer?.notes, editingNotes])
 
+  // Elapsed timer — depends on the full object so serverNowUtc baseline is fresh.
   useEffect(() => {
     if (!runningTimer) {
       setElapsed('00:00:00')
-      setRunningNotes('')
       return
-    }
-
-    // Only update running notes if the user is not currently editing them
-    // Use ref to avoid stale closure and dependency issues
-    if (!isEditingNotesRef.current) {
-      setRunningNotes(runningTimer.notes || '')
     }
 
     const baselineClientNowMs = Date.now()
