@@ -487,6 +487,8 @@ jobs:
 
       - name: Build shared host package
         shell: pwsh
+        env:
+          VITE_APP_VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
           .\package-shared-host.ps1 -Version $version
