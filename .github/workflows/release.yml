@@ -16,6 +16,11 @@ name: Create Release
         required: true
         default: true
         type: boolean
+      build_installer:
+        description: 'Build Windows installer (.exe) package (slow — skip if distributing via shared host)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-and-release:
@@ -60,6 +65,7 @@ jobs:
           }
       
       - name: Setup Inno Setup
+        if: inputs.build_installer == true
         shell: pwsh
         run: |
           Write-Host "Installing Inno Setup..."
@@ -413,6 +419,7 @@ jobs:
           Compress-Archive -Path $distFolder -DestinationPath $zipPath -Force
       
       - name: Build Windows Installer
+        if: inputs.build_installer == true
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
@@ -578,6 +585,7 @@ jobs:
             Release/Timekeeper-Shared-Host-v${{ steps.get_version.outputs.VERSION }}.sha256.txt
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
