@@ -7,8 +7,9 @@ name: Create Release
   workflow_dispatch:  # Allows manual triggering
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
-        required: true
+        description: 'Tag to release (e.g., v1.0.0). Leave blank to auto-increment patch from the latest tag.'
+        required: false
+        default: ''
         type: string
       auto_deploy:
         description: 'Automatically deploy to shared host after release build'
@@ -82,7 +83,26 @@ jobs:
         run: |
           # Get tag name from either push event or manual input
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $tagName = "${{ inputs.tag }}"
+            $tagName = "${{ inputs.tag }}".Trim()
+            if ([string]::IsNullOrWhiteSpace($tagName)) {
+              # Auto-increment: find the latest semver tag and bump the patch
+              git fetch --tags
+              $latestTag = git tag --list 'v*.*.*' |
+                Where-Object { $_ -match '^v(\d+)\.(\d+)\.(\d+)' } |
+                Sort-Object { [version]($_ -replace '^v','') } |
+                Select-Object -Last 1
+              if ([string]::IsNullOrWhiteSpace($latestTag)) {
+                $tagName = 'v1.0.0'
+                Write-Host "No existing tags found. Starting at $tagName"
+              } else {
+                $parts = ($latestTag -replace '^v','').Split('.')
+                $major = [int]$parts[0]
+                $minor = [int]$parts[1]
+                $patch = [int]$parts[2] + 1
+                $tagName = "v$major.$minor.$patch"
+                Write-Host "Auto-incremented patch from $latestTag to $tagName"
+              }
+            }
           } else {
             $tagName = "${{ github.ref_name }}"
           }
