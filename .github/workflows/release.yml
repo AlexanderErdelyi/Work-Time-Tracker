@@ -194,6 +194,18 @@ jobs:
           
           Write-Host ""
       
+      - name: Build frontend
+        shell: pwsh
+        env:
+          VITE_APP_VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          Push-Location "${{ github.workspace }}\Timekeeper.Web"
+          try {
+            npm run build
+          } finally {
+            Pop-Location
+          }
+      
       - name: Build self-contained application
         shell: pwsh
         run: |
