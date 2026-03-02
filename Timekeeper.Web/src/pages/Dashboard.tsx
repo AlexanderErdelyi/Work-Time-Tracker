@@ -9,7 +9,7 @@ import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseT
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
@@ -184,6 +184,9 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
+  // Ref to track editing state - prevents race conditions with async state updates
+  const isEditingNotesRef = useRef(false)
+
   // Idle detection
   const {
     dialogState,
@@ -230,10 +233,10 @@ export function Dashboard() {
   // Deliberately does NOT depend on the full runningTimer object so the 1-second
   // refetch (which changes serverNowUtc every poll) never resets what the user typed.
   useEffect(() => {
-    if (editingNotes) return
+    if (isEditingNotesRef.current) return
     setRunningNotes(runningTimer?.notes || '')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runningTimer?.id, runningTimer?.notes, editingNotes])
+  }, [runningTimer?.id, runningTimer?.notes])
 
   // Elapsed timer — depends on the full object so serverNowUtc baseline is fresh.
   useEffect(() => {
@@ -461,6 +464,7 @@ export function Dashboard() {
         startTime: runningTimer.startTime,
       }
     })
+    isEditingNotesRef.current = false
     setEditingNotes(false)
   }
 
@@ -973,7 +977,10 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingNotes(true)}
+                        onClick={() => {
+                          isEditingNotesRef.current = true
+                          setEditingNotes(true)
+                        }}
                         className="gap-2"
                       >
                         <Edit className="h-4 w-4" />
@@ -1000,6 +1007,7 @@ export function Dashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            isEditingNotesRef.current = false
                             setEditingNotes(false)
                             setRunningNotes(runningTimer.notes || '')
                           }}
