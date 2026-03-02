@@ -33,7 +33,7 @@ export function useConnectionStatus() {
       intervalIdRef.current = window.setInterval(checkConnection, interval)
     }
 
-    const checkConnection = async () => {
+    const checkConnection = async (): Promise<boolean> => {
       let timeoutId: number | undefined
       let newIsConnected = false
       
@@ -72,15 +72,21 @@ export function useConnectionStatus() {
     }
 
     // Initial check and setup
-    checkConnection().then((initialIsConnected) => {
-      // Set up periodic checking with interval matching the actual connection state
-      if (isMountedRef.current && intervalIdRef.current === undefined) {
-        const interval = initialIsConnected 
-          ? CHECK_INTERVAL_CONNECTED 
-          : CHECK_INTERVAL_DISCONNECTED
-        intervalIdRef.current = window.setInterval(checkConnection, interval)
-      }
-    })
+    checkConnection()
+      .then((initialIsConnected) => {
+        // Set up periodic checking with interval matching the actual connection state
+        if (isMountedRef.current && intervalIdRef.current === undefined) {
+          const interval = initialIsConnected 
+            ? CHECK_INTERVAL_CONNECTED 
+            : CHECK_INTERVAL_DISCONNECTED
+          intervalIdRef.current = window.setInterval(checkConnection, interval)
+        }
+      })
+      .catch(() => {
+        // Handle any unexpected errors during initial setup
+        // The checkConnection function already handles errors internally,
+        // but this prevents unhandled promise rejections
+      })
 
     return () => {
       isMountedRef.current = false
