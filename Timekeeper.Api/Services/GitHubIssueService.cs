@@ -606,15 +606,18 @@ public class GitHubIssueService : IGitHubIssueService
             return string.Empty;
         }
 
+        // Remove "Support Ticket" section: from <h2>Support Ticket</h2> until the next heading (h2 or h3) or end
+        // This handles any HTML elements (ul, p, etc.) between the heading and the next section
         var cleaned = Regex.Replace(
             html,
-            "<h2[^>]*>\\s*Support Ticket\\s*</h2>\\s*<ul>.*?</ul>",
+            "<h2[^>]*>\\s*Support Ticket\\s*</h2>.*?(?=<h[23][^>]*>|$)",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
+        // Remove "Environment" section: from <h3>Environment</h3> to the end of the content
         cleaned = Regex.Replace(
             cleaned,
-            "<h3[^>]*>\\s*Environment\\s*</h3>\\s*<ul>.*?</ul>",
+            "<h3[^>]*>\\s*Environment\\s*</h3>.*",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
