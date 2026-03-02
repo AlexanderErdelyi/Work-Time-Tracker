@@ -19,12 +19,12 @@ export function useConnectionStatus() {
     isConnected: true, // Start optimistically, will be checked immediately
     lastChecked: null,
   })
+  const intervalIdRef = useRef<number | undefined>()
   const isCheckingRef = useRef(false)
   const isMountedRef = useRef(true)
 
   useEffect(() => {
     isMountedRef.current = true
-    let intervalId: number | undefined
 
     const checkConnection = async () => {
       // Prevent concurrent checks
@@ -56,12 +56,14 @@ export function useConnectionStatus() {
       if (isMountedRef.current) {
         setStatus((prevStatus) => {
           // Only update interval if connection state changed
-          if (prevStatus.isConnected !== newIsConnected && intervalId !== undefined) {
-            clearInterval(intervalId)
+          if (prevStatus.isConnected !== newIsConnected) {
+            if (intervalIdRef.current !== undefined) {
+              clearInterval(intervalIdRef.current)
+            }
             const interval = newIsConnected 
               ? CHECK_INTERVAL_CONNECTED 
               : CHECK_INTERVAL_DISCONNECTED
-            intervalId = window.setInterval(checkConnection, interval)
+            intervalIdRef.current = window.setInterval(checkConnection, interval)
           }
           return {
             isConnected: newIsConnected,
@@ -75,12 +77,13 @@ export function useConnectionStatus() {
     checkConnection()
 
     // Set up periodic checking with initial interval
-    intervalId = window.setInterval(checkConnection, CHECK_INTERVAL_CONNECTED)
+    intervalIdRef.current = window.setInterval(checkConnection, CHECK_INTERVAL_CONNECTED)
 
     return () => {
       isMountedRef.current = false
-      if (intervalId !== undefined) {
-        clearInterval(intervalId)
+      if (intervalIdRef.current !== undefined) {
+        clearInterval(intervalIdRef.current)
+        intervalIdRef.current = undefined
       }
     }
   }, [])
