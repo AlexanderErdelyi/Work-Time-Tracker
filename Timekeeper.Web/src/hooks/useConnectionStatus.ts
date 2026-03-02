@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 interface ConnectionStatus {
   isConnected: boolean
@@ -19,11 +19,19 @@ export function useConnectionStatus() {
     isConnected: true, // Assume connected initially
     lastChecked: null,
   })
+  const intervalIdRef = useRef<number | undefined>()
+  const isMountedRef = useRef(true)
 
   useEffect(() => {
-    let isMounted = true
-    let intervalId: number | undefined
-    let currentInterval = CHECK_INTERVAL_CONNECTED
+    isMountedRef.current = true
+
+    const updateInterval = (isConnected: boolean) => {
+      if (intervalIdRef.current !== undefined) {
+        clearInterval(intervalIdRef.current)
+      }
+      const interval = isConnected ? CHECK_INTERVAL_CONNECTED : CHECK_INTERVAL_DISCONNECTED
+      intervalIdRef.current = window.setInterval(checkConnection, interval)
+    }
 
     const checkConnection = async () => {
       let timeoutId: number | undefined
@@ -35,18 +43,13 @@ export function useConnectionStatus() {
           signal: controller.signal,
         })
 
-        if (isMounted) {
+        if (isMountedRef.current) {
           const newIsConnected = response.ok
           setStatus((prevStatus) => {
-            // Determine if we need to adjust the polling interval
-            const needsIntervalChange = prevStatus.isConnected !== newIsConnected
-            
-            if (needsIntervalChange && intervalId !== undefined) {
-              clearInterval(intervalId)
-              currentInterval = newIsConnected ? CHECK_INTERVAL_CONNECTED : CHECK_INTERVAL_DISCONNECTED
-              intervalId = window.setInterval(checkConnection, currentInterval)
+            // Only update interval if connection state changed
+            if (prevStatus.isConnected !== newIsConnected) {
+              updateInterval(newIsConnected)
             }
-
             return {
               isConnected: newIsConnected,
               lastChecked: new Date(),
@@ -55,17 +58,12 @@ export function useConnectionStatus() {
         }
       } catch (error) {
         // Network error, timeout, or aborted request
-        if (isMounted) {
+        if (isMountedRef.current) {
           setStatus((prevStatus) => {
-            // Determine if we need to adjust the polling interval
-            const needsIntervalChange = prevStatus.isConnected !== false
-            
-            if (needsIntervalChange && intervalId !== undefined) {
-              clearInterval(intervalId)
-              currentInterval = CHECK_INTERVAL_DISCONNECTED
-              intervalId = window.setInterval(checkConnection, currentInterval)
+            // Only update interval if connection state changed
+            if (prevStatus.isConnected !== false) {
+              updateInterval(false)
             }
-
             return {
               isConnected: false,
               lastChecked: new Date(),
@@ -80,15 +78,26 @@ export function useConnectionStatus() {
     }
 
     // Initial check
-    checkConnection()
-
-    // Set up periodic checking with initial interval
-    intervalId = window.setInterval(checkConnection, currentInterval)
+    checkConnection().then(() => {
+      // Set up periodic checking after initial check completes
+      // This ensures the interval matches the actual connection state
+      if (isMountedRef.current && intervalIdRef.current === undefined) {
+        // Use the current status to determine initial interval
+        setStatus((currentStatus) => {
+          const interval = currentStatus.isConnected 
+            ? CHECK_INTERVAL_CONNECTED 
+            : CHECK_INTERVAL_DISCONNECTED
+          intervalIdRef.current = window.setInterval(checkConnection, interval)
+          return currentStatus
+        })
+      }
+    })
 
     return () => {
-      isMounted = false
-      if (intervalId !== undefined) {
-        clearInterval(intervalId)
+      isMountedRef.current = false
+      if (intervalIdRef.current !== undefined) {
+        clearInterval(intervalIdRef.current)
+        intervalIdRef.current = undefined
       }
     }
   }, [])
