@@ -316,7 +316,10 @@ export function Dashboard() {
     setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev, recentEntriesWidgetHeight))
   }, [recentEntriesWidgetHeight, isLayoutEditMode])
 
-  // Populate dialog when opening for running timer
+  // Populate dialog when opening for running timer.
+  // Depends on runningTimer?.id (not the full object) so the 1-second refetch
+  // (which changes serverNowUtc every poll) never resets user-typed notes or
+  // task selection while the dialog is open.
   useEffect(() => {
     if (dialogOpen && runningTimer) {
       if (runningTimer.taskId) {
@@ -324,7 +327,7 @@ export function Dashboard() {
       }
       setNotes(runningTimer.notes || '')
     }
-  }, [dialogOpen, runningTimer])
+  }, [dialogOpen, runningTimer?.id])
 
   const filteredTasks = useMemo(() => {
     if (!searchTerm) return tasks
