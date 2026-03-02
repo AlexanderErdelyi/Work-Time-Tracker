@@ -16,7 +16,7 @@ const TIMEOUT_MS = 5000 // 5 seconds timeout for health check
  */
 export function useConnectionStatus() {
   const [status, setStatus] = useState<ConnectionStatus>({
-    isConnected: true, // Assume connected initially
+    isConnected: true, // Start optimistically, will be checked immediately
     lastChecked: null,
   })
   const intervalIdRef = useRef<number | undefined>()
@@ -35,6 +35,8 @@ export function useConnectionStatus() {
 
     const checkConnection = async () => {
       let timeoutId: number | undefined
+      let newIsConnected = false
+      
       try {
         const controller = new AbortController()
         timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT_MS)
@@ -43,53 +45,40 @@ export function useConnectionStatus() {
           signal: controller.signal,
         })
 
-        if (isMountedRef.current) {
-          const newIsConnected = response.ok
-          setStatus((prevStatus) => {
-            // Only update interval if connection state changed
-            if (prevStatus.isConnected !== newIsConnected) {
-              updateInterval(newIsConnected)
-            }
-            return {
-              isConnected: newIsConnected,
-              lastChecked: new Date(),
-            }
-          })
-        }
+        newIsConnected = response.ok
       } catch (error) {
         // Network error, timeout, or aborted request
-        if (isMountedRef.current) {
-          setStatus((prevStatus) => {
-            // Only update interval if connection state changed
-            if (prevStatus.isConnected !== false) {
-              updateInterval(false)
-            }
-            return {
-              isConnected: false,
-              lastChecked: new Date(),
-            }
-          })
-        }
+        newIsConnected = false
       } finally {
         if (timeoutId !== undefined) {
           clearTimeout(timeoutId)
         }
       }
+
+      if (isMountedRef.current) {
+        setStatus((prevStatus) => {
+          // Only update interval if connection state changed
+          if (prevStatus.isConnected !== newIsConnected) {
+            updateInterval(newIsConnected)
+          }
+          return {
+            isConnected: newIsConnected,
+            lastChecked: new Date(),
+          }
+        })
+      }
+
+      return newIsConnected
     }
 
-    // Initial check
-    checkConnection().then(() => {
-      // Set up periodic checking after initial check completes
-      // This ensures the interval matches the actual connection state
+    // Initial check and setup
+    checkConnection().then((initialIsConnected) => {
+      // Set up periodic checking with interval matching the actual connection state
       if (isMountedRef.current && intervalIdRef.current === undefined) {
-        // Use the current status to determine initial interval
-        setStatus((currentStatus) => {
-          const interval = currentStatus.isConnected 
-            ? CHECK_INTERVAL_CONNECTED 
-            : CHECK_INTERVAL_DISCONNECTED
-          intervalIdRef.current = window.setInterval(checkConnection, interval)
-          return currentStatus
-        })
+        const interval = initialIsConnected 
+          ? CHECK_INTERVAL_CONNECTED 
+          : CHECK_INTERVAL_DISCONNECTED
+        intervalIdRef.current = window.setInterval(checkConnection, interval)
       }
     })
 
