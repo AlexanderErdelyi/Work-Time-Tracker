@@ -19,21 +19,18 @@ export function useConnectionStatus() {
     isConnected: true, // Start optimistically, will be checked immediately
     lastChecked: null,
   })
-  const intervalIdRef = useRef<number | undefined>()
+  const isCheckingRef = useRef(false)
   const isMountedRef = useRef(true)
 
   useEffect(() => {
     isMountedRef.current = true
+    let intervalId: number | undefined
 
-    const updateInterval = (isConnected: boolean) => {
-      if (intervalIdRef.current !== undefined) {
-        clearInterval(intervalIdRef.current)
-      }
-      const interval = isConnected ? CHECK_INTERVAL_CONNECTED : CHECK_INTERVAL_DISCONNECTED
-      intervalIdRef.current = window.setInterval(checkConnection, interval)
-    }
+    const checkConnection = async () => {
+      // Prevent concurrent checks
+      if (isCheckingRef.current) return
+      isCheckingRef.current = true
 
-    const checkConnection = async (): Promise<boolean> => {
       let timeoutId: number | undefined
       let newIsConnected = false
       
@@ -53,13 +50,18 @@ export function useConnectionStatus() {
         if (timeoutId !== undefined) {
           clearTimeout(timeoutId)
         }
+        isCheckingRef.current = false
       }
 
       if (isMountedRef.current) {
         setStatus((prevStatus) => {
           // Only update interval if connection state changed
-          if (prevStatus.isConnected !== newIsConnected) {
-            updateInterval(newIsConnected)
+          if (prevStatus.isConnected !== newIsConnected && intervalId !== undefined) {
+            clearInterval(intervalId)
+            const interval = newIsConnected 
+              ? CHECK_INTERVAL_CONNECTED 
+              : CHECK_INTERVAL_DISCONNECTED
+            intervalId = window.setInterval(checkConnection, interval)
           }
           return {
             isConnected: newIsConnected,
@@ -67,32 +69,18 @@ export function useConnectionStatus() {
           }
         })
       }
-
-      return newIsConnected
     }
 
-    // Initial check and setup
+    // Initial check
     checkConnection()
-      .then((initialIsConnected) => {
-        // Set up periodic checking with interval matching the actual connection state
-        if (isMountedRef.current && intervalIdRef.current === undefined) {
-          const interval = initialIsConnected 
-            ? CHECK_INTERVAL_CONNECTED 
-            : CHECK_INTERVAL_DISCONNECTED
-          intervalIdRef.current = window.setInterval(checkConnection, interval)
-        }
-      })
-      .catch(() => {
-        // Handle any unexpected errors during initial setup
-        // The checkConnection function already handles errors internally,
-        // but this prevents unhandled promise rejections
-      })
+
+    // Set up periodic checking with initial interval
+    intervalId = window.setInterval(checkConnection, CHECK_INTERVAL_CONNECTED)
 
     return () => {
       isMountedRef.current = false
-      if (intervalIdRef.current !== undefined) {
-        clearInterval(intervalIdRef.current)
-        intervalIdRef.current = undefined
+      if (intervalId !== undefined) {
+        clearInterval(intervalId)
       }
     }
   }, [])
