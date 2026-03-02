@@ -232,6 +232,8 @@ export function Dashboard() {
   // Sync notes from server only when the timer ID or server-side notes change.
   // Deliberately does NOT depend on the full runningTimer object so the 1-second
   // refetch (which changes serverNowUtc every poll) never resets what the user typed.
+  // Uses isEditingNotesRef instead of editingNotes state to prevent race conditions
+  // with async state updates during rapid refetches.
   useEffect(() => {
     if (isEditingNotesRef.current) return
     setRunningNotes(runningTimer?.notes || '')
