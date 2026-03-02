@@ -23,6 +23,7 @@ export function useConnectionStatus() {
   useEffect(() => {
     let isMounted = true
     let intervalId: number | undefined
+    let currentInterval = CHECK_INTERVAL_CONNECTED
 
     const checkConnection = async () => {
       let timeoutId: number | undefined
@@ -36,33 +37,40 @@ export function useConnectionStatus() {
 
         if (isMounted) {
           const newIsConnected = response.ok
-          setStatus({
-            isConnected: newIsConnected,
-            lastChecked: new Date(),
-          })
+          setStatus((prevStatus) => {
+            // Determine if we need to adjust the polling interval
+            const needsIntervalChange = prevStatus.isConnected !== newIsConnected
+            
+            if (needsIntervalChange && intervalId !== undefined) {
+              clearInterval(intervalId)
+              currentInterval = newIsConnected ? CHECK_INTERVAL_CONNECTED : CHECK_INTERVAL_DISCONNECTED
+              intervalId = window.setInterval(checkConnection, currentInterval)
+            }
 
-          // Adjust polling interval based on connection state
-          if (intervalId !== undefined) {
-            clearInterval(intervalId)
-            intervalId = window.setInterval(
-              checkConnection,
-              newIsConnected ? CHECK_INTERVAL_CONNECTED : CHECK_INTERVAL_DISCONNECTED
-            )
-          }
+            return {
+              isConnected: newIsConnected,
+              lastChecked: new Date(),
+            }
+          })
         }
       } catch (error) {
         // Network error, timeout, or aborted request
         if (isMounted) {
-          setStatus({
-            isConnected: false,
-            lastChecked: new Date(),
-          })
+          setStatus((prevStatus) => {
+            // Determine if we need to adjust the polling interval
+            const needsIntervalChange = prevStatus.isConnected !== false
+            
+            if (needsIntervalChange && intervalId !== undefined) {
+              clearInterval(intervalId)
+              currentInterval = CHECK_INTERVAL_DISCONNECTED
+              intervalId = window.setInterval(checkConnection, currentInterval)
+            }
 
-          // Adjust polling interval to check more frequently when disconnected
-          if (intervalId !== undefined) {
-            clearInterval(intervalId)
-            intervalId = window.setInterval(checkConnection, CHECK_INTERVAL_DISCONNECTED)
-          }
+            return {
+              isConnected: false,
+              lastChecked: new Date(),
+            }
+          })
         }
       } finally {
         if (timeoutId !== undefined) {
@@ -75,7 +83,7 @@ export function useConnectionStatus() {
     checkConnection()
 
     // Set up periodic checking with initial interval
-    intervalId = window.setInterval(checkConnection, CHECK_INTERVAL_CONNECTED)
+    intervalId = window.setInterval(checkConnection, currentInterval)
 
     return () => {
       isMounted = false
