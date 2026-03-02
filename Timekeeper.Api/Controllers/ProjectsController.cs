@@ -88,7 +88,6 @@ public class ProjectsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<ProjectDto>> CreateProject(CreateProjectDto dto)
     {
         var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == dto.CustomerId);
