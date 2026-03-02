@@ -101,7 +101,6 @@ public class TasksController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = AuthorizationPolicies.ManagerOrAdmin)]
     public async Task<ActionResult<TaskDto>> CreateTask(CreateTaskDto dto)
     {
         var project = await _context.Projects.Include(p => p.Customer).FirstOrDefaultAsync(p => p.Id == dto.ProjectId);
