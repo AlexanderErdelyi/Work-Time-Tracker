@@ -9,7 +9,7 @@ import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseT
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
@@ -184,6 +184,9 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
+  // Ref to track editing state - prevents race conditions with async state updates
+  const isEditingNotesRef = useRef(false)
+
   // Idle detection
   const {
     dialogState,
@@ -229,11 +232,13 @@ export function Dashboard() {
   // Sync notes from server only when the timer ID or server-side notes change.
   // Deliberately does NOT depend on the full runningTimer object so the 1-second
   // refetch (which changes serverNowUtc every poll) never resets what the user typed.
+  // Uses isEditingNotesRef instead of editingNotes state to prevent race conditions
+  // with async state updates during rapid refetches.
   useEffect(() => {
-    if (editingNotes) return
+    if (isEditingNotesRef.current) return
     setRunningNotes(runningTimer?.notes || '')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runningTimer?.id, runningTimer?.notes, editingNotes])
+  }, [runningTimer?.id, runningTimer?.notes])
 
   // Elapsed timer — depends on the full object so serverNowUtc baseline is fresh.
   useEffect(() => {
@@ -311,7 +316,10 @@ export function Dashboard() {
     setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev, recentEntriesWidgetHeight))
   }, [recentEntriesWidgetHeight, isLayoutEditMode])
 
-  // Populate dialog when opening for running timer
+  // Populate dialog when opening for running timer.
+  // Depends on runningTimer?.id (not the full object) so the 1-second refetch
+  // (which changes serverNowUtc every poll) never resets user-typed notes or
+  // task selection while the dialog is open.
   useEffect(() => {
     if (dialogOpen && runningTimer) {
       if (runningTimer.taskId) {
@@ -319,7 +327,7 @@ export function Dashboard() {
       }
       setNotes(runningTimer.notes || '')
     }
-  }, [dialogOpen, runningTimer])
+  }, [dialogOpen, runningTimer?.id])
 
   const filteredTasks = useMemo(() => {
     if (!searchTerm) return tasks
@@ -461,6 +469,7 @@ export function Dashboard() {
         startTime: runningTimer.startTime,
       }
     })
+    isEditingNotesRef.current = false
     setEditingNotes(false)
   }
 
@@ -973,7 +982,10 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingNotes(true)}
+                        onClick={() => {
+                          isEditingNotesRef.current = true
+                          setEditingNotes(true)
+                        }}
                         className="gap-2"
                       >
                         <Edit className="h-4 w-4" />
@@ -1000,6 +1012,7 @@ export function Dashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            isEditingNotesRef.current = false
                             setEditingNotes(false)
                             setRunningNotes(runningTimer.notes || '')
                           }}
