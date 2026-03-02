@@ -5,12 +5,14 @@ interface ConnectionStatus {
   lastChecked: Date | null
 }
 
-const CHECK_INTERVAL = 10000 // 10 seconds
+const CHECK_INTERVAL_CONNECTED = 10000 // 10 seconds when connected
+const CHECK_INTERVAL_DISCONNECTED = 3000 // 3 seconds when disconnected (faster recovery)
 const TIMEOUT_MS = 5000 // 5 seconds timeout for health check
 
 /**
  * Hook to monitor connection status with the API server
  * Performs periodic health checks and reports connection state
+ * Uses faster polling when disconnected for quicker reconnection detection
  */
 export function useConnectionStatus() {
   const [status, setStatus] = useState<ConnectionStatus>({
@@ -20,23 +22,33 @@ export function useConnectionStatus() {
 
   useEffect(() => {
     let isMounted = true
+    let intervalId: number | undefined
 
     const checkConnection = async () => {
+      let timeoutId: number | undefined
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS)
+        timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT_MS)
 
         const response = await fetch('/api/health', {
           signal: controller.signal,
         })
 
-        clearTimeout(timeoutId)
-
         if (isMounted) {
+          const newIsConnected = response.ok
           setStatus({
-            isConnected: response.ok,
+            isConnected: newIsConnected,
             lastChecked: new Date(),
           })
+
+          // Adjust polling interval based on connection state
+          if (intervalId !== undefined) {
+            clearInterval(intervalId)
+            intervalId = window.setInterval(
+              checkConnection,
+              newIsConnected ? CHECK_INTERVAL_CONNECTED : CHECK_INTERVAL_DISCONNECTED
+            )
+          }
         }
       } catch (error) {
         // Network error, timeout, or aborted request
@@ -45,6 +57,16 @@ export function useConnectionStatus() {
             isConnected: false,
             lastChecked: new Date(),
           })
+
+          // Adjust polling interval to check more frequently when disconnected
+          if (intervalId !== undefined) {
+            clearInterval(intervalId)
+            intervalId = window.setInterval(checkConnection, CHECK_INTERVAL_DISCONNECTED)
+          }
+        }
+      } finally {
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId)
         }
       }
     }
@@ -52,12 +74,14 @@ export function useConnectionStatus() {
     // Initial check
     checkConnection()
 
-    // Set up periodic checking
-    const interval = setInterval(checkConnection, CHECK_INTERVAL)
+    // Set up periodic checking with initial interval
+    intervalId = window.setInterval(checkConnection, CHECK_INTERVAL_CONNECTED)
 
     return () => {
       isMounted = false
-      clearInterval(interval)
+      if (intervalId !== undefined) {
+        clearInterval(intervalId)
+      }
     }
   }, [])
 
