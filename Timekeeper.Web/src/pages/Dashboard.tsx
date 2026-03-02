@@ -9,6 +9,7 @@ import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
 import { useState, useEffect, useMemo } from 'react'
 import { parseApiDateTime } from '../lib/timeUtils'
+import type { TimeEntry } from '../types'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
@@ -152,7 +153,7 @@ export function Dashboard() {
   const [elapsed, setElapsed] = useState('00:00:00')
   const [manualDialogOpen, setManualDialogOpen] = useState(false)
   const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
-  const [editingEntry, setEditingEntry] = useState<typeof recentEntries[number] | null>(null)
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
   const [detectionMethod, setDetectionMethod] = useState<'system-level' | 'browser-only' | 'none'>('none')
   const [isLayoutEditMode, setIsLayoutEditMode] = useState(false)
   const [dashboardLayouts, setDashboardLayouts] = useState<ResponsiveLayouts>(() => loadDashboardLayouts())
@@ -404,7 +405,7 @@ export function Dashboard() {
     }
   }
 
-  const openEditEntryDialog = (entry: typeof recentEntries[number]) => {
+  const openEditEntryDialog = (entry: TimeEntry) => {
     setEditingEntry(entry)
     setEditEntryDialogOpen(true)
   }

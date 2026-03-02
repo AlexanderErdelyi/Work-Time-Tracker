@@ -25,7 +25,7 @@ export function StatsPanel({
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+    <div className={`grid gap-4 md:grid-cols-3 ${isBillingEnabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium">Today</CardTitle>
