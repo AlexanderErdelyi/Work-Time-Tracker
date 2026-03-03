@@ -46,13 +46,37 @@ function MessageBubble({ message }: { message: Message }) {
   )
 }
 
+const STORAGE_KEY = 'timekeeper_ai_messages'
+
+function loadPersistedMessages(): Message[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed: Message[] = JSON.parse(raw)
+    // Clear any streaming flag that was left mid-flight on a previous session
+    return parsed.map(m => ({ ...m, streaming: false }))
+  } catch {
+    return []
+  }
+}
+
 export function Chat() {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(loadPersistedMessages)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Persist messages to localStorage whenever they change (skip mid-stream saves)
+  useEffect(() => {
+    if (isLoading) return
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+    } catch {
+      // storage quota exceeded — ignore
+    }
+  }, [messages, isLoading])
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['ai', 'status'],
@@ -164,6 +188,7 @@ export function Chat() {
   const clearConversation = async () => {
     abortRef.current?.abort()
     setMessages([])
+    localStorage.removeItem(STORAGE_KEY)
     await aiApi.clearSession()
   }
 
