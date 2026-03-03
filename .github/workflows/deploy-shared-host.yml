@@ -37,6 +37,11 @@ on:
         required: false
         default: ''
         type: string
+      certDirectory:
+        description: 'Optional folder containing the .pfx and .password.txt (e.g. C:\Timekeeper-Shared-Host-v3.0.0-rc1\certs). Used on first deploy to seed certs into the deploy root. Leave empty on subsequent deploys.'
+        required: false
+        default: ''
+        type: string
       keepBackups:
         description: 'How many backups to retain'
         required: true
@@ -130,6 +135,10 @@ jobs:
 
           if (-not [string]::IsNullOrWhiteSpace("${{ inputs.certificatePath }}")) {
             $params.CertificatePath = "${{ inputs.certificatePath }}"
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace("${{ inputs.certDirectory }}")) {
+            $params.CertDirectory = "${{ inputs.certDirectory }}"
           }
 
           if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PASSWORD)) {

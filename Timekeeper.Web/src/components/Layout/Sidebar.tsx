@@ -120,7 +120,7 @@ export function Sidebar() {
       {!collapsed && (
         <div className="border-t p-4">
           <p className="text-xs text-muted-foreground">
-            Timekeeper v2.0
+            Timekeeper v{import.meta.env.VITE_APP_VERSION ?? '2.0'}
           </p>
         </div>
       )}

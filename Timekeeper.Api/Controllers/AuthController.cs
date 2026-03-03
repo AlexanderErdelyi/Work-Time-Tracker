@@ -69,7 +69,7 @@ public class AuthController : ControllerBase
             DisplayName = dto.DisplayName.Trim(),
             Email = email,
             WorkspaceId = workspaceId,
-            Role = UserRole.Member,
+            Role = await GetInitialRoleAsync(workspaceId),
             IsActive = true,
             PasswordHash = _passwordHashService.HashPassword(dto.Password),
             CreatedAt = DateTime.UtcNow,
@@ -496,7 +496,7 @@ public class AuthController : ControllerBase
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? normalizedEmail : displayName!.Trim(),
                 Email = normalizedEmail,
                 WorkspaceId = workspaceId,
-                Role = UserRole.Member,
+                Role = await GetInitialRoleAsync(workspaceId),
                 IsActive = true,
                 ExternalProvider = provider,
                 ExternalProviderUserId = externalUserId,
@@ -526,6 +526,19 @@ public class AuthController : ControllerBase
         await _context.SaveChangesAsync();
 
         return user;
+    }
+
+    /// <summary>
+    /// Returns <see cref="UserRole.Admin"/> if the workspace currently has no users,
+    /// so that the very first person to register automatically becomes the administrator.
+    /// Every subsequent registration gets <see cref="UserRole.Member"/>.
+    /// </summary>
+    private async Task<UserRole> GetInitialRoleAsync(int workspaceId)
+    {
+        var hasAnyUser = await _context.Users
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.WorkspaceId == workspaceId);
+        return hasAnyUser ? UserRole.Member : UserRole.Admin;
     }
 
     private static string GetAuthProperty(AuthenticationProperties? properties, string key, string defaultValue)
