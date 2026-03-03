@@ -58,9 +58,20 @@ For every changed file in the PR:
 
 ## Step 4 — Ask the user whether to apply changes
 
-Present the review report to the user and ask:
+Present the review report to the user.
 
-> "Do you want me to apply these changes / additional fixes? (yes / no)"
+**If no changes are needed:**
+> "Everything looks correct and complete — no additional changes are needed. The PR is ready to merge on GitHub: `https://github.com/<owner>/<repo>/pull/<number>`"
+
+Stop here (skip to Step 8 to tell the user to merge manually).
+
+**If changes are needed**, clearly list each one, then ask:
+
+> "I found the following issues that need to be fixed:
+> 1. …
+> 2. …
+>
+> Shall I apply these fixes now? (yes / no)"
 
 - If **no**: stop here and summarise what was reviewed.
 - If **yes**: continue to Step 5.
@@ -98,40 +109,42 @@ Confirm to the user: "Changes committed and pushed to `<branch>`."
 
 ## Step 7 — Create a Pull Request (if none exists)
 
-If a PR for this branch does not yet exist, ask:
+> ⚠️ The agent does not have API permission to create or merge PRs. The user must do these steps manually on GitHub.
 
-> "No PR exists for this branch. Shall I create one? (yes / no)"
+If a PR for this branch does not yet exist, tell the user:
 
-- If **yes**: create a PR with:
-  - Title derived from the issue title.
-  - Body that references the issue (`Fixes #NNN`), summarises the changes, and includes a short test plan.
-- If **no**: skip.
+> "No PR exists for this branch yet. Please create one manually on GitHub:
+> - Base: `main` (or the repo's default branch)
+> - Head: `<branch>`
+> - Title: derived from the issue title
+> - Body: reference the issue with `Fixes #NNN`, summarise the changes, and include a short test plan."
+
+Then wait for the user to confirm the PR has been created before continuing.
 
 ---
 
 ## Step 8 — Merge the PR
 
-Ask:
+Tell the user:
 
-> "Shall I merge the PR now? (yes / no)"
+> "Please merge the PR on GitHub when you are ready. Use squash merge to keep a clean history.
+> PR URL: `https://github.com/<owner>/<repo>/pull/<number>`
+>
+> Once you have merged it, let me know and I will clean up the branch."
 
-- If **no**: stop. Provide the PR URL for manual review.
-- If **yes**:
-  1. Confirm the PR has no merge conflicts (update branch if needed).
-  2. Merge using **squash** merge by default (ask user if they prefer merge commit or rebase).
-  3. Confirm merge to the user.
+Wait for the user to confirm the PR has been merged.
 
 ---
 
 ## Step 9 — Delete the branch
 
-After a successful merge, ask:
+After the user confirms the merge, ask:
 
 > "Shall I delete the `<branch>` branch (remote + local)? (yes / no)"
 
 - If **yes**:
   1. Delete the remote branch: `git push origin --delete <branch>`
-  2. Delete the local branch: `git branch -d <branch>`
+  2. Delete the local branch: `git branch -D <branch>` (use `-D` because squash merges are not recognised as merged by git)
   3. Check out `main` (or the repo's default branch).
   4. Pull the latest changes: `git pull`.
 - If **no**: leave the branch in place.
