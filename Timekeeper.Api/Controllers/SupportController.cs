@@ -17,17 +17,20 @@ public class SupportController : ControllerBase
     private readonly IWorkspaceContext _workspaceContext;
     private readonly IGitHubIssueService _gitHubIssueService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<SupportController> _logger;
 
     public SupportController(
         TimekeeperContext context,
         IWorkspaceContext workspaceContext,
         IGitHubIssueService gitHubIssueService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ILogger<SupportController> logger)
     {
         _context = context;
         _workspaceContext = workspaceContext;
         _gitHubIssueService = gitHubIssueService;
         _environment = environment;
+        _logger = logger;
     }
 
     [HttpPost("issues")]
@@ -72,6 +75,7 @@ public class SupportController : ControllerBase
 
         if (!result.Success)
         {
+            _logger.LogError("GitHub issue creation failed for workspace {WorkspaceId}. Error: {Error}", workspace.Id, result.Error);
             return StatusCode(StatusCodes.Status502BadGateway, result.Error ?? "Could not create support issue at this time.");
         }
 
@@ -181,6 +185,7 @@ public class SupportController : ControllerBase
                 return NotFound("Support ticket no longer exists on GitHub.");
             }
 
+            _logger.LogError("Failed to load issue details for ticket #{IssueNumber} in workspace {WorkspaceId}. Error: {Error}", issueNumber, _workspaceContext.WorkspaceId, details.Error);
             return StatusCode(StatusCodes.Status502BadGateway, details.Error ?? "Could not load issue details at this time.");
         }
 
@@ -262,6 +267,7 @@ public class SupportController : ControllerBase
 
         if (!commentResult.Success)
         {
+            _logger.LogError("Failed to post comment for ticket #{IssueNumber} in workspace {WorkspaceId}. Error: {Error}", issueNumber, _workspaceContext.WorkspaceId, commentResult.Error);
             return StatusCode(StatusCodes.Status502BadGateway, commentResult.Error ?? "Could not post comment at this time.");
         }
 
@@ -332,6 +338,7 @@ public class SupportController : ControllerBase
 
         if (!closeResult.Success && !closeResult.IssueNotFound)
         {
+            _logger.LogError("Failed to close issue #{IssueNumber} in workspace {WorkspaceId}. Error: {Error}", issueNumber, _workspaceContext.WorkspaceId, closeResult.Error);
             return StatusCode(StatusCodes.Status502BadGateway, closeResult.Error ?? "Could not close issue at this time.");
         }
 

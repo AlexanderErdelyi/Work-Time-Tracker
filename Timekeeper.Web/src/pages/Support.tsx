@@ -183,11 +183,29 @@ export function Support() {
     enabled: supportTargetConfigured,
   })
 
-  useEffect(() => {
-    if (!selectedIssueNumber && (ticketsQuery.data?.length ?? 0) > 0) {
-      setSelectedIssueNumber(ticketsQuery.data?.[0]?.issueNumber ?? null)
+  const tickets = ticketsQuery.data ?? []
+  const filteredTickets = useMemo(() => {
+    if (ticketFilter === 'all') {
+      return tickets
     }
-  }, [selectedIssueNumber, ticketsQuery.data])
+    return tickets.filter((ticket) =>
+      ticketFilter === 'open' ? ticket.state.toLowerCase() !== 'closed' : ticket.state.toLowerCase() === 'closed'
+    )
+  }, [ticketFilter, tickets])
+
+  // Single effect: auto-select first visible ticket when nothing is selected,
+  // or when the current selection is hidden by the active filter.
+  useEffect(() => {
+    if (!selectedIssueNumber) {
+      if (filteredTickets.length > 0) {
+        setSelectedIssueNumber(filteredTickets[0].issueNumber)
+      }
+      return
+    }
+    if (!filteredTickets.some((ticket) => ticket.issueNumber === selectedIssueNumber)) {
+      setSelectedIssueNumber(filteredTickets[0]?.issueNumber ?? null)
+    }
+  }, [filteredTickets, selectedIssueNumber])
 
   const detailQuery = useQuery({
     queryKey: ['support', 'issue-detail', selectedIssueNumber],
@@ -366,26 +384,7 @@ export function Support() {
     markReadMutation.mutate(issueNumber)
   }
 
-  const tickets = ticketsQuery.data ?? []
-  const filteredTickets = useMemo(() => {
-    if (ticketFilter === 'all') {
-      return tickets
-    }
-
-    return tickets.filter((ticket) =>
-      ticketFilter === 'open' ? ticket.state.toLowerCase() !== 'closed' : ticket.state.toLowerCase() === 'closed'
-    )
-  }, [ticketFilter, tickets])
-
   const unreadCount = unreadQuery.data?.unreadCount ?? 0
-
-  useEffect(() => {
-    if (!selectedIssueNumber || filteredTickets.some((ticket) => ticket.issueNumber === selectedIssueNumber)) {
-      return
-    }
-
-    setSelectedIssueNumber(filteredTickets[0]?.issueNumber ?? null)
-  }, [filteredTickets, selectedIssueNumber])
 
   useEffect(() => {
     if (!detailQuery.isError || !selectedIssueNumber) {
@@ -691,7 +690,13 @@ export function Support() {
               {!supportTargetConfigured && <p className="text-sm text-muted-foreground">Support repository is not configured.</p>}
               {supportTargetConfigured && ticketsQuery.isLoading && <p className="text-sm text-muted-foreground">Loading tickets...</p>}
               {supportTargetConfigured && !ticketsQuery.isLoading && filteredTickets.length === 0 && (
-                <p className="text-sm text-muted-foreground">No tickets found yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  {tickets.length === 0
+                    ? 'No tickets found yet.'
+                    : ticketFilter === 'open'
+                      ? 'No open tickets.'
+                      : 'No completed tickets.'}
+                </p>
               )}
 
               {filteredTickets.map((ticket) => (
