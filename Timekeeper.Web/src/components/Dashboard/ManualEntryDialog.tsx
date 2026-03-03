@@ -2,8 +2,10 @@ import { Button } from '../ui/Button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
-import { Search } from 'lucide-react'
+import { Search, Sparkles, Loader2 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { aiApi } from '../../api/ai'
 import type { TaskItem } from '../../types'
 
 interface ManualEntryDialogProps {
@@ -36,6 +38,31 @@ export function ManualEntryDialog({
   const [manualNotes, setManualNotes] = useState('')
   const [manualError, setManualError] = useState<string | null>(null)
   const [manualFieldErrors, setManualFieldErrors] = useState<{ start?: string; end?: string }>({})
+  const [isPolishingNotes, setIsPolishingNotes] = useState(false)
+
+  const { data: aiStatus } = useQuery({
+    queryKey: ['ai', 'status'],
+    queryFn: aiApi.getStatus,
+    staleTime: 60_000,
+  })
+  const aiEnabled = aiStatus?.enabled ?? false
+
+  const handlePolishNotes = async () => {
+    if (!manualNotes.trim()) return
+    setIsPolishingNotes(true)
+    const task = manualTaskId ? tasks.find(t => t.id === manualTaskId) : null
+    try {
+      const result = await aiApi.polishNote({
+        rawNote: manualNotes,
+        taskName: task?.name,
+        projectName: task?.projectName,
+        customerName: task?.customerName,
+      })
+      if (result?.note) setManualNotes(result.note)
+    } finally {
+      setIsPolishingNotes(false)
+    }
+  }
 
   const filteredManualTasks = useMemo(() => {
     const term = manualTaskSearch.trim().toLowerCase()
@@ -257,7 +284,15 @@ export function ManualEntryDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Notes</label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Notes</label>
+              {aiEnabled && manualNotes.trim() && (
+                <Button variant="ghost" size="sm" onClick={handlePolishNotes} disabled={isPolishingNotes} className="gap-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground">
+                  {isPolishingNotes ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  Polish for invoice
+                </Button>
+              )}
+            </div>
             <Textarea
               placeholder="What did you work on?"
               rows={3}

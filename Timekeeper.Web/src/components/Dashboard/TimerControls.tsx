@@ -2,8 +2,11 @@ import { Button } from '../ui/Button'
 import { Textarea } from '../ui/Textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog'
 import { Input } from '../ui/Input'
-import { Play, Square, Clock, Search, Edit, Pause } from 'lucide-react'
+import { Play, Square, Clock, Search, Edit, Pause, Sparkles, Bot, Loader2 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { aiApi } from '../../api/ai'
+import type { ResolveTaskResult } from '../../api/ai'
 import type { TaskItem } from '../../types'
 
 interface RunningTimer {
@@ -57,6 +60,21 @@ export function TimerControls({
   const [runningNotes, setRunningNotes] = useState('')
   const isEditingNotesRef = useRef(false)
 
+  // AI state
+  const [dialogTab, setDialogTab] = useState<'search' | 'ai'>('search')
+  const [aiDescription, setAiDescription] = useState('')
+  const [isAiResolving, setIsAiResolving] = useState(false)
+  const [aiResolved, setAiResolved] = useState<ResolveTaskResult | null>(null)
+  const [isPolishingDialogNotes, setIsPolishingDialogNotes] = useState(false)
+  const [isPolishingRunningNotes, setIsPolishingRunningNotes] = useState(false)
+
+  const { data: aiStatus } = useQuery({
+    queryKey: ['ai', 'status'],
+    queryFn: aiApi.getStatus,
+    staleTime: 60_000,
+  })
+  const aiEnabled = aiStatus?.enabled ?? false
+
   // Populate dialog when opening for running timer.
   // Depends on runningTimer?.id (not full object) so 1-second refetch never resets user input.
   useEffect(() => {
@@ -67,6 +85,15 @@ export function TimerControls({
       setNotes(runningTimer.notes || '')
     }
   }, [dialogOpen, runningTimer?.id])
+
+  // Reset AI state when dialog closes
+  useEffect(() => {
+    if (!dialogOpen) {
+      setDialogTab('search')
+      setAiDescription('')
+      setAiResolved(null)
+    }
+  }, [dialogOpen])
 
   // Sync notes from server only when timer ID or notes change.
   // Uses isEditingNotesRef (not editingNotes state) to avoid stale-closure race condition
@@ -114,6 +141,54 @@ export function TimerControls({
     setEditingNotes(false)
   }
 
+  const handleResolveTask = async () => {
+    if (!aiDescription.trim()) return
+    setIsAiResolving(true)
+    setAiResolved(null)
+    try {
+      const result = await aiApi.resolveTask(aiDescription.trim())
+      setAiResolved(result)
+      if (result?.found && result.taskId) {
+        setSelectedTaskId(result.taskId)
+      }
+    } finally {
+      setIsAiResolving(false)
+    }
+  }
+
+  const handlePolishDialogNotes = async () => {
+    if (!notes.trim()) return
+    setIsPolishingDialogNotes(true)
+    const task = selectedTaskId ? tasks.find(t => t.id === selectedTaskId) : null
+    try {
+      const result = await aiApi.polishNote({
+        rawNote: notes,
+        taskName: task?.name,
+        projectName: task?.projectName,
+        customerName: task?.customerName,
+      })
+      if (result?.note) setNotes(result.note)
+    } finally {
+      setIsPolishingDialogNotes(false)
+    }
+  }
+
+  const handlePolishRunningNotes = async () => {
+    if (!runningNotes.trim()) return
+    setIsPolishingRunningNotes(true)
+    try {
+      const result = await aiApi.polishNote({
+        rawNote: runningNotes,
+        taskName: runningTimer?.taskName,
+        projectName: runningTimer?.projectName,
+        customerName: runningTimer?.customerName,
+      })
+      if (result?.note) setRunningNotes(result.note)
+    } finally {
+      setIsPolishingRunningNotes(false)
+    }
+  }
+
   return (
     <div className="flex w-full flex-col items-center gap-4">
       {runningTimer ? (
@@ -138,6 +213,22 @@ export function TimerControls({
 
             {editingNotes && (
               <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Notes</span>
+                  {aiEnabled && runningNotes.trim() && (
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={handlePolishRunningNotes}
+                      disabled={isPolishingRunningNotes}
+                      className="gap-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      {isPolishingRunningNotes
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Sparkles className="h-3 w-3" />}
+                      Polish for invoice
+                    </Button>
+                  )}
+                </div>
                 <Textarea
                   placeholder="Describe what you're working on..."
                   value={runningNotes}
@@ -223,79 +314,96 @@ export function TimerControls({
                 </DialogHeader>
                 
                 <div className="space-y-4">
-                  {/* Search */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search tasks, projects, or customers..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
+                  {/* Search / AI tabs */}
+                  {aiEnabled && (
+                    <div className="flex gap-1 rounded-lg bg-muted p-1">
+                      <button onClick={() => setDialogTab('search')} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${dialogTab === 'search' ? 'bg-background shadow' : 'text-muted-foreground hover:text-foreground'}`}>
+                        <Search className="inline h-3.5 w-3.5 mr-1" />Search
+                      </button>
+                      <button onClick={() => { setDialogTab('ai'); setAiResolved(null) }} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${dialogTab === 'ai' ? 'bg-background shadow' : 'text-muted-foreground hover:text-foreground'}`}>
+                        <Bot className="inline h-3.5 w-3.5 mr-1" />Ask AI
+                      </button>
+                    </div>
+                  )}
 
-                  {/* Task List */}
-                  <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                    {filteredTasks.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-8">
-                        {searchTerm ? 'No tasks found' : 'No active tasks available'}
-                      </p>
-                    ) : (
-                      filteredTasks.map((task) => (
-                        <button
-                          key={task.id}
-                          onClick={() => handleSelectTask(task.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                            selectedTaskId === task.id
-                              ? 'bg-primary/10 border-primary'
-                              : 'hover:bg-accent hover:border-primary'
-                          }`}
-                        >
-                          <div className="font-medium">{task.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {task.customerName} / {task.projectName}
-                          </div>
-                          {(task.position || task.procurementNumber) && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {task.position && <span>Position: {task.position}</span>}
-                              {task.position && task.procurementNumber && <span> • </span>}
-                              {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
-                            </div>
+                  {/* Search tab */}
+                  {dialogTab === 'search' && (
+                    <>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search tasks, projects, or customers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+                      </div>
+                      <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                        {filteredTasks.length === 0 ? (
+                          <p className="text-center text-muted-foreground py-8">{searchTerm ? 'No tasks found' : 'No active tasks available'}</p>
+                        ) : (
+                          filteredTasks.map((task) => (
+                            <button key={task.id} onClick={() => handleSelectTask(task.id)}
+                              className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedTaskId === task.id ? 'bg-primary/10 border-primary' : 'hover:bg-accent hover:border-primary'}`}>
+                              <div className="font-medium">{task.name}</div>
+                              <div className="text-sm text-muted-foreground">{task.customerName} / {task.projectName}</div>
+                              {(task.position || task.procurementNumber) && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {task.position && <span>Position: {task.position}</span>}
+                                  {task.position && task.procurementNumber && <span> • </span>}
+                                  {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
+                                </div>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* AI tab */}
+                  {dialogTab === 'ai' && (
+                    <div className="space-y-3">
+                      <Textarea
+                        placeholder="Describe what you're working on, e.g. 'Teams meeting with NOBILIS about the DMS workshop'..."
+                        value={aiDescription}
+                        onChange={e => setAiDescription(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleResolveTask() } }}
+                        rows={2}
+                        disabled={isAiResolving}
+                      />
+                      <Button variant="outline" size="sm" onClick={handleResolveTask} disabled={!aiDescription.trim() || isAiResolving} className="gap-2">
+                        {isAiResolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                        {isAiResolving ? 'Searching...' : 'Find Task'}
+                      </Button>
+                      {aiResolved && (
+                        <div className={`rounded-lg border p-3 text-sm ${aiResolved.found ? 'border-primary bg-primary/5' : 'border-destructive bg-destructive/5'}`}>
+                          {aiResolved.found ? (
+                            <>
+                              <div className="font-medium">{aiResolved.taskName}</div>
+                              <div className="text-muted-foreground">{aiResolved.customerName} / {aiResolved.projectName}</div>
+                              {aiResolved.reasoning && <div className="text-xs text-muted-foreground mt-1 italic">{aiResolved.reasoning}</div>}
+                            </>
+                          ) : (
+                            <div className="text-destructive">{aiResolved.reasoning || 'No matching task found.'}</div>
                           )}
-                        </button>
-                      ))
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Notes */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Notes</label>
-                    <Textarea
-                      placeholder="Describe what you're working on..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Notes</label>
+                      {aiEnabled && notes.trim() && (
+                        <Button variant="ghost" size="sm" onClick={handlePolishDialogNotes} disabled={isPolishingDialogNotes} className="gap-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground">
+                          {isPolishingDialogNotes ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Polish for invoice
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea placeholder="Describe what you're working on..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
                   </div>
 
-                  {/* Start Button */}
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setDialogOpen(false)
-                        setSelectedTaskId(undefined)
-                        setNotes('')
-                        setSearchTerm('')
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAssignTaskToRunningTimer}
-                      disabled={isUpdateTimerPending}
-                      className="gap-2"
-                    >
+                    <Button variant="outline" onClick={() => { setDialogOpen(false); setSelectedTaskId(undefined); setNotes(''); setSearchTerm('') }}>Cancel</Button>
+                    <Button onClick={handleAssignTaskToRunningTimer} disabled={isUpdateTimerPending} className="gap-2">
                       <Clock className="h-4 w-4" />
                       {selectedTaskId ? 'Assign Task' : 'Update Notes'}
                     </Button>
@@ -341,79 +449,96 @@ export function TimerControls({
                 </DialogHeader>
                 
                 <div className="space-y-4">
-                  {/* Search */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search tasks, projects, or customers..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
+                  {/* Search / AI tabs */}
+                  {aiEnabled && (
+                    <div className="flex gap-1 rounded-lg bg-muted p-1">
+                      <button onClick={() => setDialogTab('search')} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${dialogTab === 'search' ? 'bg-background shadow' : 'text-muted-foreground hover:text-foreground'}`}>
+                        <Search className="inline h-3.5 w-3.5 mr-1" />Search
+                      </button>
+                      <button onClick={() => { setDialogTab('ai'); setAiResolved(null) }} className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${dialogTab === 'ai' ? 'bg-background shadow' : 'text-muted-foreground hover:text-foreground'}`}>
+                        <Bot className="inline h-3.5 w-3.5 mr-1" />Ask AI
+                      </button>
+                    </div>
+                  )}
 
-                  {/* Task List */}
-                  <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                    {filteredTasks.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-8">
-                        {searchTerm ? 'No tasks found' : 'No active tasks available'}
-                      </p>
-                    ) : (
-                      filteredTasks.map((task) => (
-                        <button
-                          key={task.id}
-                          onClick={() => handleSelectTask(task.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                            selectedTaskId === task.id
-                              ? 'bg-primary/10 border-primary'
-                              : 'hover:bg-accent hover:border-primary'
-                          }`}
-                        >
-                          <div className="font-medium">{task.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {task.customerName} / {task.projectName}
-                          </div>
-                          {(task.position || task.procurementNumber) && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {task.position && <span>Position: {task.position}</span>}
-                              {task.position && task.procurementNumber && <span> • </span>}
-                              {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
-                            </div>
+                  {/* Search tab */}
+                  {dialogTab === 'search' && (
+                    <>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search tasks, projects, or customers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+                      </div>
+                      <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                        {filteredTasks.length === 0 ? (
+                          <p className="text-center text-muted-foreground py-8">{searchTerm ? 'No tasks found' : 'No active tasks available'}</p>
+                        ) : (
+                          filteredTasks.map((task) => (
+                            <button key={task.id} onClick={() => handleSelectTask(task.id)}
+                              className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedTaskId === task.id ? 'bg-primary/10 border-primary' : 'hover:bg-accent hover:border-primary'}`}>
+                              <div className="font-medium">{task.name}</div>
+                              <div className="text-sm text-muted-foreground">{task.customerName} / {task.projectName}</div>
+                              {(task.position || task.procurementNumber) && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {task.position && <span>Position: {task.position}</span>}
+                                  {task.position && task.procurementNumber && <span> • </span>}
+                                  {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
+                                </div>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* AI tab */}
+                  {dialogTab === 'ai' && (
+                    <div className="space-y-3">
+                      <Textarea
+                        placeholder="Describe what you're working on, e.g. 'Teams meeting with NOBILIS about the DMS workshop'..."
+                        value={aiDescription}
+                        onChange={e => setAiDescription(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleResolveTask() } }}
+                        rows={2}
+                        disabled={isAiResolving}
+                      />
+                      <Button variant="outline" size="sm" onClick={handleResolveTask} disabled={!aiDescription.trim() || isAiResolving} className="gap-2">
+                        {isAiResolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                        {isAiResolving ? 'Searching...' : 'Find Task'}
+                      </Button>
+                      {aiResolved && (
+                        <div className={`rounded-lg border p-3 text-sm ${aiResolved.found ? 'border-primary bg-primary/5' : 'border-destructive bg-destructive/5'}`}>
+                          {aiResolved.found ? (
+                            <>
+                              <div className="font-medium">{aiResolved.taskName}</div>
+                              <div className="text-muted-foreground">{aiResolved.customerName} / {aiResolved.projectName}</div>
+                              {aiResolved.reasoning && <div className="text-xs text-muted-foreground mt-1 italic">{aiResolved.reasoning}</div>}
+                            </>
+                          ) : (
+                            <div className="text-destructive">{aiResolved.reasoning || 'No matching task found.'}</div>
                           )}
-                        </button>
-                      ))
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Notes */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Notes (optional)</label>
-                    <Textarea
-                      placeholder="Describe what you're working on..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Notes (optional)</label>
+                      {aiEnabled && notes.trim() && (
+                        <Button variant="ghost" size="sm" onClick={handlePolishDialogNotes} disabled={isPolishingDialogNotes} className="gap-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground">
+                          {isPolishingDialogNotes ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Polish for invoice
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea placeholder="Describe what you're working on..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
                   </div>
 
-                  {/* Start Button */}
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setDialogOpen(false)
-                        setSelectedTaskId(undefined)
-                        setNotes('')
-                        setSearchTerm('')
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleStartTimer}
-                      disabled={!selectedTaskId || isStartTimerPending}
-                      className="gap-2"
-                    >
+                    <Button variant="outline" onClick={() => { setDialogOpen(false); setSelectedTaskId(undefined); setNotes(''); setSearchTerm('') }}>Cancel</Button>
+                    <Button onClick={handleStartTimer} disabled={!selectedTaskId || isStartTimerPending} className="gap-2">
                       <Play className="h-4 w-4" />
                       Start Timer
                     </Button>

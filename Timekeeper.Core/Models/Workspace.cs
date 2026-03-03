@@ -7,6 +7,8 @@ public class Workspace
     public string? GitHubIssueOwner { get; set; }
     public string? GitHubIssueRepo { get; set; }
     public string? GitHubIssueTokenProtected { get; set; }
+    public bool CopilotEnabled { get; set; } = false;
+    public string? CopilotGitHubTokenProtected { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

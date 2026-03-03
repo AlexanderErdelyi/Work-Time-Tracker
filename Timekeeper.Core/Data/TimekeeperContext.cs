@@ -40,6 +40,7 @@ public class TimekeeperContext : DbContext
             entity.Property(e => e.GitHubIssueOwner).HasMaxLength(100);
             entity.Property(e => e.GitHubIssueRepo).HasMaxLength(100);
             entity.Property(e => e.GitHubIssueTokenProtected).HasMaxLength(4000);
+            entity.Property(e => e.CopilotGitHubTokenProtected).HasMaxLength(4000);
             entity.HasIndex(e => e.Name).IsUnique();
             entity.HasQueryFilter(e => e.Id == CurrentWorkspaceId);
         });

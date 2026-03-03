@@ -17,6 +17,7 @@ const Support = lazy(() => import('./pages/Support').then(module => ({ default: 
 const Users = lazy(() => import('./pages/Users').then(module => ({ default: module.Users })))
 const WorkDays = lazy(() => import('./pages/WorkDays').then(module => ({ default: module.WorkDays })))
 const ServiceManager = lazy(() => import('./pages/ServiceManager').then(module => ({ default: module.ServiceManager })))
+const Chat = lazy(() => import('./pages/Chat').then(module => ({ default: module.Chat })))
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('timekeeper_loggedIn') === 'true')
@@ -45,6 +46,7 @@ function App() {
             <Route path="/docs" element={<Documentation />} />
             <Route path="/support" element={<Support />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/users" element={<Users />} />
           </Routes>
         </Suspense>
