@@ -13,7 +13,7 @@ import { useQuickActions, useCreateQuickAction, useUpdateQuickAction, useDeleteQ
 import type { QuickAction } from '../api/quickActions'
 import { SystemIdleDetectionService } from '../services/systemIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
-import { workspacesApi } from '../api'
+import { workspacesApi, aiApi } from '../api'
 import type { UserRole } from '../types'
 import { 
   User,
@@ -38,6 +38,9 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  Bot,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useConfirm } from '../hooks/useConfirm'
@@ -62,6 +65,40 @@ export function Settings() {
     type: 'success' | 'error'
     message: string
   } | null>(null)
+
+  // AI Assistant admin state
+  const [aiTokenInput, setAiTokenInput] = useState('')
+  const [aiTokenVisible, setAiTokenVisible] = useState(false)
+  const [aiTestStatus, setAiTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const { data: aiConfig } = useQuery({
+    queryKey: ['ai', 'config'],
+    queryFn: aiApi.getConfig,
+    enabled: isAdminUser,
+  })
+
+  const saveAiConfigMutation = useMutation({
+    mutationFn: (req: { enabled: boolean; gitHubToken?: string; clearToken?: boolean }) =>
+      aiApi.saveConfig(req),
+    onSuccess: () => {
+      setAiTokenInput('')
+      queryClient.invalidateQueries({ queryKey: ['ai'] })
+      toast.success('AI Assistant configuration saved.')
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save AI config.')
+    },
+  })
+
+  const testAiConnectionMutation = useMutation({
+    mutationFn: aiApi.testConnection,
+    onSuccess: (result) => {
+      setAiTestStatus({ type: result.success ? 'success' : 'error', message: result.message })
+    },
+    onError: () => {
+      setAiTestStatus({ type: 'error', message: 'Connection test failed.' })
+    },
+  })
 
   useEffect(() => {
     setSupportRepoOwner(workspaceContext?.workspace.gitHubIssueOwner || '')
@@ -1944,6 +1981,158 @@ export function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Assistant (admin only) */}
+      {isAdminUser && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              <CardTitle>AI Assistant</CardTitle>
+            </div>
+            <CardDescription>
+              Configure Copilot-powered natural language time tracking for all users.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Status badges */}
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-full ${
+                aiConfig?.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-muted text-muted-foreground'
+              }`}>
+                {aiConfig?.enabled ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                {aiConfig?.enabled ? 'Enabled' : 'Disabled'}
+              </div>
+              <div className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full ${
+                aiConfig?.tokenConfigured ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'bg-muted text-muted-foreground'
+              }`}>
+                {aiConfig?.tokenConfigured ? <Check className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                {aiConfig?.tokenConfigured ? 'Token configured' : 'No token'}
+              </div>
+              {aiConfig?.globallyConfigured && (
+                <div className="flex items-center gap-1.5 text-sm px-3 py-1 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                  <Check className="h-3.5 w-3.5" />
+                  Server env token active
+                </div>
+              )}
+            </div>
+
+            {/* Enable toggle */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="aiEnabled"
+                checked={aiConfig?.enabled ?? false}
+                onChange={(e) =>
+                  saveAiConfigMutation.mutate({ enabled: e.target.checked })
+                }
+                className="h-4 w-4"
+                disabled={saveAiConfigMutation.isPending}
+              />
+              <Label htmlFor="aiEnabled" className="cursor-pointer">
+                Enable AI Assistant for all users in this workspace
+              </Label>
+            </div>
+
+            {/* Token input */}
+            <div className="space-y-2">
+              <Label htmlFor="aiToken">
+                GitHub Token{' '}
+                <span className="text-muted-foreground font-normal text-xs">
+                  (PAT with Copilot / GitHub Models access)
+                </span>
+              </Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="aiToken"
+                    type={aiTokenVisible ? 'text' : 'password'}
+                    value={aiTokenInput}
+                    onChange={(e) => setAiTokenInput(e.target.value)}
+                    placeholder={aiConfig?.tokenConfigured ? '••••••••  (token already set — paste new to replace)' : 'ghp_...'}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAiTokenVisible(!aiTokenVisible)}
+                    className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
+                  >
+                    {aiTokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button
+                  onClick={() => {
+                    if (!aiTokenInput.trim()) {
+                      toast.error('Paste a GitHub token first.')
+                      return
+                    }
+                    saveAiConfigMutation.mutate({
+                      enabled: aiConfig?.enabled ?? false,
+                      gitHubToken: aiTokenInput.trim(),
+                    })
+                  }}
+                  disabled={saveAiConfigMutation.isPending || !aiTokenInput.trim()}
+                >
+                  {saveAiConfigMutation.isPending ? 'Saving...' : 'Save Token'}
+                </Button>
+                {aiConfig?.tokenConfigured && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Remove GitHub Token',
+                        description: 'This will clear the stored token and disable AI for all users. Continue?',
+                        confirmText: 'Remove',
+                        variant: 'destructive',
+                      })
+                      if (ok) saveAiConfigMutation.mutate({ enabled: false, clearToken: true })
+                    }}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Generate a PAT at github.com/settings/tokens — needs{' '}
+                <code className="bg-muted px-1 rounded">models:read</code> or Copilot access.
+                Can also be set via the{' '}
+                <code className="bg-muted px-1 rounded">COPILOT__GITHUBTOKEN</code> environment variable.
+              </p>
+            </div>
+
+            {/* Test connection */}
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAiTestStatus(null)
+                  testAiConnectionMutation.mutate()
+                }}
+                disabled={testAiConnectionMutation.isPending || (!aiConfig?.tokenConfigured && !aiConfig?.globallyConfigured)}
+                className="gap-2"
+              >
+                {testAiConnectionMutation.isPending ? (
+                  <><RefreshCw className="h-4 w-4 animate-spin" /> Testing...</>
+                ) : (
+                  <><Activity className="h-4 w-4" /> Test Connection</>
+                )}
+              </Button>
+              {aiTestStatus && (
+                <div className={`flex items-center gap-2 text-sm ${
+                  aiTestStatus.type === 'success' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {aiTestStatus.type === 'success'
+                    ? <Check className="h-4 w-4" />
+                    : <AlertCircle className="h-4 w-4" />}
+                  {aiTestStatus.message}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* About */}
       <Card>

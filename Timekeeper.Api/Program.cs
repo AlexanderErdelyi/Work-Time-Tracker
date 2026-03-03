@@ -156,6 +156,11 @@ builder.Services.AddScoped<IImportService, ImportService>();
 builder.Services.AddScoped<IWorkDayService, WorkDayService>();
 builder.Services.AddScoped<IBreakService, BreakService>();
 builder.Services.AddSingleton<IPasswordHashService, PasswordHashService>();
+builder.Services.AddSingleton<IAiService, AiService>();
+builder.Services.AddHttpClient("copilot", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
 
 // Configure CORS
 builder.Services.AddCors(options =>

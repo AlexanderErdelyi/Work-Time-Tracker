@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Wifi,
-  WifiOff
+  WifiOff,
+  Bot
 } from 'lucide-react'
 import { useConnectionStatus } from '../../hooks/useConnectionStatus'
 import { cn } from '../../lib/utils'
@@ -24,10 +25,11 @@ import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState } from 'react'
 import { useWorkspaceContext } from '../../hooks/useWorkspaceContext'
-import { supportApi } from '../../api'
+import { supportApi, aiApi } from '../../api'
 
-const navigation = [
+const baseNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'AI Assistant', href: '/chat', icon: Bot },
   { name: 'Time Entries', href: '/entries', icon: Clock },
   { name: 'Work Days', href: '/workdays', icon: Calendar },
   { name: 'Customers', href: '/customers', icon: Users },
@@ -46,6 +48,16 @@ export function Sidebar() {
   const { data: workspaceContext } = useWorkspaceContext()
   const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
 
+  const { data: aiStatus } = useQuery({
+    queryKey: ['ai', 'status'],
+    queryFn: aiApi.getStatus,
+    staleTime: 60_000,
+  })
+
+  const navigation = aiStatus?.enabled
+    ? baseNavigation
+    : baseNavigation.filter(item => item.href !== '/chat')
+
   const unreadQuery = useQuery({
     queryKey: ['support', 'unread-count'],
     queryFn: supportApi.getUnreadCount,
@@ -58,6 +70,7 @@ export function Sidebar() {
   const navigationItems = isAdminUser
     ? [...navigation, { name: 'Users', href: '/users', icon: User }]
     : navigation
+
 
   return (
     <div
