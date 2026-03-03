@@ -3,7 +3,7 @@ import { Textarea } from '../ui/Textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog'
 import { Input } from '../ui/Input'
 import { Play, Square, Clock, Search, Edit, Pause } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { TaskItem } from '../../types'
 
 interface RunningTimer {
@@ -55,8 +55,10 @@ export function TimerControls({
   const [notes, setNotes] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
   const [runningNotes, setRunningNotes] = useState('')
+  const isEditingNotesRef = useRef(false)
 
-  // Populate dialog when opening for running timer
+  // Populate dialog when opening for running timer.
+  // Depends on runningTimer?.id (not full object) so 1-second refetch never resets user input.
   useEffect(() => {
     if (dialogOpen && runningTimer) {
       if (runningTimer.taskId) {
@@ -64,14 +66,16 @@ export function TimerControls({
       }
       setNotes(runningTimer.notes || '')
     }
-  }, [dialogOpen, runningTimer])
+  }, [dialogOpen, runningTimer?.id])
 
-  // Update running notes when timer changes (only if not editing)
+  // Sync notes from server only when timer ID or notes change.
+  // Uses isEditingNotesRef (not editingNotes state) to avoid stale-closure race condition
+  // where the 1-second refetch resets notes the user is actively typing.
   useEffect(() => {
-    if (runningTimer && !editingNotes) {
-      setRunningNotes(runningTimer.notes || '')
-    }
-  }, [runningTimer, editingNotes])
+    if (isEditingNotesRef.current) return
+    setRunningNotes(runningTimer?.notes || '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningTimer?.id, runningTimer?.notes])
 
   const filteredTasks = tasks.filter(task => {
     if (!searchTerm) return true
@@ -106,6 +110,7 @@ export function TimerControls({
 
   const handleUpdateRunningNotes = () => {
     onUpdateRunningNotes(runningNotes)
+    isEditingNotesRef.current = false
     setEditingNotes(false)
   }
 
@@ -119,7 +124,7 @@ export function TimerControls({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setEditingNotes(true)}
+                  onClick={() => { isEditingNotesRef.current = true; setEditingNotes(true) }}
                   className="gap-2"
                 >
                   <Edit className="h-4 w-4" />
@@ -146,6 +151,7 @@ export function TimerControls({
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                      isEditingNotesRef.current = false
                       setEditingNotes(false)
                       setRunningNotes(runningTimer.notes || '')
                     }}

@@ -10,6 +10,7 @@ import { workDaysApi } from '../api/workDays'
 import { useState, useEffect, useMemo } from 'react'
 import { parseApiDateTime } from '../lib/timeUtils'
 import type { TimeEntry } from '../types'
+import { getErrorMessage } from '../lib/utils'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
@@ -160,6 +161,7 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
+
   // Idle detection
   const {
     dialogState,
@@ -202,6 +204,7 @@ export function Dashboard() {
     [displayedRecentEntries.length, recentEntriesMode, totalRecentEntriesPages]
   )
 
+  // Elapsed timer — depends on the full object so serverNowUtc baseline is fresh.
   useEffect(() => {
     if (!runningTimer) {
       setElapsed('00:00:00')
@@ -277,6 +280,7 @@ export function Dashboard() {
     setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev, recentEntriesWidgetHeight))
   }, [recentEntriesWidgetHeight, isLayoutEditMode])
 
+
   const filteredTasks = useMemo(() => {
     return tasks
   }, [tasks])
@@ -322,10 +326,10 @@ export function Dashboard() {
   }, [recentEntries])
 
   const handleStartTimer = (taskId: number, notes: string) => {
-    startTimer.mutate({ 
-      taskId,
-      notes: notes || undefined
-    })
+    startTimer.mutate(
+      { taskId, notes: notes || undefined },
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to start timer.')) } }
+    )
   }
 
   const handleQuickStart = async () => {
@@ -336,39 +340,47 @@ export function Dashboard() {
         await workDaysApi.checkIn('Auto check-in from Quick Start')
       }
     } catch (error) {
-      console.error('Error checking in:', error)
+      alert(getErrorMessage(error, 'Failed to check in during quick start.'))
+      return
     }
     
     // Then start the timer
-    startTimer.mutate({ 
-      notes: 'Quick start from dashboard'
-    })
+    startTimer.mutate(
+      { notes: 'Quick start from dashboard' },
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to start timer.')) } }
+    )
   }
 
   const handleAssignTaskToRunningTimer = (taskId: number | undefined, notes: string) => {
     if (!runningTimer) return
     
-    updateTimer.mutate({
-      id: runningTimer.id,
-      data: {
-        taskId,
-        notes: notes || runningTimer.notes,
-        startTime: runningTimer.startTime,
-      }
-    })
+    updateTimer.mutate(
+      {
+        id: runningTimer.id,
+        data: {
+          taskId,
+          notes: notes || runningTimer.notes,
+          startTime: runningTimer.startTime,
+        }
+      },
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to assign task to timer.')) } }
+    )
   }
 
   const handleUpdateRunningNotes = (notes: string) => {
     if (!runningTimer) return
     
-    updateTimer.mutate({
-      id: runningTimer.id,
-      data: {
-        taskId: runningTimer.taskId,
-        notes,
-        startTime: runningTimer.startTime,
-      }
-    })
+    updateTimer.mutate(
+      {
+        id: runningTimer.id,
+        data: {
+          taskId: runningTimer.taskId,
+          notes,
+          startTime: runningTimer.startTime,
+        }
+      },
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to update notes.')) } }
+    )
   }
 
   const handleRestartTimer = (entryId: number) => {
@@ -378,17 +390,32 @@ export function Dashboard() {
       }
       stopTimer.mutate(runningTimer.id, {
         onSuccess: () => {
-          resumeTimer.mutate(entryId)
+          resumeTimer.mutate(entryId, {
+            onError: (error: unknown) => {
+              alert(getErrorMessage(error, 'Failed to resume timer.'))
+            }
+          })
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to stop running timer.'))
         }
       })
     } else {
-      resumeTimer.mutate(entryId)
+      resumeTimer.mutate(entryId, {
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to resume timer.'))
+        }
+      })
     }
   }
 
   const handleStopTimer = () => {
     if (runningTimer) {
-      stopTimer.mutate(runningTimer.id)
+      stopTimer.mutate(runningTimer.id, {
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to stop timer.'))
+        }
+      })
     }
   }
 
@@ -574,8 +601,8 @@ export function Dashboard() {
             onStartTimer={handleStartTimer}
             onQuickStart={handleQuickStart}
             onStopTimer={handleStopTimer}
-            onPauseTimer={(id) => pauseTimer.mutate(id)}
-            onResumeFromPause={(id) => resumeFromPause.mutate(id)}
+            onPauseTimer={(id) => pauseTimer.mutate(id, { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to pause timer.')) } })}
+            onResumeFromPause={(id) => resumeFromPause.mutate(id, { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to resume timer.')) } })}
             onUpdateRunningNotes={handleUpdateRunningNotes}
             onAssignTaskToRunningTimer={handleAssignTaskToRunningTimer}
             isStartTimerPending={startTimer.isPending}
@@ -583,7 +610,7 @@ export function Dashboard() {
             isPauseTimerPending={pauseTimer.isPending}
             isResumeFromPausePending={resumeFromPause.isPending}
             isUpdateTimerPending={updateTimer.isPending}
-          />
+          />
         </CardContent>
       </Card>
       </div>

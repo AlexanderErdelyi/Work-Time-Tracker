@@ -340,18 +340,24 @@ public class GitHubIssueService : IGitHubIssueService
         try
         {
             var issueResponse = await client.GetAsync($"/repos/{owner}/{repo}/issues/{issueNumber}", cancellationToken);
+            var issueBodyText = await issueResponse.Content.ReadAsStringAsync(cancellationToken);
+
             if (IsIssueMissingStatusCode(issueResponse.StatusCode)
-                || await ResponseIndicatesIssueMissingAsync(issueResponse, cancellationToken))
+                || ResponseIndicatesIssueMissingInBody(issueBodyText))
             {
                 return new GitHubIssueDetailsResult(false, "Issue was not found on GitHub.", true, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
             }
 
             if (!issueResponse.IsSuccessStatusCode)
             {
+                _logger.LogError(
+                    "GitHub API returned {StatusCode} fetching issue {Owner}/{Repo}#{IssueNumber}. Response: {GitHubResponse}",
+                    (int)issueResponse.StatusCode, owner, repo, issueNumber,
+                    issueBodyText.Length > 500 ? issueBodyText[..500] : issueBodyText);
                 return new GitHubIssueDetailsResult(false, "Could not load issue details from GitHub.", false, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
             }
 
-            using var issueDoc = JsonDocument.Parse(await issueResponse.Content.ReadAsStringAsync(cancellationToken));
+            using var issueDoc = JsonDocument.Parse(issueBodyText);
             var issueRoot = issueDoc.RootElement;
 
             var state = issueRoot.TryGetProperty("state", out var stateElement)
@@ -394,7 +400,7 @@ public class GitHubIssueService : IGitHubIssueService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch issue details for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
+            _logger.LogError(ex, "Unexpected error fetching issue details for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
             return new GitHubIssueDetailsResult(false, "Could not load issue details from GitHub.", false, string.Empty, string.Empty, string.Empty, string.Empty, null, null, [], []);
         }
     }
@@ -429,11 +435,16 @@ public class GitHubIssueService : IGitHubIssueService
                 return new GitHubIssueAddCommentResult(true, null);
             }
 
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError(
+                "GitHub API returned {StatusCode} posting comment for {Owner}/{Repo}#{IssueNumber}. Response: {GitHubResponse}",
+                (int)response.StatusCode, owner, repo, issueNumber,
+                responseBody.Length > 500 ? responseBody[..500] : responseBody);
             return new GitHubIssueAddCommentResult(false, "Could not post comment to GitHub.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to add comment for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
+            _logger.LogError(ex, "Unexpected error posting comment for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
             return new GitHubIssueAddCommentResult(false, "Could not post comment to GitHub.");
         }
     }
@@ -472,11 +483,16 @@ public class GitHubIssueService : IGitHubIssueService
                 return new GitHubIssueStateUpdateResult(true, false, null);
             }
 
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError(
+                "GitHub API returned {StatusCode} closing issue {Owner}/{Repo}#{IssueNumber}. Response: {GitHubResponse}",
+                (int)response.StatusCode, owner, repo, issueNumber,
+                responseBody.Length > 500 ? responseBody[..500] : responseBody);
             return new GitHubIssueStateUpdateResult(false, false, "Could not close issue on GitHub.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to close issue for {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
+            _logger.LogError(ex, "Unexpected error closing issue {Owner}/{Repo}#{IssueNumber}", owner, repo, issueNumber);
             return new GitHubIssueStateUpdateResult(false, false, "Could not close issue on GitHub.");
         }
     }
@@ -639,14 +655,8 @@ public class GitHubIssueService : IGitHubIssueService
         return statusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone;
     }
 
-    private static async Task<bool> ResponseIndicatesIssueMissingAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static bool ResponseIndicatesIssueMissingInBody(string body)
     {
-        if (response.IsSuccessStatusCode)
-        {
-            return false;
-        }
-
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(body))
         {
             return false;

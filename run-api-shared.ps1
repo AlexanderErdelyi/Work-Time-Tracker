@@ -112,39 +112,125 @@ function Wait-ForPortListening {
     return $false
 }
 
-function Start-UntrackedBackgroundProcess {
+function Start-ScheduledBackgroundProcess {
+    # Launches the process via the Windows Task Scheduler service (running as SYSTEM).
+    # Because the Task Scheduler's svchost.exe is NOT inside the GitHub Actions runner's
+    # Windows Job Object, the spawned dotnet process is fully independent and survives
+    # when the Actions step / job ends.
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [Parameter(Mandatory = $true)]
-        [string[]]$ArgumentList,
-
-        [Parameter(Mandatory = $true)]
-        [string]$WorkingDirectory,
-
-        [Parameter(Mandatory = $true)]
-        [string]$StandardOutputPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$StandardErrorPath
+        [Parameter(Mandatory = $true)] [string]   $FilePath,
+        [Parameter(Mandatory = $true)] [string[]] $ArgumentList,
+        [Parameter(Mandatory = $true)] [string]   $WorkingDirectory,
+        [hashtable] $EnvironmentVariables = @{},
+        [Parameter(Mandatory = $true)] [string]   $StandardOutputPath,
+        [Parameter(Mandatory = $true)] [string]   $StandardErrorPath
     )
 
-    $runnerTrackingId = $null
-    $hasRunnerTrackingId = Test-Path Env:RUNNER_TRACKING_ID
-    if ($hasRunnerTrackingId) {
-        $runnerTrackingId = (Get-Item Env:RUNNER_TRACKING_ID).Value
-        Remove-Item Env:RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+    $taskName       = 'Timekeeper-API-' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $tempDir        = [System.IO.Path]::GetTempPath()
+    $launcherScript = Join-Path $tempDir "$taskName.ps1"
+    $pidWaitFile    = Join-Path $tempDir "$taskName.pid"
+
+    # Build the single-use launcher script:
+    #   1. Set environment variables
+    #   2. Spawn dotnet (or whatever $FilePath is)
+    #   3. Write the spawned PID to $pidWaitFile so the caller can read it
+    $sb = [System.Text.StringBuilder]::new()
+    foreach ($kvp in $EnvironmentVariables.GetEnumerator()) {
+        $escapedVal = $kvp.Value -replace "'", "''"
+        [void]$sb.AppendLine("`$env:$($kvp.Key) = '$escapedVal'")
     }
+    $eFile    = $FilePath           -replace "'", "''"
+    $eWorkDir = $WorkingDirectory   -replace "'", "''"
+    $eStdout  = $StandardOutputPath -replace "'", "''"
+    $eStderr  = $StandardErrorPath  -replace "'", "''"
+    $ePidFile = $pidWaitFile        -replace "'", "''"
+    $argParts    = $ArgumentList | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
+    $argArrayStr = '@(' + ($argParts -join ', ') + ')'
+    [void]$sb.AppendLine("`$proc = Start-Process -FilePath '$eFile' ``")
+    [void]$sb.AppendLine("    -ArgumentList $argArrayStr ``")
+    [void]$sb.AppendLine("    -WorkingDirectory '$eWorkDir' ``")
+    [void]$sb.AppendLine("    -PassThru -WindowStyle Hidden ``")
+    [void]$sb.AppendLine("    -RedirectStandardOutput '$eStdout' ``")
+    [void]$sb.AppendLine("    -RedirectStandardError  '$eStderr'")
+    [void]$sb.AppendLine("Set-Content -LiteralPath '$ePidFile' -Value `$proc.Id -Encoding ASCII")
+    Set-Content -LiteralPath $launcherScript -Value $sb.ToString() -Encoding UTF8
+
+    Write-Host "Registering one-shot scheduler task: $taskName" -ForegroundColor Cyan
+    $action    = New-ScheduledTaskAction `
+                     -Execute 'powershell.exe' `
+                     -Argument "-NonInteractive -NoProfile -ExecutionPolicy Bypass -File `"$launcherScript`"" `
+                     -WorkingDirectory $WorkingDirectory
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -MultipleInstances IgnoreNew
+    $trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddYears(10)  # never auto-fires; started manually below
+    Register-ScheduledTask -TaskName $taskName -Action $action `
+        -Principal $principal -Settings $settings -Trigger $trigger -Force | Out-Null
 
     try {
-        return Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -PassThru -WindowStyle Hidden -RedirectStandardOutput $StandardOutputPath -RedirectStandardError $StandardErrorPath
+        Start-ScheduledTask -TaskName $taskName
+
+        # Wait up to 20 s for the launcher script to write the dotnet PID
+        $deadline = (Get-Date).AddSeconds(20)
+        while (-not (Test-Path -LiteralPath $pidWaitFile) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 300
+        }
+
+        if (-not (Test-Path -LiteralPath $pidWaitFile)) {
+            throw ("Launcher did not produce a PID file within 20 seconds. " +
+                   "The scheduled task may have failed. Check Windows Event Viewer " +
+                   "(Applications and Services Logs > Microsoft > Windows > TaskScheduler > Operational).")
+        }
+
+        $parsedPid = 0
+        $rawPid    = (Get-Content -LiteralPath $pidWaitFile -Raw -ErrorAction SilentlyContinue).Trim()
+        if (-not [int]::TryParse($rawPid, [ref]$parsedPid)) {
+            throw "Launcher PID file contained an invalid value: '$rawPid'"
+        }
+
+        Write-Host "Process started by Task Scheduler (survives runner job end), PID: $parsedPid" -ForegroundColor Green
+        return [pscustomobject]@{ Id = $parsedPid }
     }
     finally {
-        if ($hasRunnerTrackingId -and -not [string]::IsNullOrWhiteSpace($runnerTrackingId)) {
-            Set-Item Env:RUNNER_TRACKING_ID -Value $runnerTrackingId
-        }
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+        Start-Sleep -Milliseconds 300
+        Remove-Item -LiteralPath $launcherScript -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $pidWaitFile    -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Start-BackgroundProcess {
+    # In GitHub Actions the runner places every child of Start-Process into a Windows
+    # Job Object. The OS kills them all when the job step ends -- even if RUNNER_TRACKING_ID
+    # is removed. Use the Task Scheduler path in CI so the process is fully independent.
+    # Outside CI, plain Start-Process is used (child inherits parent env vars as usual).
+    param(
+        [Parameter(Mandatory = $true)] [string]   $FilePath,
+        [Parameter(Mandatory = $true)] [string[]] $ArgumentList,
+        [Parameter(Mandatory = $true)] [string]   $WorkingDirectory,
+        [hashtable] $EnvironmentVariables = @{},
+        [Parameter(Mandatory = $true)] [string]   $StandardOutputPath,
+        [Parameter(Mandatory = $true)] [string]   $StandardErrorPath
+    )
+
+    $inCi = ($env:GITHUB_ACTIONS -eq 'true') -or
+            (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TRACKING_ID))
+
+    if ($inCi) {
+        return Start-ScheduledBackgroundProcess `
+            -FilePath             $FilePath `
+            -ArgumentList         $ArgumentList `
+            -WorkingDirectory     $WorkingDirectory `
+            -EnvironmentVariables $EnvironmentVariables `
+            -StandardOutputPath   $StandardOutputPath `
+            -StandardErrorPath    $StandardErrorPath
+    }
+
+    # Local / interactive: process inherits current env vars automatically.
+    return Start-Process -FilePath $FilePath -ArgumentList $ArgumentList `
+        -WorkingDirectory $WorkingDirectory -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $StandardOutputPath `
+        -RedirectStandardError  $StandardErrorPath
 }
 
 $existingConnection = Get-ListeningConnection -TargetPort $Port
@@ -227,6 +313,20 @@ if ($UseHttps) {
     Remove-Item Env:ASPNETCORE_Kestrel__Certificates__Default__Password -ErrorAction SilentlyContinue
 }
 
+# Build the env-var dictionary passed to Start-ScheduledBackgroundProcess.
+# When running inside GitHub Actions the scheduled task launches under SYSTEM
+# in a separate session, so environment variables cannot be inherited from the
+# runner's process -- they must be written explicitly into the launcher script.
+$processEnv = @{
+    'ConnectionStrings__DefaultConnection' = $env:ConnectionStrings__DefaultConnection
+    'ASPNETCORE_ENVIRONMENT'               = $env:ASPNETCORE_ENVIRONMENT
+    'ASPNETCORE_URLS'                      = $env:ASPNETCORE_URLS
+}
+if ($UseHttps) {
+    $processEnv['ASPNETCORE_Kestrel__Certificates__Default__Path']     = $env:ASPNETCORE_Kestrel__Certificates__Default__Path
+    $processEnv['ASPNETCORE_Kestrel__Certificates__Default__Password'] = $env:ASPNETCORE_Kestrel__Certificates__Default__Password
+}
+
 Write-Host "Effective URL: $apiUrl" -ForegroundColor Cyan
 if ($UseHttps) {
     Write-Host "Effective HTTPS URL: $httpsUrl" -ForegroundColor Cyan
@@ -257,7 +357,7 @@ if ($apiDllPath) {
         }
         $stdoutLog = Join-Path $logDirectory 'timekeeper-api.stdout.log'
         $stderrLog = Join-Path $logDirectory 'timekeeper-api.stderr.log'
-        $process = Start-UntrackedBackgroundProcess -FilePath 'dotnet' -ArgumentList @($apiDllPath) -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
+        $process = Start-BackgroundProcess -FilePath 'dotnet' -ArgumentList @($apiDllPath) -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -EnvironmentVariables $processEnv -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
         Write-ScriptPid -Path $pidFilePath -PidValue $process.Id
 
         $isReady = Wait-ForPortListening -TargetPort $Port -ProcessId $process.Id -TimeoutSeconds 45
@@ -290,7 +390,7 @@ if ($Background) {
     }
     $stdoutLog = Join-Path $logDirectory 'timekeeper-api.stdout.log'
     $stderrLog = Join-Path $logDirectory 'timekeeper-api.stderr.log'
-    $process = Start-UntrackedBackgroundProcess -FilePath 'dotnet' -ArgumentList @('run', '--project', $apiProjectPath, '--no-launch-profile') -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
+    $process = Start-BackgroundProcess -FilePath 'dotnet' -ArgumentList @('run', '--project', $apiProjectPath, '--no-launch-profile') -WorkingDirectory (Join-Path $repoRoot 'Timekeeper.Api') -EnvironmentVariables $processEnv -StandardOutputPath $stdoutLog -StandardErrorPath $stderrLog
     Write-ScriptPid -Path $pidFilePath -PidValue $process.Id
 
     $isReady = Wait-ForPortListening -TargetPort $Port -ProcessId $process.Id -TimeoutSeconds 45
