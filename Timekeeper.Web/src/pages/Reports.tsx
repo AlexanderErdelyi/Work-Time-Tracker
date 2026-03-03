@@ -63,6 +63,45 @@ export function Reports() {
       .slice(0, 10) // Top 10 projects
   }, [entries])
 
+  // Calculate total hours per task
+  const taskData = useMemo(() => {
+    const grouped = entries.reduce((acc, entry) => {
+      const task = entry.taskName || 'Unknown'
+      if (!acc[task]) {
+        acc[task] = 0
+      }
+      const hours = (entry.durationMinutes || 0) / 60
+      acc[task] += hours
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(grouped)
+      .map(([name, hours]) => ({
+        name,
+        hours: parseFloat(hours.toFixed(2)),
+      }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 10) // Top 10 tasks
+  }, [entries])
+
+  // Calculate billable vs non-billable hours
+  const billableData = useMemo(() => {
+    const billable = entries.reduce((sum, entry) => {
+      return sum + (entry.billedHours || 0)
+    }, 0)
+    
+    const total = entries.reduce((sum, entry) => {
+      return sum + (entry.durationMinutes || 0)
+    }, 0) / 60
+    
+    const nonBillable = total - billable
+
+    return [
+      { name: 'Billable', hours: parseFloat(billable.toFixed(2)) },
+      { name: 'Non-Billable', hours: parseFloat(nonBillable.toFixed(2)) },
+    ]
+  }, [entries])
+
   // Calculate daily hours
   const dailyData = useMemo(() => {
     // Determine the date range
@@ -116,7 +155,31 @@ export function Reports() {
     })
   }, [entries, startDate, endDate])
 
-  const hasChartData = customerData.length > 0 || projectData.length > 0 || dailyData.length > 0
+  // Calculate weekly hours
+  const weeklyData = useMemo(() => {
+    if (!startDate || !endDate || entries.length === 0) return []
+    
+    const grouped = entries.reduce((acc, entry) => {
+      const entryDate = parseISO(entry.startTime)
+      const weekStart = startOfWeek(entryDate, { weekStartsOn: 1 })
+      const weekLabel = format(weekStart, 'MMM d')
+      
+      if (!acc[weekLabel]) {
+        acc[weekLabel] = 0
+      }
+      const hours = (entry.durationMinutes || 0) / 60
+      acc[weekLabel] += hours
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(grouped)
+      .map(([date, hours]) => ({
+        date,
+        hours: parseFloat(hours.toFixed(2)),
+      }))
+  }, [entries, startDate, endDate])
+
+  const hasChartData = customerData.length > 0 || projectData.length > 0 || dailyData.length > 0 || taskData.length > 0
 
   // Calculate summary statistics
   const stats = useMemo(() => {
@@ -211,11 +274,11 @@ export function Reports() {
         </Button>
       </div>
 
-      {/* Date Filters */}
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Time Period</CardTitle>
-          <CardDescription>Filter reports by date range</CardDescription>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>Filter reports by date range and project details</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -373,6 +436,9 @@ export function Reports() {
             customerData={customerData}
             projectData={projectData}
             dailyData={dailyData}
+            weeklyData={weeklyData}
+            taskData={taskData}
+            billableData={billableData}
           />
         </Suspense>
       ) : (
