@@ -1,19 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { Progress } from '../components/ui/Progress'
 import { Button } from '../components/ui/Button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/Dialog'
-import { Input } from '../components/ui/Input'
-import { Textarea } from '../components/ui/Textarea'
+import { Dialog, DialogTrigger } from '../components/ui/Dialog'
 import { Badge } from '../components/ui/Badge'
-import { Play, Square, Clock, Search, Edit, RefreshCw, Pause, Monitor, Activity, PlusCircle, Trash2 } from 'lucide-react'
+import { Clock, Monitor, Activity, PlusCircle } from 'lucide-react'
 import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries, useCreateTimeEntry, useDeleteTimeEntry } from '../hooks/useTimeEntries'
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { formatDurationHours } from '../lib/durationUtils'
-import { formatDate } from '../lib/dateUtils'
+import { useState, useEffect, useMemo } from 'react'
 import { parseApiDateTime } from '../lib/timeUtils'
+import type { TimeEntry } from '../types'
 import { getErrorMessage } from '../lib/utils'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
@@ -23,6 +19,7 @@ import { useBreakStatus } from '../hooks/useBreaks'
 import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-layout/legacy'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
+import { StatsPanel, TimerControls, ManualEntryDialog, EditEntryDialog, RecentEntriesList } from '../components/Dashboard'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
 const DASHBOARD_LAYOUTS_KEY = 'timekeeper_dashboard_layouts_v1'
@@ -155,39 +152,15 @@ export function Dashboard() {
   const deleteEntry = useDeleteTimeEntry()
   const createTimeEntry = useCreateTimeEntry()
   const [elapsed, setElapsed] = useState('00:00:00')
-  const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>()
-  const [dialogOpen, setDialogOpen] = useState(false)
   const [manualDialogOpen, setManualDialogOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [notes, setNotes] = useState('')
-  const [editingNotes, setEditingNotes] = useState(false)
-  const [runningNotes, setRunningNotes] = useState('')
-  const [manualTaskId, setManualTaskId] = useState<number | undefined>()
-  const [manualTaskSearch, setManualTaskSearch] = useState('')
-  const [manualStart, setManualStart] = useState('')
-  const [manualEnd, setManualEnd] = useState('')
-  const [manualEntryMode, setManualEntryMode] = useState<'timeRange' | 'billedOnly'>('timeRange')
-  const [manualBilledHours, setManualBilledHours] = useState('')
-  const [manualNotes, setManualNotes] = useState('')
-  const [manualError, setManualError] = useState<string | null>(null)
-  const [manualFieldErrors, setManualFieldErrors] = useState<{ start?: string; end?: string }>({})
   const [editEntryDialogOpen, setEditEntryDialogOpen] = useState(false)
-  const [editingEntryId, setEditingEntryId] = useState<number | null>(null)
-  const [editTaskId, setEditTaskId] = useState<number | undefined>()
-  const [editTaskSearch, setEditTaskSearch] = useState('')
-  const [editStart, setEditStart] = useState('')
-  const [editEnd, setEditEnd] = useState('')
-  const [editNotes, setEditNotes] = useState('')
-  const [editBilledHours, setEditBilledHours] = useState('')
-  const [editError, setEditError] = useState<string | null>(null)
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
   const [detectionMethod, setDetectionMethod] = useState<'system-level' | 'browser-only' | 'none'>('none')
   const [isLayoutEditMode, setIsLayoutEditMode] = useState(false)
   const [dashboardLayouts, setDashboardLayouts] = useState<ResponsiveLayouts>(() => loadDashboardLayouts())
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
-  // Ref to track editing state - prevents race conditions with async state updates
-  const isEditingNotesRef = useRef(false)
 
   // Idle detection
   const {
@@ -204,17 +177,6 @@ export function Dashboard() {
 
   // Check if idle detection is enabled
   const isIdleDetectionEnabled = localStorage.getItem('timekeeper_enableIdleDetection') === 'true'
-
-  // Read daily and weekly targets from localStorage (defaults: 8h daily, 40h weekly)
-  // Note: Empty dependency array is intentional - Settings page alerts users to refresh to apply changes
-  const dailyTargetHours = useMemo(() => {
-    const value = parseFloat(localStorage.getItem('timekeeper_dailyTarget') || '8')
-    return isNaN(value) || value <= 0 ? 8 : value
-  }, [])
-  const weeklyTargetHours = useMemo(() => {
-    const value = parseFloat(localStorage.getItem('timekeeper_weeklyTarget') || '40')
-    return isNaN(value) || value <= 0 ? 40 : value
-  }, [])
 
   // Update detection method when idle detection initializes
   useEffect(() => {
@@ -241,17 +203,6 @@ export function Dashboard() {
     () => getRecentEntriesHeight(displayedRecentEntries.length, recentEntriesMode, recentEntriesMode === 'pagination' && totalRecentEntriesPages > 1),
     [displayedRecentEntries.length, recentEntriesMode, totalRecentEntriesPages]
   )
-
-  // Sync notes from server only when the timer ID or server-side notes change.
-  // Deliberately does NOT depend on the full runningTimer object so the 1-second
-  // refetch (which changes serverNowUtc every poll) never resets what the user typed.
-  // Uses isEditingNotesRef instead of editingNotes state to prevent race conditions
-  // with async state updates during rapid refetches.
-  useEffect(() => {
-    if (isEditingNotesRef.current) return
-    setRunningNotes(runningTimer?.notes || '')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runningTimer?.id, runningTimer?.notes])
 
   // Elapsed timer — depends on the full object so serverNowUtc baseline is fresh.
   useEffect(() => {
@@ -329,35 +280,10 @@ export function Dashboard() {
     setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev, recentEntriesWidgetHeight))
   }, [recentEntriesWidgetHeight, isLayoutEditMode])
 
-  // Populate dialog when opening for running timer.
-  // Depends on runningTimer?.id (not the full object) so the 1-second refetch
-  // (which changes serverNowUtc every poll) never resets user-typed notes or
-  // task selection while the dialog is open.
-  useEffect(() => {
-    if (dialogOpen && runningTimer) {
-      if (runningTimer.taskId) {
-        setSelectedTaskId(runningTimer.taskId)
-      }
-      setNotes(runningTimer.notes || '')
-    }
-  }, [dialogOpen, runningTimer?.id])
 
   const filteredTasks = useMemo(() => {
-    if (!searchTerm) return tasks
-    const lower = searchTerm.toLowerCase()
-    return tasks.filter(task =>
-      task.name?.toLowerCase().includes(lower) ||
-      task.projectName?.toLowerCase().includes(lower) ||
-      task.customerName?.toLowerCase().includes(lower)
-    )
-  }, [tasks, searchTerm])
-
-  const formatMinutesAsHoursMinutes = (minutes: number) => {
-    const safeMinutes = Math.max(0, Math.round(minutes))
-    const hours = Math.floor(safeMinutes / 60)
-    const remainingMinutes = safeMinutes % 60
-    return `${hours}h ${remainingMinutes}m`
-  }
+    return tasks
+  }, [tasks])
 
   const activeBreakMinutes = useMemo(() => {
     if (!breakStatus?.isOnBreak || !breakStatus.breakStartTime) return 0
@@ -399,30 +325,11 @@ export function Dashboard() {
     return projectSet.size
   }, [recentEntries])
 
-  const handleStartTimer = () => {
-    if (!selectedTaskId) return
-    
+  const handleStartTimer = (taskId: number, notes: string) => {
     startTimer.mutate(
-      { 
-        taskId: selectedTaskId,
-        notes: notes || undefined
-      },
-      {
-        onSuccess: () => {
-          setDialogOpen(false)
-          setSelectedTaskId(undefined)
-          setSearchTerm('')
-          setNotes('')
-        },
-        onError: (error: unknown) => {
-          alert(getErrorMessage(error, 'Failed to start timer.'))
-        }
-      }
+      { taskId, notes: notes || undefined },
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to start timer.')) } }
     )
-  }
-
-  const handleSelectTask = (taskId: number) => {
-    setSelectedTaskId(taskId)
   }
 
   const handleQuickStart = async () => {
@@ -439,49 +346,28 @@ export function Dashboard() {
     
     // Then start the timer
     startTimer.mutate(
-      { 
-        notes: 'Quick start from dashboard'
-      },
-      {
-        onSuccess: () => {
-          setSelectedTaskId(undefined)
-          setSearchTerm('')
-          setNotes('')
-        },
-        onError: (error: unknown) => {
-          alert(getErrorMessage(error, 'Failed to start timer.'))
-        }
-      }
+      { notes: 'Quick start from dashboard' },
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to start timer.')) } }
     )
   }
 
-  const handleAssignTaskToRunningTimer = () => {
+  const handleAssignTaskToRunningTimer = (taskId: number | undefined, notes: string) => {
     if (!runningTimer) return
     
     updateTimer.mutate(
       {
         id: runningTimer.id,
         data: {
-          taskId: selectedTaskId,
+          taskId,
           notes: notes || runningTimer.notes,
           startTime: runningTimer.startTime,
         }
       },
-      {
-        onSuccess: () => {
-          setDialogOpen(false)
-          setSelectedTaskId(undefined)
-          setSearchTerm('')
-          setNotes('')
-        },
-        onError: (error: unknown) => {
-          alert(getErrorMessage(error, 'Failed to assign task to timer.'))
-        }
-      }
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to assign task to timer.')) } }
     )
   }
 
-  const handleUpdateRunningNotes = () => {
+  const handleUpdateRunningNotes = (notes: string) => {
     if (!runningTimer) return
     
     updateTimer.mutate(
@@ -489,19 +375,11 @@ export function Dashboard() {
         id: runningTimer.id,
         data: {
           taskId: runningTimer.taskId,
-          notes: runningNotes,
+          notes,
           startTime: runningTimer.startTime,
         }
       },
-      {
-        onSuccess: () => {
-          isEditingNotesRef.current = false
-          setEditingNotes(false)
-        },
-        onError: (error: unknown) => {
-          alert(getErrorMessage(error, 'Failed to update notes.'))
-        }
-      }
+      { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to update notes.')) } }
     )
   }
 
@@ -554,200 +432,47 @@ export function Dashboard() {
     }
   }
 
-  const toLocalDateTimeInput = (value?: string) => {
-    if (!value) return ''
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-    const year = date.getFullYear()
-    const month = `${date.getMonth() + 1}`.padStart(2, '0')
-    const day = `${date.getDate()}`.padStart(2, '0')
-    const hours = `${date.getHours()}`.padStart(2, '0')
-    const minutes = `${date.getMinutes()}`.padStart(2, '0')
-    return `${year}-${month}-${day}T${hours}:${minutes}`
-  }
-
-  const openEditEntryDialog = (entry: typeof recentEntries[number]) => {
-    setEditingEntryId(entry.id)
-    setEditTaskId(entry.taskId)
-    setEditTaskSearch('')
-    setEditStart(toLocalDateTimeInput(entry.startTime))
-    setEditEnd(toLocalDateTimeInput(entry.endTime))
-    setEditNotes(entry.notes || '')
-    setEditBilledHours(entry.billedHours != null ? entry.billedHours.toString() : '')
-    setEditError(null)
+  const openEditEntryDialog = (entry: TimeEntry) => {
+    setEditingEntry(entry)
     setEditEntryDialogOpen(true)
   }
 
-  const resetEditEntryDialog = () => {
-    setEditEntryDialogOpen(false)
-    setEditingEntryId(null)
-    setEditTaskId(undefined)
-    setEditTaskSearch('')
-    setEditStart('')
-    setEditEnd('')
-    setEditNotes('')
-    setEditBilledHours('')
-    setEditError(null)
-  }
-
-  const handleSaveEditedEntry = () => {
-    if (!editingEntryId) return
-
-    setEditError(null)
-
-    if (!editStart) {
-      setEditError('Start time is required.')
-      return
-    }
-
-    const start = new Date(editStart)
-    const end = editEnd ? new Date(editEnd) : undefined
-
-    if (Number.isNaN(start.getTime())) {
-      setEditError('Start time is invalid.')
-      return
-    }
-
-    if (end && Number.isNaN(end.getTime())) {
-      setEditError('End time is invalid.')
-      return
-    }
-
-    if (end && end <= start) {
-      setEditError('End time must be after start time.')
-      return
-    }
-
-    const billedHoursValue = editBilledHours.trim() === '' ? undefined : Number(editBilledHours)
-    if (editBilledHours.trim() !== '' && (!Number.isFinite(billedHoursValue) || (billedHoursValue ?? 0) < 0)) {
-      setEditError('Billed hours must be 0 or greater.')
-      return
-    }
+  const handleSaveEditedEntry = (data: {
+    taskId?: number
+    startTime: string
+    endTime?: string
+    billedHours?: number
+    notes?: string
+  }) => {
+    if (!editingEntry) return
 
     updateTimer.mutate(
       {
-        id: editingEntryId,
-        data: {
-          taskId: editTaskId,
-          startTime: start.toISOString(),
-          endTime: end ? end.toISOString() : undefined,
-          billedHours: billedHoursValue,
-          notes: editNotes || undefined,
-        },
+        id: editingEntry.id,
+        data,
       },
       {
         onSuccess: () => {
-          resetEditEntryDialog()
+          setEditEntryDialogOpen(false)
+          setEditingEntry(null)
         },
       }
     )
   }
 
-  const resetManualDialog = () => {
-    setManualTaskId(undefined)
-    setManualTaskSearch('')
-    setManualEntryMode('timeRange')
-    setManualBilledHours('')
-    setManualNotes('')
-    setManualError(null)
-    setManualFieldErrors({})
-    const now = new Date()
-    const end = new Date(now)
-    const start = new Date(now)
-    start.setHours(now.getHours() - 1)
-    setManualStart(start.toISOString().slice(0, 16))
-    setManualEnd(end.toISOString().slice(0, 16))
-  }
-
-  useEffect(() => {
-    if (manualDialogOpen && !manualStart && !manualEnd) {
-      resetManualDialog()
-    }
-  }, [manualDialogOpen, manualStart, manualEnd])
-
-  const handleCreateManualEntry = () => {
-    setManualError(null)
-    setManualFieldErrors({})
-
-    const fieldErrors: { start?: string; end?: string } = {}
-
-    if (!manualStart) {
-      fieldErrors.start = 'Start time is required.'
-      setManualFieldErrors(fieldErrors)
-      setManualError('Please fix the highlighted fields.')
-      return
-    }
-
-    const start = new Date(manualStart)
-    const billedHoursValue = manualBilledHours ? Number(manualBilledHours) : undefined
-    let endIso: string | undefined
-
-    if (manualEntryMode === 'timeRange') {
-      if (!manualEnd) {
-        fieldErrors.end = 'End time is required.'
-        setManualFieldErrors(fieldErrors)
-        setManualError('Please fix the highlighted fields.')
-        return
-      }
-
-      const end = new Date(manualEnd)
-      if (end <= start) {
-        fieldErrors.end = 'End time must be after start time.'
-        setManualFieldErrors(fieldErrors)
-        setManualError('End time must be after start time.')
-        return
-      }
-
-      endIso = end.toISOString()
-    } else {
-      if (!billedHoursValue || billedHoursValue <= 0) {
-        setManualError('Billed time must be greater than 0.')
-        return
-      }
-    }
-
-    createTimeEntry.mutate(
-      {
-        taskId: manualTaskId,
-        startTime: start.toISOString(),
-        endTime: endIso,
-        billedHours: billedHoursValue,
-        notes: manualNotes || undefined,
+  const handleCreateManualEntry = (data: {
+    taskId?: number
+    startTime: string
+    endTime?: string
+    billedHours?: number
+    notes?: string
+  }) => {
+    createTimeEntry.mutate(data, {
+      onSuccess: () => {
+        setManualDialogOpen(false)
       },
-      {
-        onSuccess: () => {
-          setManualDialogOpen(false)
-          resetManualDialog()
-        },
-      }
-    )
+    })
   }
-
-  const filteredManualTasks = useMemo(() => {
-    const term = manualTaskSearch.trim().toLowerCase()
-    if (!term) {
-      return tasks
-    }
-
-    return tasks.filter(task =>
-      task.name?.toLowerCase().includes(term) ||
-      task.projectName?.toLowerCase().includes(term) ||
-      task.customerName?.toLowerCase().includes(term)
-    )
-  }, [tasks, manualTaskSearch])
-
-  const filteredEditTasks = useMemo(() => {
-    const term = editTaskSearch.trim().toLowerCase()
-    if (!term) {
-      return tasks
-    }
-
-    return tasks.filter(task =>
-      task.name?.toLowerCase().includes(term) ||
-      task.projectName?.toLowerCase().includes(term) ||
-      task.customerName?.toLowerCase().includes(term)
-    )
-  }, [tasks, editTaskSearch])
 
   return (
     <div className="space-y-6">
@@ -764,164 +489,14 @@ export function Dashboard() {
                 Add Manual Entry
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-xl">
-              <DialogHeader>
-                <DialogTitle>Add Manual Duration</DialogTitle>
-                <DialogDescription>Create a finished time entry with exact start and end time.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Entry mode</label>
-                  <select
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={manualEntryMode}
-                    onChange={(e) => setManualEntryMode(e.target.value as 'timeRange' | 'billedOnly')}
-                  >
-                    <option value="timeRange">Start + End time</option>
-                    <option value="billedOnly">Start + Billed hours</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Task (optional)</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search tasks, projects, or customers..."
-                      value={manualTaskSearch}
-                      onChange={(e) => setManualTaskSearch(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto rounded-md border p-2">
-                    <button
-                      type="button"
-                      onClick={() => setManualTaskId(undefined)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                        manualTaskId == null
-                          ? 'bg-primary/10 border-primary'
-                          : 'hover:bg-accent hover:border-primary'
-                      }`}
-                    >
-                      <div className="font-medium">No task</div>
-                      <div className="text-sm text-muted-foreground">Create entry without assigning a task</div>
-                    </button>
-
-                    {filteredManualTasks.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-4 text-sm">
-                        {manualTaskSearch ? 'No tasks found' : 'No active tasks available'}
-                      </p>
-                    ) : (
-                      filteredManualTasks.map((task) => (
-                        <button
-                          type="button"
-                          key={task.id}
-                          onClick={() => setManualTaskId(task.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                            manualTaskId === task.id
-                              ? 'bg-primary/10 border-primary'
-                              : 'hover:bg-accent hover:border-primary'
-                          }`}
-                        >
-                          <div className="font-medium">{task.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {task.customerName} / {task.projectName}
-                          </div>
-                          {(task.position || task.procurementNumber) && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {task.position && <span>Position: {task.position}</span>}
-                              {task.position && task.procurementNumber && <span> • </span>}
-                              {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
-                            </div>
-                          )}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Start</label>
-                    <Input
-                      type="datetime-local"
-                      value={manualStart}
-                      onChange={(e) => {
-                        setManualStart(e.target.value)
-                        if (manualFieldErrors.start) {
-                          setManualFieldErrors(prev => ({ ...prev, start: undefined }))
-                        }
-                      }}
-                      className={manualFieldErrors.start ? 'border-destructive focus-visible:ring-destructive' : ''}
-                    />
-                    {manualFieldErrors.start && (
-                      <p className="text-xs text-destructive">{manualFieldErrors.start}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {manualEntryMode === 'timeRange' ? (
-                      <>
-                        <label className="text-sm font-medium">End</label>
-                        <Input
-                          type="datetime-local"
-                          value={manualEnd}
-                          onChange={(e) => {
-                            setManualEnd(e.target.value)
-                            if (manualFieldErrors.end) {
-                              setManualFieldErrors(prev => ({ ...prev, end: undefined }))
-                            }
-                          }}
-                          className={manualFieldErrors.end ? 'border-destructive focus-visible:ring-destructive' : ''}
-                        />
-                        {manualFieldErrors.end && (
-                          <p className="text-xs text-destructive">{manualFieldErrors.end}</p>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <label className="text-sm font-medium">Billed hours</label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.25"
-                          value={manualBilledHours}
-                          onChange={(e) => setManualBilledHours(e.target.value)}
-                          placeholder="e.g. 1.50"
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Notes</label>
-                  <Textarea
-                    placeholder="What did you work on?"
-                    rows={3}
-                    value={manualNotes}
-                    onChange={(e) => setManualNotes(e.target.value)}
-                  />
-                </div>
-                {manualError && (
-                  <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {manualError}
-                  </div>
-                )}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setManualDialogOpen(false)
-                      resetManualDialog()
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateManualEntry} disabled={createTimeEntry.isPending}>
-                    Save Entry
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
           </Dialog>
+          <ManualEntryDialog
+            open={manualDialogOpen}
+            onOpenChange={setManualDialogOpen}
+            tasks={filteredTasks}
+            onCreateEntry={handleCreateManualEntry}
+            isCreating={createTimeEntry.isPending}
+          />
           <Button
             variant={isLayoutEditMode ? 'default' : 'outline'}
             onClick={() => setIsLayoutEditMode(prev => !prev)}
@@ -1020,333 +595,22 @@ export function Dashboard() {
           </div>
 
           {/* Timer Controls */}
-          <div className="flex w-full flex-col items-center gap-4">
-            {runningTimer ? (
-              <>
-                <div className="w-full max-w-2xl min-h-[108px]">
-                  {!editingNotes && (
-                    <div className="flex flex-col items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          isEditingNotesRef.current = true
-                          setEditingNotes(true)
-                        }}
-                        className="gap-2"
-                      >
-                        <Edit className="h-4 w-4" />
-                        {runningTimer.notes ? 'Edit Notes' : 'Add Notes'}
-                      </Button>
-                      <div className="w-full rounded-md border p-3 text-sm text-muted-foreground">
-                        {runningTimer.notes || 'No notes yet'}
-                      </div>
-                    </div>
-                  )}
-
-                  {editingNotes && (
-                    <div className="space-y-2">
-                      <Textarea
-                        placeholder="Describe what you're working on..."
-                        value={runningNotes}
-                        onChange={(e) => setRunningNotes(e.target.value)}
-                        rows={3}
-                        className="resize-none"
-                        autoFocus
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            isEditingNotesRef.current = false
-                            setEditingNotes(false)
-                            setRunningNotes(runningTimer.notes || '')
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={handleUpdateRunningNotes}
-                          disabled={updateTimer.isPending}
-                        >
-                          Save Notes
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
-                  {runningTimer.isPaused ? (
-                    <Button
-                      size="lg"
-                      onClick={() => resumeFromPause.mutate(runningTimer.id, {
-                        onError: (error: unknown) => {
-                          alert(getErrorMessage(error, 'Failed to resume timer.'))
-                        }
-                      })}
-                      disabled={resumeFromPause.isPending}
-                      className="h-12 w-full gap-2 whitespace-nowrap"
-                    >
-                      <Play className="h-5 w-5" />
-                      Resume
-                    </Button>
-                  ) : (
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={() => pauseTimer.mutate(runningTimer.id, {
-                        onError: (error: unknown) => {
-                          alert(getErrorMessage(error, 'Failed to pause timer.'))
-                        }
-                      })}
-                      disabled={pauseTimer.isPending}
-                      className="h-12 w-full gap-2 whitespace-nowrap"
-                    >
-                      <Pause className="h-5 w-5" />
-                      Pause
-                    </Button>
-                  )}
-                  
-                  <Button
-                    size="lg"
-                    variant="destructive"
-                    onClick={handleStopTimer}
-                    disabled={stopTimer.isPending}
-                    className="h-12 w-full gap-2 whitespace-nowrap"
-                  >
-                    <Square className="h-5 w-5" />
-                    Stop
-                  </Button>
-                  
-                  <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="lg" variant="outline" className="h-12 w-full gap-2 whitespace-nowrap">
-                        <Clock className="h-5 w-5" />
-                        {runningTimer.taskId ? 'Change' : 'Assign'}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[700px]">
-                      <DialogHeader>
-                        <DialogTitle>
-                          {runningTimer.taskId ? 'Change Task' : 'Assign Task to Running Timer'}
-                        </DialogTitle>
-                        <DialogDescription>
-                          Select a task and update notes for the current time entry
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <div className="space-y-4">
-                        {/* Search */}
-                        <div className="relative">
-                          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Search tasks, projects, or customers..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-9"
-                          />
-                        </div>
-
-                        {/* Task List */}
-                        <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                          {filteredTasks.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-8">
-                              {searchTerm ? 'No tasks found' : 'No active tasks available'}
-                            </p>
-                          ) : (
-                            filteredTasks.map((task) => (
-                              <button
-                                key={task.id}
-                                onClick={() => handleSelectTask(task.id)}
-                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                                  selectedTaskId === task.id
-                                    ? 'bg-primary/10 border-primary'
-                                    : 'hover:bg-accent hover:border-primary'
-                                }`}
-                              >
-                                <div className="font-medium">{task.name}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {task.customerName} / {task.projectName}
-                                </div>
-                                {(task.position || task.procurementNumber) && (
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    {task.position && <span>Position: {task.position}</span>}
-                                    {task.position && task.procurementNumber && <span> • </span>}
-                                    {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
-                                  </div>
-                                )}
-                              </button>
-                            ))
-                          )}
-                        </div>
-
-                        {/* Notes Section */}
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">
-                            Notes (Optional)
-                          </label>
-                          <Textarea
-                            placeholder="Describe what you're working on..."
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            rows={3}
-                            className="resize-none"
-                          />
-                        </div>
-
-                        {/* Assign Button */}
-                        <div className="flex justify-end gap-2 pt-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setDialogOpen(false)
-                              setSelectedTaskId(undefined)
-                              setNotes('')
-                              setSearchTerm('')
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={handleAssignTaskToRunningTimer}
-                            disabled={updateTimer.isPending}
-                            className="gap-2"
-                          >
-                            <Clock className="h-4 w-4" />
-                            {selectedTaskId ? 'Assign Task' : 'Update Notes'}
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="w-full max-w-2xl min-h-[108px] rounded-md border border-dashed border-muted p-3 text-center text-sm text-muted-foreground flex items-center justify-center">
-                  Start a timer to add notes
-                </div>
-
-                <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={handleQuickStart}
-                    disabled={startTimer.isPending}
-                    className="h-12 w-full gap-2 whitespace-nowrap"
-                  >
-                    <Play className="h-5 w-5" />
-                    Quick Start
-                  </Button>
-
-                  <div className="h-12" />
-
-                  <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="lg" className="h-12 w-full gap-2 whitespace-nowrap">
-                        <Clock className="h-5 w-5" />
-                        Start with Task
-                      </Button>
-                    </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[700px]">
-                    <DialogHeader>
-                      <DialogTitle>Start New Timer</DialogTitle>
-                      <DialogDescription>
-                        Select a task and add optional notes to begin tracking time
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="space-y-4">
-                      {/* Search */}
-                      <div className="relative">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search tasks, projects, or customers..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-9"
-                        />
-                      </div>
-
-                      {/* Task List */}
-                      <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                        {filteredTasks.length === 0 ? (
-                          <p className="text-center text-muted-foreground py-8">
-                            {searchTerm ? 'No tasks found' : 'No active tasks available'}
-                          </p>
-                        ) : (
-                          filteredTasks.map((task) => (
-                            <button
-                              key={task.id}
-                              onClick={() => handleSelectTask(task.id)}
-                              className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                                selectedTaskId === task.id
-                                  ? 'bg-primary/10 border-primary'
-                                  : 'hover:bg-accent hover:border-primary'
-                              }`}
-                            >
-                              <div className="font-medium">{task.name}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {task.customerName} / {task.projectName}
-                              </div>
-                              {(task.position || task.procurementNumber) && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  {task.position && <span>Position: {task.position}</span>}
-                                  {task.position && task.procurementNumber && <span> • </span>}
-                                  {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
-                                </div>
-                              )}
-                            </button>
-                          ))
-                        )}
-                      </div>
-
-                      {/* Notes Section */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Notes (Optional)
-                        </label>
-                        <Textarea
-                          placeholder="Describe what you're working on..."
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          rows={3}
-                          className="resize-none"
-                        />
-                      </div>
-
-                      {/* Start Button */}
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setDialogOpen(false)
-                            setSelectedTaskId(undefined)
-                            setNotes('')
-                            setSearchTerm('')
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleStartTimer}
-                          disabled={!selectedTaskId || startTimer.isPending}
-                          className="gap-2"
-                        >
-                          <Play className="h-4 w-4" />
-                          Start Timer
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                  </Dialog>
-                </div>
-              </>
-            )}
-          </div>
+          <TimerControls
+            runningTimer={runningTimer}
+            tasks={filteredTasks}
+            onStartTimer={handleStartTimer}
+            onQuickStart={handleQuickStart}
+            onStopTimer={handleStopTimer}
+            onPauseTimer={(id) => pauseTimer.mutate(id, { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to pause timer.')) } })}
+            onResumeFromPause={(id) => resumeFromPause.mutate(id, { onError: (error: unknown) => { alert(getErrorMessage(error, 'Failed to resume timer.')) } })}
+            onUpdateRunningNotes={handleUpdateRunningNotes}
+            onAssignTaskToRunningTimer={handleAssignTaskToRunningTimer}
+            isStartTimerPending={startTimer.isPending}
+            isStopTimerPending={stopTimer.isPending}
+            isPauseTimerPending={pauseTimer.isPending}
+            isResumeFromPausePending={resumeFromPause.isPending}
+            isUpdateTimerPending={updateTimer.isPending}
+          />
         </CardContent>
       </Card>
       </div>
@@ -1357,67 +621,14 @@ export function Dashboard() {
             Drag / resize: Stats
           </div>
         )}
-      <div className="grid h-full min-h-0 gap-4 md:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Today</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(todayWorkedMinutes)}</div>
-            <p className="text-xs text-muted-foreground">of {dailyTargetHours.toFixed(2)}h target</p>
-            <Progress 
-              value={todayWorkedMinutes} 
-              max={dailyTargetHours * 60} 
-              className="mt-2"
-            />
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">This Week</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(thisWeekWorkedMinutes)}</div>
-            <p className="text-xs text-muted-foreground">of {weeklyTargetHours.toFixed(2)}h target</p>
-            <Progress 
-              value={thisWeekWorkedMinutes} 
-              max={weeklyTargetHours * 60} 
-              className="mt-2"
-            />
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeProjectCount}</div>
-            <p className="text-xs text-muted-foreground">currently tracking</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Break</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(totalBreakMinutesToday)}</div>
-            <p className="text-xs text-muted-foreground">Breaks today</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Billed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{todayBilledHours.toFixed(2)}h</div>
-            <p className="text-xs text-muted-foreground">Billed today</p>
-          </CardContent>
-        </Card>
-      </div>
+        <StatsPanel
+          todayWorkedMinutes={todayWorkedMinutes}
+          thisWeekWorkedMinutes={thisWeekWorkedMinutes}
+          activeProjectCount={activeProjectCount}
+          totalBreakMinutesToday={totalBreakMinutesToday}
+          todayBilledHours={todayBilledHours}
+          isBillingEnabled={isBillingEnabled}
+        />
       </div>
 
       <div key="breaksList" className="flex h-full min-h-0 flex-col">
@@ -1435,277 +646,29 @@ export function Dashboard() {
             Drag / resize: Recent Entries
           </div>
         )}
-      <Card className="flex h-full min-h-0 flex-col">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Time Entries</CardTitle>
-              <CardDescription>
-                Double-click to restart timer for any entry
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <select
-                className="h-9 rounded-md border bg-background px-2 text-xs"
-                value={recentEntriesMode}
-                onChange={(e) => setRecentEntriesMode(e.target.value as RecentEntriesMode)}
-              >
-                <option value="scroll">Scrolling</option>
-                <option value="pagination">Pagination</option>
-              </select>
-              <Badge variant="secondary">{limitedRecentEntries.length} entries</Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className={recentEntriesMode === 'scroll' ? 'flex-1 min-h-0 overflow-y-auto' : 'flex-1 min-h-0'}>
-          {displayedRecentEntries.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No recent entries yet. Start tracking time to see your activity here!
-            </p>
-          ) : (
-            <div className="space-y-2 pr-1">
-              {displayedRecentEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  onDoubleClick={() => handleRestartTimer(entry.id)}
-                  className="grid grid-cols-1 gap-2 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer md:grid-cols-[1.2fr_1fr_1.2fr_auto_auto_auto_auto] md:items-center"
-                  title="Double-click to restart timer"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">
-                        {entry.taskName || 'No task'}
-                      </span>
-                      {entry.isRunning && (
-                        <Badge variant="success" className="flex-shrink-0">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Running
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground truncate">
-                      {entry.customerName && entry.projectName ? (
-                        <>{entry.customerName} / {entry.projectName}</>
-                      ) : (
-                        'No project assigned'
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {entry.notes && entry.notes !== 'Quick start from dashboard' ? entry.notes : '—'}
-                  </div>
-                  <div className="text-sm font-medium md:text-right">
-                    {entry.durationMinutes 
-                      ? formatDurationHours(
-                          `${Math.floor(entry.durationMinutes / 60).toString().padStart(2, '0')}:${Math.floor(entry.durationMinutes % 60).toString().padStart(2, '0')}:00`
-                        )
-                      : '—'}
-                    {isBillingEnabled && entry.billedHours != null && (
-                      <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                        Billed: {entry.billedHours.toFixed(2)}h
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground md:text-right">
-                    {formatDate(entry.startTime, 'MMM d, HH:mm')}
-                  </div>
-                  <div className="flex md:justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openEditEntryDialog(entry)
-                      }}
-                      title="Edit entry"
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                  </div>
-                  <div className="flex md:justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteRecentEntry(entry.id)
-                      }}
-                      disabled={deleteEntry.isPending || entry.isRunning}
-                      title={entry.isRunning ? 'Stop running timer before deleting' : 'Delete entry'}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex md:justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRestartTimer(entry.id)
-                      }}
-                      title="Restart timer"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+        <RecentEntriesList
+          entries={displayedRecentEntries}
+          mode={recentEntriesMode}
+          currentPage={recentEntriesPage}
+          totalPages={totalRecentEntriesPages}
+          isBillingEnabled={isBillingEnabled}
+          onModeChange={setRecentEntriesMode}
+          onPageChange={setRecentEntriesPage}
+          onEditEntry={openEditEntryDialog}
+          onDeleteEntry={handleDeleteRecentEntry}
+          onRestartTimer={handleRestartTimer}
+          isDeleting={deleteEntry.isPending}
+        />
 
-              {recentEntriesMode === 'pagination' && totalRecentEntriesPages > 1 && (
-                <div className="flex items-center justify-between border-t pt-3">
-                  <span className="text-xs text-muted-foreground">
-                    Page {recentEntriesPage} of {totalRecentEntriesPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setRecentEntriesPage(prev => Math.max(1, prev - 1))}
-                      disabled={recentEntriesPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setRecentEntriesPage(prev => Math.min(totalRecentEntriesPages, prev + 1))}
-                      disabled={recentEntriesPage === totalRecentEntriesPages}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={editEntryDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          resetEditEntryDialog()
-          return
-        }
-        setEditEntryDialogOpen(open)
-      }}>
-        <DialogContent className="max-w-2xl max-h-[700px]">
-          <DialogHeader>
-            <DialogTitle>Edit Time Entry</DialogTitle>
-            <DialogDescription>Update task, timestamps, notes, and billing for this entry.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Task</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search tasks, projects, or customers..."
-                  value={editTaskSearch}
-                  onChange={(e) => setEditTaskSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <div className="space-y-2 max-h-[220px] overflow-y-auto rounded-md border p-2">
-                <button
-                  type="button"
-                  onClick={() => setEditTaskId(undefined)}
-                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                    editTaskId == null
-                      ? 'bg-primary/10 border-primary'
-                      : 'hover:bg-accent hover:border-primary'
-                  }`}
-                >
-                  <div className="font-medium">No task</div>
-                  <div className="text-sm text-muted-foreground">Keep this entry without an assigned task</div>
-                </button>
-
-                {filteredEditTasks.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4 text-sm">
-                    {editTaskSearch ? 'No tasks found' : 'No active tasks available'}
-                  </p>
-                ) : (
-                  filteredEditTasks.map((task) => (
-                    <button
-                      type="button"
-                      key={task.id}
-                      onClick={() => setEditTaskId(task.id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                        editTaskId === task.id
-                          ? 'bg-primary/10 border-primary'
-                          : 'hover:bg-accent hover:border-primary'
-                      }`}
-                    >
-                      <div className="font-medium">{task.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {task.customerName} / {task.projectName}
-                      </div>
-                      {(task.position || task.procurementNumber) && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {task.position && <span>Position: {task.position}</span>}
-                          {task.position && task.procurementNumber && <span> • </span>}
-                          {task.procurementNumber && <span>Procurement: {task.procurementNumber}</span>}
-                        </div>
-                      )}
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Start</label>
-                <Input type="datetime-local" value={editStart} onChange={(e) => setEditStart(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">End (optional)</label>
-                <Input type="datetime-local" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} />
-              </div>
-            </div>
-
-            {isBillingEnabled && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Billed hours</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.25"
-                  value={editBilledHours}
-                  onChange={(e) => setEditBilledHours(e.target.value)}
-                  placeholder="e.g. 1.50"
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Notes</label>
-              <Textarea
-                placeholder="Describe what you worked on..."
-                rows={3}
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-              />
-            </div>
-
-            {editError && (
-              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {editError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={resetEditEntryDialog}>Cancel</Button>
-              <Button onClick={handleSaveEditedEntry} disabled={updateTimer.isPending}>
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <EditEntryDialog
+          open={editEntryDialogOpen}
+          onOpenChange={setEditEntryDialogOpen}
+          tasks={filteredTasks}
+          entry={editingEntry}
+          onSaveEntry={handleSaveEditedEntry}
+          isSaving={updateTimer.isPending}
+          isBillingEnabled={isBillingEnabled}
+        />
       </div>
       </ResponsiveGridLayout>
 
