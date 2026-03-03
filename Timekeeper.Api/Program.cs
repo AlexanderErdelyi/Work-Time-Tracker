@@ -162,6 +162,23 @@ builder.Services.AddHttpClient("copilot", client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 
+// Activity tracking services
+builder.Services.AddSingleton<IOAuthTokenProtector, OAuthTokenProtector>();
+builder.Services.AddScoped<IGraphApiClient, GraphApiClient>();
+builder.Services.AddScoped<IAzureDevOpsApiClient, AzureDevOpsApiClient>();
+builder.Services.AddScoped<IActivitySuggestionService, ActivitySuggestionService>();
+builder.Services.AddSingleton<ActivitySyncService>();
+builder.Services.AddSingleton<IActivitySyncTrigger>(sp => sp.GetRequiredService<ActivitySyncService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ActivitySyncService>());
+builder.Services.AddHttpClient("graph", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddHttpClient("ado", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
 // Configure CORS
 builder.Services.AddCors(options =>
 {

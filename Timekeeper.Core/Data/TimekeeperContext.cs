@@ -28,6 +28,10 @@ public class TimekeeperContext : DbContext
     public DbSet<WorkDay> WorkDays { get; set; } = null!;
     public DbSet<QuickAction> QuickActions { get; set; } = null!;
     public DbSet<SupportTicket> SupportTickets { get; set; } = null!;
+    public DbSet<UserIntegration> UserIntegrations { get; set; } = null!;
+    public DbSet<ActivityEvent> ActivityEvents { get; set; } = null!;
+    public DbSet<ActivityMappingRule> ActivityMappingRules { get; set; } = null!;
+    public DbSet<UserActivityPreferences> UserActivityPreferences { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -245,6 +249,131 @@ public class TimekeeperContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<UserIntegration>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.Provider).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.AccessToken).HasMaxLength(4000);
+            entity.Property(e => e.RefreshToken).HasMaxLength(4000);
+            entity.Property(e => e.EnabledSourcesJson).HasMaxLength(500).HasDefaultValue("[]");
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.Provider }).IsUnique();
+            entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
+
+            entity.HasOne<Workspace>()
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ActivityEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.Source).HasConversion<string>().HasMaxLength(40);
+            entity.Property(e => e.EventType).HasMaxLength(50);
+            entity.Property(e => e.ExternalId).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.MetadataJson).HasMaxLength(4000).HasDefaultValue("{}");
+            entity.Property(e => e.SuggestionState).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.SuggestedNotes).HasMaxLength(2000);
+            entity.Property(e => e.Confidence).HasMaxLength(30);
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.Source, e.ExternalId }).IsUnique();
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.SuggestionState });
+            entity.HasIndex(e => e.StartTime);
+            entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
+
+            entity.HasOne<Workspace>()
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.SuggestedCustomer)
+                .WithMany()
+                .HasForeignKey(e => e.SuggestedCustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.SuggestedProject)
+                .WithMany()
+                .HasForeignKey(e => e.SuggestedProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.SuggestedTask)
+                .WithMany()
+                .HasForeignKey(e => e.SuggestedTaskId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.LinkedTimeEntry)
+                .WithMany()
+                .HasForeignKey(e => e.LinkedTimeEntryId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ActivityMappingRule>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.MatchField).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.MatchOperator).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.MatchValue).IsRequired().HasMaxLength(500);
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.Priority });
+            entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
+
+            entity.HasOne<Workspace>()
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.MappedCustomer)
+                .WithMany()
+                .HasForeignKey(e => e.MappedCustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.MappedProject)
+                .WithMany()
+                .HasForeignKey(e => e.MappedProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.MappedTask)
+                .WithMany()
+                .HasForeignKey(e => e.MappedTaskId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<UserActivityPreferences>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
+            entity.Property(e => e.NotesLanguage).IsRequired().HasMaxLength(10).HasDefaultValue("en");
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId }).IsUnique();
+            entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
+
+            entity.HasOne<Workspace>()
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         SeedData(modelBuilder);

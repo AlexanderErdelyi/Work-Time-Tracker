@@ -42,11 +42,16 @@ import {
   Eye,
   EyeOff,
   Globe,
+  Plug,
+  Unplug,
+  Puzzle,
+  Link,
 } from 'lucide-react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useConfirm } from '../hooks/useConfirm'
 import { toast } from 'sonner'
 import { AI_LANGUAGES, getAiLanguage, setAiLanguage } from '../lib/aiLanguage'
+import { activityApi, integrationsApi, activityMappingsApi, generatePkce } from '../api/activity'
 
 export function Settings() {
   const queryClient = useQueryClient()
@@ -78,8 +83,157 @@ export function Settings() {
   const handleAiLanguageChange = (lang: string) => {
     setAiLanguage(lang)
     setAiLanguageState(lang)
-    toast.success(`AI output language set to ${lang}.`)
+    // Persist to backend so the sync service can use it for note generation
+    activityApi.updatePreferences({ notesLanguage: lang })
+      .then(() => toast.success('Language preference saved'))
+      .catch(() => toast.error('Failed to save language preference'))
   }
+
+  // ---- Integrations state ----
+  const { data: integrations = [], isLoading: integrationsLoading } = useQuery({
+    queryKey: ['integrations'],
+    queryFn: integrationsApi.list,
+  })
+
+  const [adoPatInput, setAdoPatInput] = useState('')
+  const [adoPatVisible, setAdoPatVisible] = useState(false)
+  const [adoOrgInput, setAdoOrgInput] = useState('')
+  const [adoShowOrgUpdate, setAdoShowOrgUpdate] = useState(false)
+  const [adoOrgUpdateInput, setAdoOrgUpdateInput] = useState('')
+  const connectAdoMutation = useMutation({
+    mutationFn: ({ pat, orgs }: { pat: string; orgs: string }) =>
+      integrationsApi.connectAzureDevOps(pat, orgs || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      setAdoPatInput('')
+      setAdoOrgInput('')
+      toast.success('Azure DevOps connected')
+    },
+    onError: () => toast.error('Failed to connect Azure DevOps'),
+  })
+
+  const updateAdoOrgsMutation = useMutation({
+    mutationFn: ({ id, orgs }: { id: number; orgs: string }) =>
+      integrationsApi.updateAdoOrganizations(id, orgs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      setAdoShowOrgUpdate(false)
+      setAdoOrgUpdateInput('')
+      toast.success('Organizations updated')
+    },
+    onError: () => toast.error('Failed to update organizations'),
+  })
+
+  const disconnectIntegrationMutation = useMutation({
+    mutationFn: (id: number) => integrationsApi.disconnect(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      toast.success('Integration disconnected')
+    },
+    onError: () => toast.error('Failed to disconnect'),
+  })
+
+  const graphIntegration = integrations.find(i => i.provider === 'MicrosoftGraph')
+  const adoIntegration = integrations.find(i => i.provider === 'AzureDevOps')
+
+  // ---- PKCE state & flow ----
+  const [isPkceConnecting, setIsPkceConnecting] = useState(false)
+
+  const connectMicrosoftGraphPkceMutation = useMutation({
+    mutationFn: ({ code, verifier, redirectUri }: { code: string; verifier: string; redirectUri: string }) =>
+      integrationsApi.connectMicrosoftGraphPkce(code, verifier, redirectUri),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      toast.success('Microsoft 365 connected successfully!')
+      // Clean up URL params after successful connect
+      const url = new URL(window.location.href)
+      url.searchParams.delete('code')
+      url.searchParams.delete('state')
+      url.searchParams.delete('session_state')
+      window.history.replaceState({}, '', url.toString())
+    },
+    onError: (err: unknown) => {
+      let msg = 'Failed to connect Microsoft 365.'
+      try {
+        const parsed = JSON.parse(err instanceof Error ? err.message : String(err))
+        if (parsed?.message) msg = parsed.message
+      } catch { /* use default */ }
+      toast.error(msg)
+    },
+  })
+
+  // Handle PKCE callback when redirected back from Microsoft
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+
+    // Check for OAuth error redirect (e.g. redirect_uri mismatch, user denied consent)
+    const oauthError = params.get('error')
+    const oauthErrorDesc = params.get('error_description')
+    if (oauthError) {
+      const msg = oauthErrorDesc?.split('\r\n')[0] ?? oauthError
+      toast.error(`Microsoft login failed: ${msg}`, { duration: 10000 })
+      const url = new URL(window.location.href)
+      url.searchParams.delete('error')
+      url.searchParams.delete('error_description')
+      url.searchParams.delete('state')
+      window.history.replaceState({}, '', url.toString())
+      return
+    }
+
+    const code = params.get('code')
+    const state = params.get('state')
+    if (code && state === 'pkce-graph') {
+      const verifier = sessionStorage.getItem('pkce_verifier')
+      if (!verifier) {
+        toast.error('Microsoft login failed: session expired, please try again.')
+        return
+      }
+      sessionStorage.removeItem('pkce_verifier')
+      setIsPkceConnecting(true)
+      connectMicrosoftGraphPkceMutation.mutate(
+        { code, verifier, redirectUri: `${window.location.origin}/settings` },
+        { onSettled: () => setIsPkceConnecting(false) }
+      )
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const startPkceFlow = async () => {
+    setIsPkceConnecting(true)
+    try {
+      const redirectUri = `${window.location.origin}/settings`
+      const { verifier, challenge } = await generatePkce()
+      const { url } = await integrationsApi.getMicrosoftGraphPkceUrl(redirectUri, challenge)
+      sessionStorage.setItem('pkce_verifier', verifier)
+      window.location.href = url
+    } catch (err: unknown) {
+      setIsPkceConnecting(false)
+      let msg = 'PKCE not configured.'
+      try {
+        const parsed = JSON.parse(err instanceof Error ? err.message : String(err))
+        if (parsed?.message) msg = parsed.message
+      } catch { /* use default */ }
+      toast.error(msg, {
+        description: 'Set ActivitySync:MicrosoftGraph:PublicClientId in appsettings.json.',
+        duration: 8000,
+      })
+    }
+  }
+
+  // ---- Activity Mapping Rules state ----
+  const { data: mappingRules = [] } = useQuery({
+    queryKey: ['activityMappings'],
+    queryFn: activityMappingsApi.list,
+  })
+
+  const deleteMappingMutation = useMutation({
+    mutationFn: (id: number) => activityMappingsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activityMappings'] })
+      toast.success('Mapping rule deleted')
+    },
+    onError: () => toast.error('Failed to delete rule'),
+  })
 
   const { data: aiConfig } = useQuery({
     queryKey: ['ai', 'config'],
@@ -2171,6 +2325,233 @@ export function Settings() {
           <p className="text-xs text-muted-foreground mt-2">
             Applies to "Polish for invoice" and AI-generated notes. This is a personal preference stored on this device.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Integrations */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plug className="h-5 w-5" />
+            Integrations
+          </CardTitle>
+          <CardDescription>
+            Connect your Microsoft 365 and Azure DevOps accounts to automatically track activity and generate time entry suggestions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {integrationsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />Loading integrations…
+            </div>
+          ) : (
+            <>
+              {/* Microsoft Graph */}
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-sm">M</div>
+                  <div>
+                    <p className="font-medium text-sm">Microsoft 365</p>
+                    <p className="text-xs text-muted-foreground">
+                      {graphIntegration?.isConnected
+                        ? `Connected${graphIntegration.lastSyncedAt ? ` · Last sync: ${new Date(graphIntegration.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                        : 'Outlook Calendar, Teams Meetings'}
+                    </p>
+                  </div>
+                </div>
+                {graphIntegration?.isConnected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => graphIntegration.id && disconnectIntegrationMutation.mutate(graphIntegration.id)}
+                    disabled={disconnectIntegrationMutation.isPending}
+                  >
+                    <Unplug className="h-4 w-4 mr-1" />Disconnect
+                  </Button>
+                ) : (
+                  <div className="flex flex-col items-end gap-1.5">
+                    <Button
+                      size="sm"
+                      onClick={startPkceFlow}
+                      disabled={isPkceConnecting || connectMicrosoftGraphPkceMutation.isPending}
+                    >
+                      {isPkceConnecting || connectMicrosoftGraphPkceMutation.isPending
+                        ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                        : <Link className="h-4 w-4 mr-1" />}
+                      Connect (PKCE)
+                    </Button>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                      onClick={() => {
+                        const redirectUri = `${window.location.origin}/settings`
+                        integrationsApi.getMicrosoftGraphOAuthUrl(redirectUri)
+                          .then(({ url }) => { window.location.href = url })
+                          .catch((err: unknown) => {
+                            let msg = 'OAuth not configured.'
+                            try {
+                              const parsed = JSON.parse(err instanceof Error ? err.message : String(err))
+                              if (parsed?.message) msg = parsed.message
+                            } catch { /* use default */ }
+                            toast.error(msg, {
+                              description: 'Set ActivitySync:MicrosoftGraph:ClientId and ClientSecret in appsettings.json.',
+                              duration: 8000,
+                            })
+                          })
+                      }}
+                    >
+                      Use client secret instead
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Azure DevOps */}
+              <div className="flex items-start justify-between p-3 rounded-lg border gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-sm">ADO</div>
+                  <div>
+                    <p className="font-medium text-sm">Azure DevOps</p>
+                    <p className="text-xs text-muted-foreground">
+                      {adoIntegration?.isConnected
+                        ? `Connected${adoIntegration.lastSyncedAt ? ` · Last sync: ${new Date(adoIntegration.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                        : 'Work Items, Commits, Pull Requests'}
+                    </p>
+                  </div>
+                </div>
+                {adoIntegration?.isConnected ? (
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => adoIntegration.id && disconnectIntegrationMutation.mutate(adoIntegration.id)}
+                      disabled={disconnectIntegrationMutation.isPending}
+                    >
+                      <Unplug className="h-4 w-4 mr-1" />Disconnect
+                    </Button>
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline"
+                      onClick={() => setAdoShowOrgUpdate(v => !v)}
+                    >
+                      Set organizations manually
+                    </button>
+                    {adoShowOrgUpdate && (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="org1, org2"
+                          value={adoOrgUpdateInput}
+                          onChange={e => setAdoOrgUpdateInput(e.target.value)}
+                          className="w-44 text-sm h-8"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8"
+                          disabled={updateAdoOrgsMutation.isPending || !adoOrgUpdateInput.trim()}
+                          onClick={() => adoIntegration.id && updateAdoOrgsMutation.mutate({ id: adoIntegration.id, orgs: adoOrgUpdateInput.trim() })}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Input
+                          type={adoPatVisible ? 'text' : 'password'}
+                          placeholder="Personal Access Token"
+                          value={adoPatInput}
+                          onChange={e => setAdoPatInput(e.target.value)}
+                          className="w-56 pr-8 text-sm h-8"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          onClick={() => setAdoPatVisible(!adoPatVisible)}
+                        >
+                          {adoPatVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => adoPatInput.trim() && connectAdoMutation.mutate({ pat: adoPatInput.trim(), orgs: adoOrgInput.trim() })}
+                        disabled={connectAdoMutation.isPending || !adoPatInput.trim()}
+                        className="h-8 shrink-0"
+                      >
+                        {connectAdoMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4 mr-1" />}
+                        Connect
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder="Organizations (optional, e.g. mycompany, otherorg)"
+                      value={adoOrgInput}
+                      onChange={e => setAdoOrgInput(e.target.value)}
+                      className="w-full text-sm h-8 text-muted-foreground"
+                    />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                For Azure DevOps, create a PAT at <code className="bg-muted px-1 rounded">User Settings → Personal Access Tokens</code> with <strong>Work Items</strong> and <strong>Code</strong> read scopes. Add <strong>User Profile (Read)</strong> for automatic org discovery, or enter org names manually in the field below.
+                For Microsoft 365, use the <strong>Connect (PKCE)</strong> button above — no app secret needed.
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Activity Mapping Rules */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Puzzle className="h-5 w-5" />
+            Activity Mapping Rules
+          </CardTitle>
+          <CardDescription>
+            Rules that automatically map activity to customers, projects, and tasks. Rules are applied in priority order (lower number = higher priority).
+            Manage rules on the <a href="/activity" className="text-primary hover:underline">Activity page</a> — visit it to accept or dismiss suggestions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {mappingRules.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No mapping rules yet. Rules can be created via the API at <code className="bg-muted px-1 rounded">POST /api/activitymappings</code>.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {mappingRules.map(rule => (
+                <div key={rule.id} className="flex items-center justify-between p-2 rounded border text-sm">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-mono text-xs bg-muted px-1 rounded mr-2">{rule.matchField}</span>
+                    <span className="text-muted-foreground mr-1">{rule.matchOperator}</span>
+                    <span className="font-medium">"{rule.matchValue}"</span>
+                    {(rule.mappedProjectName || rule.mappedTaskName || rule.mappedCustomerName) && (
+                      <span className="ml-2 text-muted-foreground">
+                        → {[rule.mappedCustomerName, rule.mappedProjectName, rule.mappedTaskName].filter(Boolean).join(' / ')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground">Priority {rule.priority}</span>
+                    {!rule.isActive && <span className="text-xs text-muted-foreground">(disabled)</span>}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-red-600"
+                      onClick={() => deleteMappingMutation.mutate(rule.id)}
+                      disabled={deleteMappingMutation.isPending}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

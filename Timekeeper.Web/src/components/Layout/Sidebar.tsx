@@ -18,7 +18,8 @@ import {
   Wifi,
   WifiOff,
   Bot,
-  Sparkles
+  Sparkles,
+  Activity,
 } from 'lucide-react'
 import { useConnectionStatus } from '../../hooks/useConnectionStatus'
 import { cn } from '../../lib/utils'
@@ -33,6 +34,7 @@ import { ChangelogDrawer } from './ChangelogDrawer'
 const baseNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'AI Assistant', href: '/chat', icon: Bot },
+  { name: 'Activity', href: '/activity', icon: Activity },
   { name: 'Time Entries', href: '/entries', icon: Clock },
   { name: 'Work Days', href: '/workdays', icon: Calendar },
   { name: 'Customers', href: '/customers', icon: Users },
