@@ -17,6 +17,7 @@ import {
 import { useStartTimer } from '../hooks/useTimeEntries'
 import { useTasks } from '../hooks/useTasks'
 import { exportApi } from '../api/export'
+import { toast } from 'sonner'
 
 export function QuickActionsDropdown() {
   const startTimer = useStartTimer()
@@ -46,9 +47,10 @@ export function QuickActionsDropdown() {
     try {
       setIsExporting(true)
       await exportApi.exportTodayExcel()
+      toast.success('Data exported successfully')
     } catch (error) {
       console.error('Export failed:', error)
-      alert('Failed to export data')
+      toast.error('Failed to export data')
     } finally {
       setIsExporting(false)
     }

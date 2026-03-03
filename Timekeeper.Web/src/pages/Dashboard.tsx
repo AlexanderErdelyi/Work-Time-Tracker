@@ -11,6 +11,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { parseApiDateTime } from '../lib/timeUtils'
 import type { TimeEntry } from '../types'
 import { getErrorMessage } from '../lib/utils'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
@@ -161,6 +164,8 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   // Idle detection
   const {
@@ -383,11 +388,15 @@ export function Dashboard() {
     )
   }
 
-  const handleRestartTimer = (entryId: number) => {
+  const handleRestartTimer = async (entryId: number) => {
     if (runningTimer) {
-      if (!confirm('A timer is already running. Stop it and resume this entry?')) {
-        return
-      }
+      const confirmed = await confirm({
+        title: 'Timer Running',
+        description: 'A timer is already running. Stop it and resume this entry?',
+        confirmText: 'Stop & Resume',
+        variant: 'destructive',
+      })
+      if (!confirmed) return
       stopTimer.mutate(runningTimer.id, {
         onSuccess: () => {
           resumeTimer.mutate(entryId, {
@@ -420,15 +429,20 @@ export function Dashboard() {
   }
 
   const handleDeleteRecentEntry = async (entryId: number) => {
-    if (!confirm('Are you sure you want to delete this time entry?')) {
-      return
-    }
+    const confirmed = await confirm({
+      title: 'Delete Time Entry',
+      description: 'Are you sure you want to delete this time entry?',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
 
     try {
       await deleteEntry.mutateAsync(entryId)
+      toast.success('Time entry deleted successfully')
     } catch (error) {
       console.error('Failed to delete time entry:', error)
-      alert('Failed to delete time entry. Please try again.')
+      toast.error('Failed to delete time entry. Please try again.')
     }
   }
 
@@ -610,7 +624,8 @@ export function Dashboard() {
             isPauseTimerPending={pauseTimer.isPending}
             isResumeFromPausePending={resumeFromPause.isPending}
             isUpdateTimerPending={updateTimer.isPending}
-          />
+          />
+
         </CardContent>
       </Card>
       </div>
@@ -683,6 +698,17 @@ export function Dashboard() {
           onCancel={handleCancelResume}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={(open) => { if (!open) handleCancel() }}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }

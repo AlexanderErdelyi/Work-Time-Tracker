@@ -8,6 +8,9 @@ import { useWorkDays, useUpdateWorkDay, useDeleteWorkDay } from '../hooks/useWor
 import { useTimeEntries } from '../hooks/useTimeEntries';
 import { formatDate, formatTime, formatDateForInput } from '../lib/dateUtils';
 import { WorkDay } from '../api/workDays';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
+import { toast } from 'sonner';
 
 const WORKDAY_BREAK_SORT_KEY = 'timekeeper_workday_break_sort_order';
 
@@ -97,6 +100,9 @@ export function WorkDays() {
   });
   const [editForm, setEditForm] = useState({ checkInTime: '', checkOutTime: '', notes: '' });
 
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm();
+
   useEffect(() => {
     localStorage.setItem(WORKDAY_BREAK_SORT_KEY, breakSortOrder);
   }, [breakSortOrder]);
@@ -127,7 +133,7 @@ export function WorkDays() {
     const parsed = parseSmartDateInput(value);
     if (!parsed) {
       if (showError) {
-        alert(`Invalid ${target === 'start' ? 'start' : 'end'} date. Use for example: h, -1, +7, 24, 24.02, 24.02.2026`);
+        toast.error(`Invalid ${target === 'start' ? 'start' : 'end'} date. Use for example: h, -1, +7, 24, 24.02, 24.02.2026`);
       }
       return false;
     }
@@ -191,9 +197,10 @@ export function WorkDays() {
         }
       });
       setEditingWorkDay(null);
+      toast.success('Work day updated successfully');
     } catch (error) {
       console.error('Failed to update work day:', error);
-      alert('Failed to update work day. Please try again.');
+      toast.error('Failed to update work day. Please try again.');
     }
   };
 
@@ -205,39 +212,50 @@ export function WorkDays() {
   const handleDelete = async (workDay: WorkDay) => {
     const hasAssociatedData = workDay.breaks.length > 0;
     
-    let confirmMessage = `Are you sure you want to delete the work day for ${formatDate(workDay.date, 'MMMM d, yyyy')}?`;
+    let description = `Are you sure you want to delete the work day for ${formatDate(workDay.date, 'MMMM d, yyyy')}?`;
     if (hasAssociatedData) {
-      confirmMessage += `\n\nThis work day has ${workDay.breaks.length} break(s) that will also be deleted.`;
+      description += ` This work day has ${workDay.breaks.length} break(s) that will also be deleted.`;
     }
     
-    if (!confirm(confirmMessage)) {
+    const confirmed = await confirm({
+      title: 'Delete Work Day',
+      description,
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
       return;
     }
     
     try {
       // Try normal delete first
       await deleteWorkDay.mutateAsync({ id: workDay.id, cascade: false });
+      toast.success('Work day deleted successfully');
     } catch (error) {
       console.error('Failed to delete work day:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       // If it failed due to associated records, offer force delete
       if (errorMessage.includes('time entries') || errorMessage.includes('breaks')) {
-        const forceDelete = confirm(
-          `${errorMessage}\n\nDo you want to FORCE DELETE this work day and all associated records?\n\nWARNING: This will permanently delete all time entries and breaks for this day. This action cannot be undone.`
-        );
+        const forceConfirmed = await confirm({
+          title: 'Force Delete Work Day',
+          description: `${errorMessage}\n\nDo you want to FORCE DELETE this work day and all associated records?\n\nWARNING: This will permanently delete all time entries and breaks for this day. This action cannot be undone.`,
+          confirmText: 'Force Delete',
+          variant: 'destructive',
+        })
         
-        if (forceDelete) {
+        if (forceConfirmed) {
           try {
             await deleteWorkDay.mutateAsync({ id: workDay.id, cascade: true });
+            toast.success('Work day and all associated data deleted successfully');
           } catch (cascadeError) {
             console.error('Failed to force delete:', cascadeError);
             const cascadeErrorMessage = cascadeError instanceof Error ? cascadeError.message : 'Unknown error';
-            alert(`Failed to force delete work day: ${cascadeErrorMessage}`);
+            toast.error(`Failed to force delete work day: ${cascadeErrorMessage}`);
           }
         }
       } else {
-        alert(`Failed to delete work day: ${errorMessage}`);
+        toast.error(`Failed to delete work day: ${errorMessage}`);
       }
     }
   };
@@ -647,6 +665,17 @@ export function WorkDays() {
           </Card>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   );
 }

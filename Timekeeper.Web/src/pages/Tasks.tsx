@@ -14,6 +14,9 @@ import { Textarea } from '../components/ui/Textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import type { TaskItem, TaskDto } from '../types'
 import { formatDate } from '../lib/dateUtils'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 export function Tasks() {
   const [search, setSearch] = useState('')
@@ -39,6 +42,9 @@ export function Tasks() {
   const deleteTask = useDeleteTask()
   const importTasks = useImportTasks()
   const hasExistingImportData = allCustomers.length > 0 || allProjects.length > 0
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   const [formData, setFormData] = useState<TaskDto>({
     name: '',
@@ -84,23 +90,34 @@ export function Tasks() {
           id: editingTask.id,
           data: formData,
         })
+        toast.success('Task updated successfully')
       } else {
         await createTask.mutateAsync(formData)
+        toast.success('Task created successfully')
       }
       setIsDialogOpen(false)
     } catch (error) {
       console.error('Failed to save task:', error)
+      toast.error('Failed to save task. Please try again.')
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this task?')) {
-      try {
-        await deleteTask.mutateAsync(id)
-      } catch (error) {
-        console.error('Failed to delete task:', error)
-        alert('Failed to delete task. It may have associated time entries.')
-      }
+    const confirmed = await confirm({
+      title: 'Delete Task',
+      description: 'Are you sure you want to delete this task? It may have associated time entries.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
+    }
+    try {
+      await deleteTask.mutateAsync(id)
+      toast.success('Task deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete task:', error)
+      toast.error('Failed to delete task. It may have associated time entries.')
     }
   }
 
@@ -113,8 +130,10 @@ export function Tasks() {
           isActive: !task.isActive,
         },
       })
+      toast.success(`Task ${!task.isActive ? 'activated' : 'deactivated'} successfully`)
     } catch (error) {
       console.error('Failed to toggle task status:', error)
+      toast.error('Failed to update task status. Please try again.')
     }
   }
 
@@ -124,12 +143,12 @@ export function Tasks() {
 
     try {
       const result = await importTasks.mutateAsync(importFile)
-      alert(`Import successful!\nCustomers: ${result.customersCreated} created, ${result.customersUpdated} updated\nProjects: ${result.projectsCreated} created, ${result.projectsUpdated} updated\nTasks: ${result.tasksCreated} created, ${result.tasksUpdated} updated`)
+      toast.success(`Import successful! Customers: ${result.customersCreated} created, ${result.customersUpdated} updated. Projects: ${result.projectsCreated} created, ${result.projectsUpdated} updated. Tasks: ${result.tasksCreated} created, ${result.tasksUpdated} updated`)
       setIsImportDialogOpen(false)
       setImportFile(null)
     } catch (error) {
       console.error('Import failed:', error)
-      alert('Import failed. Please check your file format.')
+      toast.error('Import failed. Please check your file format.')
     }
   }
 
@@ -554,6 +573,17 @@ export function Tasks() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }

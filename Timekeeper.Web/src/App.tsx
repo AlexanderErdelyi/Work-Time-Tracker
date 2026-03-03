@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './components/Layout/AppShell'
 import { useNotifications } from './hooks/useNotifications'
 import { Login } from './pages/Login'
+import { Toaster } from './components/ui/Toaster'
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const TimeEntries = lazy(() => import('./pages/TimeEntries').then(module => ({ default: module.TimeEntries })))
@@ -48,6 +49,7 @@ function App() {
           </Routes>
         </Suspense>
       </AppShell>
+      <Toaster />
     </BrowserRouter>
   )
 }

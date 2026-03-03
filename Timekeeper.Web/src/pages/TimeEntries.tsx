@@ -63,6 +63,9 @@ import { useWorkspaceContext } from '../hooks/useWorkspaceContext'
 import { exportApi } from '../api'
 import type { TimeEntry } from '../types'
 import { formatDate } from '../lib/dateUtils'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useConfirm } from '../hooks/useConfirm'
+import { toast } from 'sonner'
 
 // Default column configuration
 const DEFAULT_COLUMN_ORDER: string[] = [
@@ -193,6 +196,9 @@ export function TimeEntries() {
   const [editNotes, setEditNotes] = useState('')
   const [editBilledHours, setEditBilledHours] = useState('')
   const [editError, setEditError] = useState<string | null>(null)
+
+  // Confirm dialog hook
+  const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
     const saved = localStorage.getItem('timekeeper_columnSizing')
@@ -703,30 +709,41 @@ export function TimeEntries() {
   }
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this time entry?')) {
-      try {
-        await deleteEntry.mutateAsync(id)
-      } catch (error) {
-        console.error('Failed to delete time entry:', error)
-      }
+    const confirmed = await confirm({
+      title: 'Delete Time Entry',
+      description: 'Are you sure you want to delete this time entry? This action cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
+    }
+    try {
+      await deleteEntry.mutateAsync(id)
+      toast.success('Time entry deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete time entry:', error)
+      toast.error('Failed to delete time entry. Please try again.')
     }
   }
 
   const handleSubmit = async (id: number) => {
     try {
       await submitEntry.mutateAsync(id)
+      toast.success('Time entry submitted successfully')
     } catch (error) {
       console.error('Failed to submit time entry:', error)
-      alert(error instanceof Error ? error.message : 'Failed to submit entry')
+      toast.error(error instanceof Error ? error.message : 'Failed to submit entry')
     }
   }
 
   const handleApprove = async (id: number) => {
     try {
       await approveEntry.mutateAsync(id)
+      toast.success('Time entry approved successfully')
     } catch (error) {
       console.error('Failed to approve time entry:', error)
-      alert(error instanceof Error ? error.message : 'Failed to approve entry')
+      toast.error(error instanceof Error ? error.message : 'Failed to approve entry')
     }
   }
 
@@ -735,27 +752,30 @@ export function TimeEntries() {
 
     try {
       await rejectEntry.mutateAsync({ id, reason })
+      toast.success('Time entry rejected')
     } catch (error) {
       console.error('Failed to reject time entry:', error)
-      alert(error instanceof Error ? error.message : 'Failed to reject entry')
+      toast.error(error instanceof Error ? error.message : 'Failed to reject entry')
     }
   }
 
   const handleLock = async (id: number) => {
     try {
       await lockEntry.mutateAsync(id)
+      toast.success('Time entry locked successfully')
     } catch (error) {
       console.error('Failed to lock time entry:', error)
-      alert(error instanceof Error ? error.message : 'Failed to lock entry')
+      toast.error(error instanceof Error ? error.message : 'Failed to lock entry')
     }
   }
 
   const handleReopen = async (id: number) => {
     try {
       await reopenEntry.mutateAsync(id)
+      toast.success('Time entry reopened successfully')
     } catch (error) {
       console.error('Failed to reopen time entry:', error)
-      alert(error instanceof Error ? error.message : 'Failed to reopen entry')
+      toast.error(error instanceof Error ? error.message : 'Failed to reopen entry')
     }
   }
 
@@ -766,13 +786,23 @@ export function TimeEntries() {
     
     if (selectedIds.length === 0) return
     
-    if (confirm(`Are you sure you want to delete ${selectedIds.length} time entries?`)) {
-      try {
-        await bulkDelete.mutateAsync(selectedIds)
-        setRowSelection({})
-      } catch (error) {
-        console.error('Failed to delete time entries:', error)
-      }
+    const confirmed = await confirm({
+      title: 'Delete Time Entries',
+      description: `Are you sure you want to delete ${selectedIds.length} time entries? This action cannot be undone.`,
+      confirmText: 'Delete All',
+      variant: 'destructive',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await bulkDelete.mutateAsync(selectedIds)
+      setRowSelection({})
+      toast.success(`Successfully deleted ${selectedIds.length} time entries`)
+    } catch (error) {
+      console.error('Failed to delete time entries:', error)
+      toast.error('Failed to delete time entries. Please try again.')
     }
   }
 
@@ -1354,6 +1384,17 @@ export function TimeEntries() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onOpenChange={handleCancel}
+        onConfirm={handleConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        variant={confirmState.variant}
+      />
     </div>
   )
 }
