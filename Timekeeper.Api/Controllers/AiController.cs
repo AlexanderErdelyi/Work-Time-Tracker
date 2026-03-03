@@ -151,6 +151,37 @@ public class AiController : ControllerBase
         _aiService.ClearSession($"{userId}:{_workspaceContext.WorkspaceId}");
         return NoContent();
     }
+
+    /// <summary>Resolve a natural-language description to the best matching task.</summary>
+    [HttpPost("resolve-task")]
+    public async Task<ActionResult<ResolveTaskResponse>> ResolveTask([FromBody] ResolveTaskRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Description))
+            return BadRequest("Description is required.");
+
+        var result = await _aiService.ResolveTaskAsync(request.Description, _workspaceContext.WorkspaceId, ct);
+        if (result == null)
+            return Ok(new ResolveTaskResponse(false, null, null, null, null, "AI is not configured."));
+
+        return Ok(new ResolveTaskResponse(result.Found, result.TaskId, result.TaskName, result.ProjectName, result.CustomerName, result.Reasoning));
+    }
+
+    /// <summary>Rewrite a raw note into a professional, customer-ready invoice note.</summary>
+    [HttpPost("polish-note")]
+    public async Task<ActionResult<PolishNoteResponse>> PolishNote([FromBody] PolishNoteRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.RawNote))
+            return BadRequest("rawNote is required.");
+
+        var polished = await _aiService.PolishNoteAsync(
+            request.RawNote, request.TaskName, request.ProjectName, request.CustomerName,
+            _workspaceContext.WorkspaceId, ct);
+
+        if (polished == null)
+            return Ok(new PolishNoteResponse(request.RawNote)); // fallback: return original
+
+        return Ok(new PolishNoteResponse(polished.Trim()));
+    }
 }
 
 public record ChatRequest([property: JsonPropertyName("message")] string Message);
@@ -166,4 +197,20 @@ public record SaveAiConfigRequest(
     [property: JsonPropertyName("enabled")] bool Enabled,
     [property: JsonPropertyName("gitHubToken")] string? GitHubToken,
     [property: JsonPropertyName("clearToken")] bool ClearToken = false);
+public record ResolveTaskRequest(
+    [property: JsonPropertyName("description")] string Description);
+public record ResolveTaskResponse(
+    [property: JsonPropertyName("found")] bool Found,
+    [property: JsonPropertyName("taskId")] int? TaskId,
+    [property: JsonPropertyName("taskName")] string? TaskName,
+    [property: JsonPropertyName("projectName")] string? ProjectName,
+    [property: JsonPropertyName("customerName")] string? CustomerName,
+    [property: JsonPropertyName("reasoning")] string? Reasoning);
+public record PolishNoteRequest(
+    [property: JsonPropertyName("rawNote")] string RawNote,
+    [property: JsonPropertyName("taskName")] string? TaskName = null,
+    [property: JsonPropertyName("projectName")] string? ProjectName = null,
+    [property: JsonPropertyName("customerName")] string? CustomerName = null);
+public record PolishNoteResponse(
+    [property: JsonPropertyName("note")] string Note);
 

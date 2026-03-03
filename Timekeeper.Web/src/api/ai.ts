@@ -21,6 +21,22 @@ export interface SaveAiConfigRequest {
   clearToken?: boolean
 }
 
+export interface ResolveTaskResult {
+  found: boolean
+  taskId: number | null
+  taskName: string | null
+  projectName: string | null
+  customerName: string | null
+  reasoning: string | null
+}
+
+export interface PolishNoteRequest {
+  rawNote: string
+  taskName?: string
+  projectName?: string
+  customerName?: string
+}
+
 export const aiApi = {
   getStatus: () => fetchApi<AiStatus>('/ai/status'),
 
@@ -45,4 +61,18 @@ export const aiApi = {
 
   clearSession: () =>
     fetchApiResponse('/ai/session', { method: 'DELETE' }),
+
+  /** Resolve a natural-language description to the best matching task. */
+  resolveTask: (description: string) =>
+    fetchApi<ResolveTaskResult>('/ai/resolve-task', {
+      method: 'POST',
+      body: JSON.stringify({ description }),
+    }),
+
+  /** Rewrite a raw note into a professional, customer-ready invoice note. */
+  polishNote: (req: PolishNoteRequest) =>
+    fetchApi<{ note: string }>('/ai/polish-note', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
 }

@@ -24,6 +24,22 @@ public interface IAiService
     IAsyncEnumerable<string> StreamChatAsync(string sessionKey, string userMessage, int userId, int workspaceId, CancellationToken ct = default);
 
     void ClearSession(string sessionKey);
+
+    /// <summary>Resolve a natural-language work description to the best matching task.</summary>
+    Task<ResolveTaskResult?> ResolveTaskAsync(string description, int workspaceId, CancellationToken ct = default);
+
+    /// <summary>Rewrite a raw note into a professional, customer-ready invoice note.</summary>
+    Task<string?> PolishNoteAsync(string rawNote, string? taskName, string? projectName, string? customerName, int workspaceId, CancellationToken ct = default);
+}
+
+public class ResolveTaskResult
+{
+    public bool Found { get; set; }
+    public int? TaskId { get; set; }
+    public string TaskName { get; set; } = string.Empty;
+    public string ProjectName { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
+    public string Reasoning { get; set; } = string.Empty;
 }
 
 public class AiService : IAiService
@@ -843,6 +859,136 @@ public class AiService : IAiService
         catch
         {
             return "Timekeeper";
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // Single-turn (non-streaming) AI helpers
+    // ────────────────────────────────────────────────────────────
+
+    private async Task<string?> CallModelSimpleAsync(string systemPrompt, string userMessage, string token, CancellationToken ct)
+    {
+        var client = _httpClientFactory.CreateClient("copilot");
+        var req = new HttpRequestMessage(HttpMethod.Post, ModelsEndpoint);
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        req.Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            model = ModelName,
+            messages = new[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userMessage }
+            },
+            max_tokens = 400
+        }), Encoding.UTF8, "application/json");
+
+        var resp = await client.SendAsync(req, ct);
+        resp.EnsureSuccessStatusCode();
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        var doc = JsonDocument.Parse(body);
+        return doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString();
+    }
+
+    public async Task<ResolveTaskResult?> ResolveTaskAsync(string description, int workspaceId, CancellationToken ct = default)
+    {
+        var (enabled, token) = await GetWorkspaceConfigAsync(workspaceId, ct);
+        if (!enabled || string.IsNullOrWhiteSpace(token)) return null;
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TimekeeperContext>();
+
+        var tasks = await db.Tasks
+            .Include(t => t.Project).ThenInclude(p => p.Customer)
+            .Where(t => t.IsActive)
+            .Select(t => new { t.Id, t.Name, project = t.Project.Name, customer = t.Project.Customer.Name })
+            .ToListAsync(ct);
+
+        if (tasks.Count == 0) return new ResolveTaskResult { Found = false, Reasoning = "No active tasks available." };
+
+        var taskList = string.Join("\n", tasks.Select(t => $"ID:{t.Id} | Task: {t.Name} | Project: {t.project} | Customer: {t.customer}"));
+
+        const string systemPrompt = """
+            You are a task matcher for a time tracking app.
+            Given a list of tasks and a work description, find the best matching task.
+            Return ONLY valid JSON (no markdown fences, no explanation):
+            {"taskId": <integer or null>, "taskName": "<name>", "projectName": "<name>", "customerName": "<name>", "reasoning": "<brief reason>"}
+            If nothing matches, use null for taskId.
+            """;
+
+        try
+        {
+            var raw = await CallModelSimpleAsync(systemPrompt, $"Tasks:\n{taskList}\n\nDescription: \"{description}\"", token!, ct);
+            if (raw == null) return null;
+
+            // Strip possible markdown fences
+            raw = raw.Trim();
+            if (raw.StartsWith("```")) { raw = raw[(raw.IndexOf('\n') + 1)..]; }
+            if (raw.EndsWith("```")) { raw = raw[..raw.LastIndexOf("```")]; }
+
+            var doc = JsonDocument.Parse(raw.Trim());
+            int? taskId = doc.RootElement.TryGetProperty("taskId", out var tidEl) && tidEl.ValueKind == JsonValueKind.Number
+                ? tidEl.GetInt32() : null;
+            var reasoning = doc.RootElement.TryGetProperty("reasoning", out var rEl) ? rEl.GetString() ?? "" : "";
+
+            if (taskId == null)
+                return new ResolveTaskResult { Found = false, Reasoning = reasoning };
+
+            var matched = tasks.FirstOrDefault(t => t.Id == taskId);
+            return new ResolveTaskResult
+            {
+                Found = matched != null,
+                TaskId = taskId,
+                TaskName = doc.RootElement.TryGetProperty("taskName", out var tnEl) ? tnEl.GetString() ?? matched?.Name ?? "" : matched?.Name ?? "",
+                ProjectName = doc.RootElement.TryGetProperty("projectName", out var pnEl) ? pnEl.GetString() ?? matched?.project ?? "" : matched?.project ?? "",
+                CustomerName = doc.RootElement.TryGetProperty("customerName", out var cnEl) ? cnEl.GetString() ?? matched?.customer ?? "" : matched?.customer ?? "",
+                Reasoning = reasoning
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ResolveTask failed");
+            return null;
+        }
+    }
+
+    public async Task<string?> PolishNoteAsync(string rawNote, string? taskName, string? projectName, string? customerName, int workspaceId, CancellationToken ct = default)
+    {
+        var (enabled, token) = await GetWorkspaceConfigAsync(workspaceId, ct);
+        if (!enabled || string.IsNullOrWhiteSpace(token)) return null;
+
+        var contextParts = new[] {
+            taskName    != null ? $"Task: {taskName}"    : null,
+            projectName != null ? $"Project: {projectName}" : null,
+            customerName != null ? $"Customer: {customerName}" : null,
+        }.Where(s => s != null);
+        var context = string.Join(", ", contextParts);
+
+        const string systemPrompt = """
+            You are a professional billing note writer for a time tracking application.
+            The user gives you a short internal note. Rewrite it as a concise, formal, customer-facing invoice description.
+            Rules:
+            - Maximum 2 sentences.
+            - Use professional language suitable for a customer invoice.
+            - Do NOT repeat the task/project/customer names — they appear in other invoice fields.
+            - Return ONLY the polished note text. No explanation, no quotes, no extra formatting.
+            """;
+
+        var userMessage = string.IsNullOrWhiteSpace(context)
+            ? $"Raw note: {rawNote}"
+            : $"Context: {context}\nRaw note: {rawNote}";
+
+        try
+        {
+            return await CallModelSimpleAsync(systemPrompt, userMessage, token!, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PolishNote failed");
+            return null;
         }
     }
 
