@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
@@ -33,6 +34,7 @@ public class AiService : IAiService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AiService> _logger;
+    private readonly IWebHostEnvironment _webHostEnv;
 
     // sessionKey = "{userId}:{workspaceId}"
     private readonly ConcurrentDictionary<string, List<JsonObject>> _sessions = new();
@@ -48,12 +50,14 @@ public class AiService : IAiService
         IConfiguration config,
         IServiceScopeFactory scopeFactory,
         IHttpClientFactory httpClientFactory,
-        ILogger<AiService> logger)
+        ILogger<AiService> logger,
+        IWebHostEnvironment webHostEnv)
     {
         _config = config;
         _scopeFactory = scopeFactory;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _webHostEnv = webHostEnv;
     }
 
     private async Task<(bool enabled, string? token)> GetWorkspaceConfigAsync(int workspaceId, CancellationToken ct = default)
@@ -139,12 +143,38 @@ public class AiService : IAiService
         {
             ["role"] = "system",
             ["content"] = $"""
-                You are a time tracking assistant for Timekeeper. 
-                The user is in workspace "{workspaceName}".
-                Help log time naturally, summarize work, and answer time-tracking questions.
-                Use the provided tools to read real data and to create/start time entries.
-                Always confirm with the user before creating or modifying entries.
-                Keep answers concise and helpful. Today is {DateTime.UtcNow:yyyy-MM-dd}.
+                You are a time tracking assistant for Timekeeper.
+                The user is in workspace "{workspaceName}". Today is {DateTime.UtcNow:yyyy-MM-dd}.
+
+                TASK SEARCH — follow these steps exactly every time:
+                1. When the user mentions any task, project, or customer (even partially or with typos), call get_tasks with NO arguments to get all tasks.
+                2. Fuzzy-match the user's words against task name, project name, and customer name in the results.
+                3. If exactly one task is a plausible match, confirm it by name and proceed.
+                4. If multiple tasks match, list them briefly and ask which one.
+                5. NEVER call get_customers or get_projects as an intermediate step — go straight to get_tasks.
+                6. NEVER say a task was not found without first calling get_tasks with no filter.
+
+                IMPORTING ERP / TIMESHEET DATA:
+                When the user pastes tabular data (tab-separated or similar) from an external system (e.g. Business Central, SAP, Jira), parse each row and extract:
+                - Customer name: look for fields like "Projekt Beschreibung" — the part before " - " and the project number is usually the customer name (e.g. "NOBILIS - 5276 - DMS: SLA" → customer = "NOBILIS").
+                - Project name: the rest of the project description after the customer and number (e.g. "DMS: SLA - TM (A)"). Use the project number ("Projektnr.") as the No field.
+                - Task name: use "Projektzeile Beschreibung" or "Beschreibung" (whichever is more descriptive). Use "Position" as the position field.
+                - Time: use "Menge" as hours, "Buchungsdatum" as the date.
+                - Notes: use "Erste Kommentarzeile" or "Beschreibung 2" if present.
+                Workflow for each row:
+                1. Call get_tasks (no filter) to see if the task already exists — fuzzy-match on name and project.
+                2. If the task does not exist, show the user a summary of what will be created: customer (if new), project (if new), task, and time entry. Ask for confirmation.
+                3. On confirmation: call create_customer (if needed) → create_project (if needed) → create_task → create_time_entry.
+                4. For multiple rows, group by customer/project to avoid duplicate create_customer/create_project calls.
+                5. Report what was created vs what already existed.
+
+                DOCUMENTATION:
+                - If the user asks how something works, how to use a feature, or a general app question, call get_documentation to look it up.
+                - First call get_documentation with no slug to see the list of available topics, then call it again with the matching slug to read the content.
+
+                GENERAL:
+                - Always confirm with the user before creating or modifying entries.
+                - Keep answers short and direct. Do not narrate tool calls.
                 """
         };
 
@@ -155,7 +185,9 @@ public class AiService : IAiService
         for (int round = 0; round < 5; round++)
         {
             // Build messages array: [system] + history
-            var messages = new JsonArray { system };
+            // Re-parse system each round — JsonNode instances can't have multiple parents
+            var messages = new JsonArray();
+            messages.Add(JsonNode.Parse(system.ToJsonString()));
             foreach (var m in history)
                 messages.Add(JsonNode.Parse(m.ToJsonString()));
 
@@ -217,8 +249,9 @@ public class AiService : IAiService
                 try { chunk = JsonNode.Parse(data); }
                 catch { continue; }
 
-                var choice = chunk?["choices"]?[0];
-                if (choice == null) continue;
+                var choicesArray = chunk?["choices"]?.AsArray();
+                if (choicesArray == null || choicesArray.Count == 0) continue;
+                var choice = choicesArray[0];
 
                 finishReason = choice["finish_reason"]?.GetValue<string>();
                 var delta = choice["delta"];
@@ -373,6 +406,21 @@ public class AiService : IAiService
 
             case "get_running_timer":
                 return await GetRunningTimerAsync(db, userId, ct);
+
+            case "get_documentation":
+            {
+                var slug = args.TryGetProperty("slug", out var s) ? s.GetString() : null;
+                return await GetDocumentationAsync(slug);
+            }
+
+            case "create_customer":
+                return await CreateCustomerAsync(db, args, workspaceId, ct);
+
+            case "create_project":
+                return await CreateProjectAsync(db, args, workspaceId, ct);
+
+            case "create_task":
+                return await CreateTaskAsync(db, args, workspaceId, ct);
 
             default:
                 return $"{{\"error\": \"Unknown tool: {name}\"}}";
@@ -618,6 +666,164 @@ public class AiService : IAiService
         });
     }
 
+    private async Task<string> GetDocumentationAsync(string? slug)
+    {
+        var docsDir = FindDocsDirectory();
+        if (docsDir == null)
+            return "{\"error\": \"Documentation not available on this server.\"}";
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                // Return manifest — list of topics
+                var manifestPath = Path.Combine(docsDir, "manifest.json");
+                if (!File.Exists(manifestPath))
+                    return "{\"error\": \"Documentation manifest not found.\"}";
+                var json = await File.ReadAllTextAsync(manifestPath);
+                // Parse and return just slugs+titles+summaries
+                using var doc = JsonDocument.Parse(json);
+                var sections = doc.RootElement.GetProperty("sections");
+                var list = sections.EnumerateArray().Select(s => new
+                {
+                    slug = s.GetProperty("slug").GetString(),
+                    title = s.GetProperty("title").GetString(),
+                    summary = s.GetProperty("summary").GetString()
+                });
+                return JsonSerializer.Serialize(new { available_topics = list });
+            }
+            else
+            {
+                // Sanitise slug — strip traversal chars
+                var safe = Path.GetFileName(slug.Trim().Replace('/', '-').Replace('\\', '-'));
+                var mdPath = Path.Combine(docsDir, safe.EndsWith(".md") ? safe : safe + ".md");
+                if (!File.Exists(mdPath))
+                    return $"{{\"error\": \"Documentation page '{slug}' not found.\"}}";
+                var content = await File.ReadAllTextAsync(mdPath);
+                // Truncate very long docs to ~8000 chars to stay within context
+                if (content.Length > 8000)
+                    content = content[..8000] + "\n\n[... content truncated ...]";
+                return JsonSerializer.Serialize(new { slug, content });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read documentation for slug '{Slug}'", slug);
+            return "{\"error\": \"Failed to read documentation.\"}";
+        }
+    }
+
+    private string? FindDocsDirectory()
+    {
+        // Production: served from wwwroot/docs (built by Vite)
+        var webRoot = _webHostEnv.WebRootPath;
+        if (!string.IsNullOrEmpty(webRoot))
+        {
+            var prod = Path.Combine(webRoot, "docs");
+            if (Directory.Exists(prod)) return prod;
+        }
+
+        // Development fallback: Timekeeper.Web/public/docs
+        var dev = Path.GetFullPath(
+            Path.Combine(_webHostEnv.ContentRootPath, "..", "Timekeeper.Web", "public", "docs"));
+        if (Directory.Exists(dev)) return dev;
+
+        return null;
+    }
+
+    private static async Task<string> CreateCustomerAsync(TimekeeperContext db, JsonElement args, int workspaceId, CancellationToken ct)
+    {
+        if (!args.TryGetProperty("name", out var nameEl) || string.IsNullOrWhiteSpace(nameEl.GetString()))
+            return "{\"error\": \"name is required\"}";
+
+        var name = nameEl.GetString()!.Trim();
+        // Check for duplicate (case-insensitive)
+        var existing = await db.Customers
+            .FirstOrDefaultAsync(c => c.Name.ToLower() == name.ToLower(), ct);
+        if (existing != null)
+            return JsonSerializer.Serialize(new { already_exists = true, id = existing.Id, name = existing.Name, no = existing.No });
+
+        var customer = new Customer
+        {
+            WorkspaceId = workspaceId,
+            Name = name,
+            No = args.TryGetProperty("no", out var noEl) ? noEl.GetString() : null,
+            Description = args.TryGetProperty("description", out var descEl) ? descEl.GetString() : null,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Customers.Add(customer);
+        await db.SaveChangesAsync(ct);
+        return JsonSerializer.Serialize(new { created = true, id = customer.Id, name = customer.Name, no = customer.No });
+    }
+
+    private static async Task<string> CreateProjectAsync(TimekeeperContext db, JsonElement args, int workspaceId, CancellationToken ct)
+    {
+        if (!args.TryGetProperty("name", out var nameEl) || string.IsNullOrWhiteSpace(nameEl.GetString()))
+            return "{\"error\": \"name is required\"}";
+        if (!args.TryGetProperty("customer_id", out var cidEl) || cidEl.ValueKind != JsonValueKind.Number)
+            return "{\"error\": \"customer_id is required\"}";
+
+        var customerId = cidEl.GetInt32();
+        var customerExists = await db.Customers.AnyAsync(c => c.Id == customerId, ct);
+        if (!customerExists)
+            return $"{{\"error\": \"Customer {customerId} not found\"}}";
+
+        var name = nameEl.GetString()!.Trim();
+        var existing = await db.Projects
+            .FirstOrDefaultAsync(p => p.CustomerId == customerId && p.Name.ToLower() == name.ToLower(), ct);
+        if (existing != null)
+            return JsonSerializer.Serialize(new { already_exists = true, id = existing.Id, name = existing.Name, no = existing.No, customer_id = existing.CustomerId });
+
+        var project = new Project
+        {
+            WorkspaceId = workspaceId,
+            CustomerId = customerId,
+            Name = name,
+            No = args.TryGetProperty("no", out var noEl) ? noEl.GetString() : null,
+            Description = args.TryGetProperty("description", out var descEl) ? descEl.GetString() : null,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Projects.Add(project);
+        await db.SaveChangesAsync(ct);
+        return JsonSerializer.Serialize(new { created = true, id = project.Id, name = project.Name, no = project.No, customer_id = project.CustomerId });
+    }
+
+    private static async Task<string> CreateTaskAsync(TimekeeperContext db, JsonElement args, int workspaceId, CancellationToken ct)
+    {
+        if (!args.TryGetProperty("name", out var nameEl) || string.IsNullOrWhiteSpace(nameEl.GetString()))
+            return "{\"error\": \"name is required\"}";
+        if (!args.TryGetProperty("project_id", out var pidEl) || pidEl.ValueKind != JsonValueKind.Number)
+            return "{\"error\": \"project_id is required\"}";
+
+        var projectId = pidEl.GetInt32();
+        var projectExists = await db.Projects.AnyAsync(p => p.Id == projectId, ct);
+        if (!projectExists)
+            return $"{{\"error\": \"Project {projectId} not found\"}}";
+
+        var name = nameEl.GetString()!.Trim();
+        var existing = await db.Tasks
+            .FirstOrDefaultAsync(t => t.ProjectId == projectId && t.Name.ToLower() == name.ToLower(), ct);
+        if (existing != null)
+            return JsonSerializer.Serialize(new { already_exists = true, id = existing.Id, name = existing.Name, project_id = existing.ProjectId });
+
+        var task = new TaskItem
+        {
+            WorkspaceId = workspaceId,
+            ProjectId = projectId,
+            Name = name,
+            Description = args.TryGetProperty("description", out var descEl) ? descEl.GetString() : null,
+            Position = args.TryGetProperty("position", out var posEl) ? posEl.GetString() : null,
+            ProcurementNumber = args.TryGetProperty("procurement_number", out var pnEl) ? pnEl.GetString() : null,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync(ct);
+        return JsonSerializer.Serialize(new { created = true, id = task.Id, name = task.Name, project_id = task.ProjectId, position = task.Position, procurement_number = task.ProcurementNumber });
+    }
+
     private async Task<string> GetWorkspaceNameAsync(int workspaceId)
     {
         try
@@ -670,7 +876,7 @@ public class AiService : IAiService
             }),
 
         MakeTool("get_tasks",
-            "Get active tasks, optionally filtered by project.",
+            "Get ALL active tasks including task name, project name, and customer name. Call with NO filter to get everything, then fuzzy-match to find the right task. Only pass project_id if you already know the exact project ID.",
             new JsonObject
             {
                 ["type"] = "object",
@@ -709,6 +915,62 @@ public class AiService : IAiService
         MakeTool("get_running_timer",
             "Check if there is a timer currently running and how long it has been going.",
             new JsonObject()),
+
+        MakeTool("get_documentation",
+            "Read the application documentation. Call with no slug to get a list of available topics (returns slugs, titles, and summaries). Then call again with a specific slug to read that page's full content. Use this to answer questions about how the app works.",
+            new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["slug"] = new JsonObject { ["type"] = "string", ["description"] = "Doc page slug (e.g. 'getting-started', 'ai-assistant'). Omit to list all topics." }
+                }
+            }),
+
+        MakeTool("create_customer",
+            "Create a new customer in the workspace. Returns the new customer's ID. If the customer already exists, returns the existing record instead.",
+            new JsonObject
+            {
+                ["type"] = "object",
+                ["required"] = new JsonArray { "name" },
+                ["properties"] = new JsonObject
+                {
+                    ["name"] = new JsonObject { ["type"] = "string", ["description"] = "Customer name" },
+                    ["no"] = new JsonObject { ["type"] = "string", ["description"] = "Customer number / external ID (optional)" },
+                    ["description"] = new JsonObject { ["type"] = "string", ["description"] = "Optional description" }
+                }
+            }),
+
+        MakeTool("create_project",
+            "Create a new project under an existing customer. Returns the new project's ID. If a project with the same name already exists under that customer, returns the existing record instead.",
+            new JsonObject
+            {
+                ["type"] = "object",
+                ["required"] = new JsonArray { "name", "customer_id" },
+                ["properties"] = new JsonObject
+                {
+                    ["name"] = new JsonObject { ["type"] = "string", ["description"] = "Project name" },
+                    ["customer_id"] = new JsonObject { ["type"] = "integer", ["description"] = "ID of the parent customer" },
+                    ["no"] = new JsonObject { ["type"] = "string", ["description"] = "Project number (e.g. '5276') or procurement number (optional)" },
+                    ["description"] = new JsonObject { ["type"] = "string", ["description"] = "Optional description" }
+                }
+            }),
+
+        MakeTool("create_task",
+            "Create a new task under an existing project. Returns the new task's ID. If a task with the same name already exists under that project, returns the existing record instead.",
+            new JsonObject
+            {
+                ["type"] = "object",
+                ["required"] = new JsonArray { "name", "project_id" },
+                ["properties"] = new JsonObject
+                {
+                    ["name"] = new JsonObject { ["type"] = "string", ["description"] = "Task name (derived from the task/line description in ERP data)" },
+                    ["project_id"] = new JsonObject { ["type"] = "integer", ["description"] = "ID of the parent project" },
+                    ["position"] = new JsonObject { ["type"] = "string", ["description"] = "Position code (e.g. '5.3.') from ERP export" },
+                    ["procurement_number"] = new JsonObject { ["type"] = "string", ["description"] = "Line procurement number from ERP" },
+                    ["description"] = new JsonObject { ["type"] = "string", ["description"] = "Optional description" }
+                }
+            }),
     ];
 
     private static JsonObject MakeTool(string name, string description, JsonObject parameters)
