@@ -41,10 +41,12 @@ import {
   Bot,
   Eye,
   EyeOff,
+  Globe,
 } from 'lucide-react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useConfirm } from '../hooks/useConfirm'
 import { toast } from 'sonner'
+import { AI_LANGUAGES, getAiLanguage, setAiLanguage } from '../lib/aiLanguage'
 
 export function Settings() {
   const queryClient = useQueryClient()
@@ -70,6 +72,14 @@ export function Settings() {
   const [aiTokenInput, setAiTokenInput] = useState('')
   const [aiTokenVisible, setAiTokenVisible] = useState(false)
   const [aiTestStatus, setAiTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  // AI language preference (per-user, stored in localStorage)
+  const [aiLanguage, setAiLanguageState] = useState<string>(getAiLanguage)
+  const handleAiLanguageChange = (lang: string) => {
+    setAiLanguage(lang)
+    setAiLanguageState(lang)
+    toast.success(`AI output language set to ${lang}.`)
+  }
 
   const { data: aiConfig } = useQuery({
     queryKey: ['ai', 'config'],
@@ -2133,6 +2143,36 @@ export function Settings() {
           </CardContent>
         </Card>
       )}
+
+      {/* AI Language Preference (all users) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Globe className="h-5 w-5" />
+            <CardTitle>AI Output Language</CardTitle>
+          </div>
+          <CardDescription>
+            Choose the language for AI-generated invoice notes and suggestions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3 max-w-xs">
+            <Select value={aiLanguage} onValueChange={handleAiLanguageChange}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AI_LANGUAGES.map(l => (
+                  <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Applies to "Polish for invoice" and AI-generated notes. This is a personal preference stored on this device.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* About */}
       <Card>

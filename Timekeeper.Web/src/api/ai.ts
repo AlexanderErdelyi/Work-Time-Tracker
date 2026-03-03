@@ -1,4 +1,5 @@
 import { fetchApi, fetchApiResponse } from './client'
+import { getAiLanguage } from '../lib/aiLanguage'
 
 export interface AiStatus {
   enabled: boolean
@@ -35,6 +36,7 @@ export interface PolishNoteRequest {
   taskName?: string
   projectName?: string
   customerName?: string
+  language?: string
 }
 
 export const aiApi = {
@@ -73,6 +75,6 @@ export const aiApi = {
   polishNote: (req: PolishNoteRequest) =>
     fetchApi<{ note: string }>('/ai/polish-note', {
       method: 'POST',
-      body: JSON.stringify(req),
+      body: JSON.stringify({ ...req, language: req.language ?? getAiLanguage() }),
     }),
 }

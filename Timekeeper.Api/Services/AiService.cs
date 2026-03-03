@@ -29,7 +29,7 @@ public interface IAiService
     Task<ResolveTaskResult?> ResolveTaskAsync(string description, int workspaceId, CancellationToken ct = default);
 
     /// <summary>Rewrite a raw note into a professional, customer-ready invoice note.</summary>
-    Task<string?> PolishNoteAsync(string rawNote, string? taskName, string? projectName, string? customerName, int workspaceId, CancellationToken ct = default);
+    Task<string?> PolishNoteAsync(string rawNote, string? taskName, string? projectName, string? customerName, string? language, int workspaceId, CancellationToken ct = default);
 }
 
 public class ResolveTaskResult
@@ -955,7 +955,7 @@ public class AiService : IAiService
         }
     }
 
-    public async Task<string?> PolishNoteAsync(string rawNote, string? taskName, string? projectName, string? customerName, int workspaceId, CancellationToken ct = default)
+    public async Task<string?> PolishNoteAsync(string rawNote, string? taskName, string? projectName, string? customerName, string? language, int workspaceId, CancellationToken ct = default)
     {
         var (enabled, token) = await GetWorkspaceConfigAsync(workspaceId, ct);
         if (!enabled || string.IsNullOrWhiteSpace(token)) return null;
@@ -967,10 +967,12 @@ public class AiService : IAiService
         }.Where(s => s != null);
         var context = string.Join(", ", contextParts);
 
-        const string systemPrompt = """
+        var outputLanguage = string.IsNullOrWhiteSpace(language) ? "English" : language;
+        var systemPrompt = $"""
             You are a professional billing note writer for a time tracking application.
             The user gives you a short internal note. Rewrite it as a concise, formal, customer-facing invoice description.
             Rules:
+            - Write the output in {outputLanguage}.
             - Maximum 2 sentences.
             - Use professional language suitable for a customer invoice.
             - Do NOT repeat the task/project/customer names — they appear in other invoice fields.

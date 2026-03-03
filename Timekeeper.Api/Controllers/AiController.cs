@@ -175,7 +175,7 @@ public class AiController : ControllerBase
 
         var polished = await _aiService.PolishNoteAsync(
             request.RawNote, request.TaskName, request.ProjectName, request.CustomerName,
-            _workspaceContext.WorkspaceId, ct);
+            request.Language, _workspaceContext.WorkspaceId, ct);
 
         if (polished == null)
             return Ok(new PolishNoteResponse(request.RawNote)); // fallback: return original
@@ -210,7 +210,8 @@ public record PolishNoteRequest(
     [property: JsonPropertyName("rawNote")] string RawNote,
     [property: JsonPropertyName("taskName")] string? TaskName = null,
     [property: JsonPropertyName("projectName")] string? ProjectName = null,
-    [property: JsonPropertyName("customerName")] string? CustomerName = null);
+    [property: JsonPropertyName("customerName")] string? CustomerName = null,
+    [property: JsonPropertyName("language")] string? Language = null);
 public record PolishNoteResponse(
     [property: JsonPropertyName("note")] string Note);
 
