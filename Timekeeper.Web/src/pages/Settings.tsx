@@ -351,7 +351,7 @@ export function Settings() {
 
         toast.success('Development identity saved! Refresh pages to apply across open tabs.')
       }
-    : undefined main
+    : undefined
 
   const handleSaveTrackingSettings = () => {
     localStorage.setItem('timekeeper_breakDuration', defaultBreakDuration)
@@ -907,7 +907,7 @@ export function Settings() {
             </div>
           </CardContent>
         </Card>
-      )} main
+      )}
 
       {/* Time Tracking Settings */}
       <Card>
