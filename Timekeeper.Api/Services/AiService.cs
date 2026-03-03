@@ -161,12 +161,19 @@ public class AiService : IAiService
                 - Task name: use "Projektzeile Beschreibung" or "Beschreibung" (whichever is more descriptive). Use "Position" as the position field.
                 - Time: use "Menge" as hours, "Buchungsdatum" as the date.
                 - Notes: use "Erste Kommentarzeile" or "Beschreibung 2" if present.
-                Workflow for each row:
-                1. Call get_tasks (no filter) to see if the task already exists — fuzzy-match on name and project.
-                2. If the task does not exist, show the user a summary of what will be created: customer (if new), project (if new), task, and time entry. Ask for confirmation.
-                3. On confirmation: call create_customer (if needed) → create_project (if needed) → create_task → create_time_entry.
-                4. For multiple rows, group by customer/project to avoid duplicate create_customer/create_project calls.
-                5. Report what was created vs what already existed.
+                Workflow for ERP data — STRICTLY follow this order:
+                1. Parse all rows first. Do NOT call any tool yet.
+                2. Call get_tasks (no filter) once to check what already exists.
+                3. Present a full preview to the user in a clear table or list — for EVERY row show:
+                   - 📁 Customer: "<name>" [NEW] or [EXISTS]
+                   - 📂 Project: "<name>" (No: <no>) [NEW] or [EXISTS]
+                   - ✅ Task: "<name>" (Position: <pos>) [NEW] or [EXISTS]
+                   - 🕐 Time entry: <date>, <hours>h, notes: "<notes>"
+                4. End the preview with: "Shall I create everything listed above? (yes / edit first)"
+                5. WAIT for the user to reply. Do NOT call create_customer, create_project, create_task, or create_time_entry until the user explicitly confirms.
+                6. On confirmation: call create_customer (if new) → create_project (if new) → create_task (if new) → create_time_entry, in that order, for each row.
+                7. Group rows by customer/project to avoid redundant create calls.
+                8. After all rows are processed, report a summary: what was created vs what already existed.
 
                 DOCUMENTATION:
                 - If the user asks how something works, how to use a feature, or a general app question, call get_documentation to look it up.
