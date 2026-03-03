@@ -19,6 +19,81 @@ $versionFile.version = $Version
 $versionFile.releaseDate = (Get-Date -Format "yyyy-MM-dd")
 $versionFile | ConvertTo-Json -Depth 10 | Set-Content "version.json"
 
+# Auto-generate Timekeeper.Web/public/version.json from CHANGELOG.md
+Write-Host "📋 Generating public/version.json from CHANGELOG.md..." -ForegroundColor Yellow
+
+function Parse-Changelog {
+    param([string]$Path)
+
+    $lines = Get-Content $Path
+    $releases = [System.Collections.Generic.List[object]]::new()
+    $current = $null
+    $currentSection = $null
+
+    foreach ($line in $lines) {
+        # Version heading: ## [3.1.0] - 2026-03-10
+        if ($line -match '^## \[(.+?)\] - (\d{4}-\d{2}-\d{2})') {
+            if ($current) { $releases.Add($current) }
+            $current = @{
+                version = $matches[1]
+                date    = $matches[2]
+                title   = ''
+                changes = @{ added = @(); changed = @(); fixed = @(); removed = @() }
+            }
+            $currentSection = $null
+            continue
+        }
+
+        if (-not $current) { continue }
+
+        # Optional title line: first non-empty, non-heading, non-list line after version heading
+        if ($current.title -eq '' -and $line.Trim() -ne '' -and
+            $line -notmatch '^#' -and $line -notmatch '^-') {
+            $current.title = $line.Trim()
+            continue
+        }
+
+        # Section heading: ### Added / Changed / Fixed / Removed (reset on any other ### heading)
+        if ($line -match '^### (.+)') {
+            $name = $matches[1].Trim()
+            $currentSection = if ($name -in 'Added','Changed','Fixed','Removed') { $name.ToLower() } else { $null }
+            continue
+        }
+
+        # List item
+        if ($currentSection -and $line -match '^- (.+)') {
+            $current.changes[$currentSection] += $matches[1].Trim()
+        }
+    }
+
+    if ($current) { $releases.Add($current) }
+    return $releases
+}
+
+$releases = Parse-Changelog -Path (Join-Path $PSScriptRoot "CHANGELOG.md")
+
+$publicVersionJson = [ordered]@{
+    currentVersion = $Version
+    releasedAt     = (Get-Date -Format "yyyy-MM-dd")
+    releases       = @($releases | ForEach-Object {
+        [ordered]@{
+            version = $_.version
+            date    = $_.date
+            title   = $_.title
+            changes = [ordered]@{
+                added   = @($_.changes.added)
+                changed = @($_.changes.changed)
+                fixed   = @($_.changes.fixed)
+                removed = @($_.changes.removed)
+            }
+        }
+    })
+}
+
+$publicVersionPath = Join-Path $PSScriptRoot "Timekeeper.Web\public\version.json"
+$publicVersionJson | ConvertTo-Json -Depth 10 | Set-Content $publicVersionPath -Encoding UTF8
+Write-Host "[SUCCESS] public/version.json updated with $($releases.Count) release(s)" -ForegroundColor Green
+
 # Clean previous builds
 Write-Host "🧹 Cleaning previous builds..." -ForegroundColor Yellow
 if (Test-Path ".\Release") {
