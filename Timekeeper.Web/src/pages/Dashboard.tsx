@@ -13,6 +13,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
+import { getErrorMessage } from '../lib/utils'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
@@ -400,6 +401,9 @@ export function Dashboard() {
           setSelectedTaskId(undefined)
           setSearchTerm('')
           setNotes('')
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to start timer.'))
         }
       }
     )
@@ -417,7 +421,8 @@ export function Dashboard() {
         await workDaysApi.checkIn('Auto check-in from Quick Start')
       }
     } catch (error) {
-      console.error('Error checking in:', error)
+      alert(getErrorMessage(error, 'Failed to check in during quick start.'))
+      return
     }
     
     // Then start the timer
@@ -430,6 +435,9 @@ export function Dashboard() {
           setSelectedTaskId(undefined)
           setSearchTerm('')
           setNotes('')
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to start timer.'))
         }
       }
     )
@@ -453,6 +461,9 @@ export function Dashboard() {
           setSelectedTaskId(undefined)
           setSearchTerm('')
           setNotes('')
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to assign task to timer.'))
         }
       }
     )
@@ -461,16 +472,25 @@ export function Dashboard() {
   const handleUpdateRunningNotes = () => {
     if (!runningTimer) return
     
-    updateTimer.mutate({
-      id: runningTimer.id,
-      data: {
-        taskId: runningTimer.taskId,
-        notes: runningNotes,
-        startTime: runningTimer.startTime,
+    updateTimer.mutate(
+      {
+        id: runningTimer.id,
+        data: {
+          taskId: runningTimer.taskId,
+          notes: runningNotes,
+          startTime: runningTimer.startTime,
+        }
+      },
+      {
+        onSuccess: () => {
+          isEditingNotesRef.current = false
+          setEditingNotes(false)
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to update notes.'))
+        }
       }
-    })
-    isEditingNotesRef.current = false
-    setEditingNotes(false)
+    )
   }
 
   const handleRestartTimer = (entryId: number) => {
@@ -480,17 +500,32 @@ export function Dashboard() {
       }
       stopTimer.mutate(runningTimer.id, {
         onSuccess: () => {
-          resumeTimer.mutate(entryId)
+          resumeTimer.mutate(entryId, {
+            onError: (error: unknown) => {
+              alert(getErrorMessage(error, 'Failed to resume timer.'))
+            }
+          })
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to stop running timer.'))
         }
       })
     } else {
-      resumeTimer.mutate(entryId)
+      resumeTimer.mutate(entryId, {
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to resume timer.'))
+        }
+      })
     }
   }
 
   const handleStopTimer = () => {
     if (runningTimer) {
-      stopTimer.mutate(runningTimer.id)
+      stopTimer.mutate(runningTimer.id, {
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to stop timer.'))
+        }
+      })
     }
   }
 
@@ -1035,7 +1070,11 @@ export function Dashboard() {
                   {runningTimer.isPaused ? (
                     <Button
                       size="lg"
-                      onClick={() => resumeFromPause.mutate(runningTimer.id)}
+                      onClick={() => resumeFromPause.mutate(runningTimer.id, {
+                        onError: (error: unknown) => {
+                          alert(getErrorMessage(error, 'Failed to resume timer.'))
+                        }
+                      })}
                       disabled={resumeFromPause.isPending}
                       className="h-12 w-full gap-2 whitespace-nowrap"
                     >
@@ -1046,7 +1085,11 @@ export function Dashboard() {
                     <Button
                       size="lg"
                       variant="outline"
-                      onClick={() => pauseTimer.mutate(runningTimer.id)}
+                      onClick={() => pauseTimer.mutate(runningTimer.id, {
+                        onError: (error: unknown) => {
+                          alert(getErrorMessage(error, 'Failed to pause timer.'))
+                        }
+                      })}
                       disabled={pauseTimer.isPending}
                       className="h-12 w-full gap-2 whitespace-nowrap"
                     >
