@@ -29,6 +29,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Trim any accidental leading/trailing whitespace from path parameters that
+# come from environment variables or GitHub Actions variables.
+$PackageZipPath   = $PackageZipPath.Trim()
+$DeployRoot       = $DeployRoot.Trim()
+$CertificatePath  = $CertificatePath.Trim()
+$CertificatePassword = $CertificatePassword.Trim()
+$CertDirectory    = $CertDirectory.Trim()
+
 function Invoke-RoboCopy {
     param(
         [Parameter(Mandatory = $true)]

@@ -1632,7 +1632,7 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            <p><strong>Version:</strong> 2.0.0 (React Edition)</p>
+            <p><strong>Version:</strong> {import.meta.env.VITE_APP_VERSION ?? '2.0.0'} (React Edition)</p>
             <p><strong>Framework:</strong> React 18 + TypeScript + Vite</p>
             <p><strong>Backend:</strong> ASP.NET Core 8.0</p>
             <p><strong>Database:</strong> SQLite with Entity Framework Core</p>
