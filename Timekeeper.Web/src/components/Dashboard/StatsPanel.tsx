@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { Progress } from '../ui/Progress'
 
 interface StatsPanelProps {
   todayWorkedMinutes: number
@@ -24,6 +26,16 @@ export function StatsPanel({
     return `${hours}h ${remainingMinutes}m`
   }
 
+  const dailyTargetHours = useMemo(() => {
+    const value = parseFloat(localStorage.getItem('timekeeper_dailyTarget') || '8')
+    return isNaN(value) || value <= 0 ? 8 : value
+  }, [])
+
+  const weeklyTargetHours = useMemo(() => {
+    const value = parseFloat(localStorage.getItem('timekeeper_weeklyTarget') || '40')
+    return isNaN(value) || value <= 0 ? 40 : value
+  }, [])
+
   return (
     <div className={`grid gap-4 md:grid-cols-3 ${isBillingEnabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
       <Card>
@@ -32,7 +44,12 @@ export function StatsPanel({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(todayWorkedMinutes)}</div>
-          <p className="text-xs text-muted-foreground">of 8.00h target</p>
+          <p className="text-xs text-muted-foreground">of {dailyTargetHours.toFixed(2)}h target</p>
+          <Progress
+            value={todayWorkedMinutes}
+            max={dailyTargetHours * 60}
+            className="mt-2"
+          />
         </CardContent>
       </Card>
       
@@ -42,7 +59,12 @@ export function StatsPanel({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{formatMinutesAsHoursMinutes(thisWeekWorkedMinutes)}</div>
-          <p className="text-xs text-muted-foreground">of 40.00h target</p>
+          <p className="text-xs text-muted-foreground">of {weeklyTargetHours.toFixed(2)}h target</p>
+          <Progress
+            value={thisWeekWorkedMinutes}
+            max={weeklyTargetHours * 60}
+            className="mt-2"
+          />
         </CardContent>
       </Card>
       
