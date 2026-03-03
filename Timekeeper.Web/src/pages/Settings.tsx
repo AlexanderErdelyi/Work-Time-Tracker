@@ -182,9 +182,18 @@ export function Settings() {
   // User Settings
   const [userName, setUserName] = useState(localStorage.getItem('timekeeper_userName') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('timekeeper_userEmail') || '')
-  const [authUserEmail, setAuthUserEmail] = useState(localStorage.getItem('timekeeper_authUserEmail') || '')
-  const [authRole, setAuthRole] = useState(localStorage.getItem('timekeeper_authRole') || 'Member')
-  const [authWorkspaceId, setAuthWorkspaceId] = useState(localStorage.getItem('timekeeper_authWorkspaceId') || '1')
+  
+  // Development Identity - Only available in development builds
+  // This allows testing multi-user scenarios without a full authentication backend
+  const [authUserEmail, setAuthUserEmail] = useState(
+    import.meta.env.DEV ? (localStorage.getItem('timekeeper_authUserEmail') || '') : ''
+  )
+  const [authRole, setAuthRole] = useState(
+    import.meta.env.DEV ? (localStorage.getItem('timekeeper_authRole') || 'Member') : 'Member'
+  )
+  const [authWorkspaceId, setAuthWorkspaceId] = useState(
+    import.meta.env.DEV ? (localStorage.getItem('timekeeper_authWorkspaceId') || '1') : '1'
+  )
 
   // Time Tracking Settings
   const [defaultBreakDuration, setDefaultBreakDuration] = useState(
@@ -315,22 +324,26 @@ export function Settings() {
     alert('User settings saved!')
   }
 
-  const handleSaveDevelopmentIdentity = () => {
-    const normalizedEmail = authUserEmail.trim() || userEmail.trim() || 'admin@local.timekeeper'
-    const parsedWorkspaceId = parseInt(authWorkspaceId, 10)
-    const normalizedWorkspaceId = Number.isFinite(parsedWorkspaceId) && parsedWorkspaceId > 0
-      ? String(parsedWorkspaceId)
-      : '1'
+  // Development-only handler for testing multi-user scenarios
+  // This function is only included in development builds and tree-shaken in production
+  const handleSaveDevelopmentIdentity = import.meta.env.DEV
+    ? () => {
+        const normalizedEmail = authUserEmail.trim() || userEmail.trim() || 'admin@local.timekeeper'
+        const parsedWorkspaceId = parseInt(authWorkspaceId, 10)
+        const normalizedWorkspaceId = Number.isFinite(parsedWorkspaceId) && parsedWorkspaceId > 0
+          ? String(parsedWorkspaceId)
+          : '1'
 
-    localStorage.setItem('timekeeper_authUserEmail', normalizedEmail)
-    localStorage.setItem('timekeeper_authRole', authRole)
-    localStorage.setItem('timekeeper_authWorkspaceId', normalizedWorkspaceId)
+        localStorage.setItem('timekeeper_authUserEmail', normalizedEmail)
+        localStorage.setItem('timekeeper_authRole', authRole)
+        localStorage.setItem('timekeeper_authWorkspaceId', normalizedWorkspaceId)
 
-    setAuthUserEmail(normalizedEmail)
-    setAuthWorkspaceId(normalizedWorkspaceId)
+        setAuthUserEmail(normalizedEmail)
+        setAuthWorkspaceId(normalizedWorkspaceId)
 
-    alert('Development identity saved! Refresh pages to apply across open tabs.')
-  }
+        alert('Development identity saved! Refresh pages to apply across open tabs.')
+      }
+    : undefined
 
   const handleSaveTrackingSettings = () => {
     localStorage.setItem('timekeeper_breakDuration', defaultBreakDuration)
@@ -805,73 +818,79 @@ export function Settings() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Monitor className="h-5 w-5" />
-            <CardTitle>Development Identity</CardTitle>
-          </div>
-          <CardDescription>
-            Used for multi-user development testing via request headers
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="authUserEmail">Auth Email</Label>
-              <Input
-                id="authUserEmail"
-                type="email"
-                value={authUserEmail}
-                onChange={(e) => setAuthUserEmail(e.target.value)}
-                placeholder="colleague@company.com"
-              />
+      {/* Development Identity - Only rendered in development builds
+          This panel allows developers to test multi-user scenarios by overriding 
+          authentication headers without requiring a full auth backend.
+          WARNING: This section is completely removed from production builds via tree-shaking. */}
+      {import.meta.env.DEV && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Monitor className="h-5 w-5" />
+              <CardTitle>Development Identity</CardTitle>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="authRole">Role</Label>
-              <Select value={authRole} onValueChange={setAuthRole}>
-                <SelectTrigger id="authRole">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                  <SelectItem value="Manager">Manager</SelectItem>
-                  <SelectItem value="Member">Member</SelectItem>
-                </SelectContent>
-              </Select>
+            <CardDescription>
+              Used for multi-user development testing via request headers
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="authUserEmail">Auth Email</Label>
+                <Input
+                  id="authUserEmail"
+                  type="email"
+                  value={authUserEmail}
+                  onChange={(e) => setAuthUserEmail(e.target.value)}
+                  placeholder="colleague@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="authRole">Role</Label>
+                <Select value={authRole} onValueChange={setAuthRole}>
+                  <SelectTrigger id="authRole">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Admin">Admin</SelectItem>
+                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="Member">Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="authWorkspaceId">Workspace ID</Label>
+                <Input
+                  id="authWorkspaceId"
+                  type="number"
+                  min="1"
+                  value={authWorkspaceId}
+                  onChange={(e) => setAuthWorkspaceId(e.target.value)}
+                  placeholder="1"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="authWorkspaceId">Workspace ID</Label>
-              <Input
-                id="authWorkspaceId"
-                type="number"
-                min="1"
-                value={authWorkspaceId}
-                onChange={(e) => setAuthWorkspaceId(e.target.value)}
-                placeholder="1"
-              />
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleSaveDevelopmentIdentity} className="gap-2">
+                <Save className="h-4 w-4" />
+                Save Development Identity
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!userEmail.trim()) {
+                    alert('Set a User Profile email first.')
+                    return
+                  }
+                  setAuthUserEmail(userEmail.trim())
+                }}
+              >
+                Use Profile Email
+              </Button>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSaveDevelopmentIdentity} className="gap-2">
-              <Save className="h-4 w-4" />
-              Save Development Identity
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!userEmail.trim()) {
-                  alert('Set a User Profile email first.')
-                  return
-                }
-                setAuthUserEmail(userEmail.trim())
-              }}
-            >
-              Use Profile Email
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Time Tracking Settings */}
       <Card>
