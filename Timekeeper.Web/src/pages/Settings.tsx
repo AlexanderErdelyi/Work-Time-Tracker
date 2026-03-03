@@ -452,7 +452,7 @@ export function Settings() {
   // Quick Actions Handlers
   const handleCreateQuickAction = () => {
     if (!newQuickActionName.trim()) {
-      alert('Please enter a name for the Quick Action.')
+      toast.error('Please enter a name for the Quick Action.')
       return
     }
 
@@ -466,21 +466,21 @@ export function Settings() {
       sortOrder: maxSortOrder + 1,
     }, {
       onSuccess: () => {
-        alert('Quick Action created successfully!')
+        toast.success('Quick Action created successfully!')
         setNewQuickActionName('')
         setNewQuickActionType('StartTimer')
         setNewQuickActionTaskId('')
       },
       onError: (error: unknown) => {
         const message = error instanceof Error ? error.message : 'Could not create Quick Action.'
-        alert(message)
+        toast.error(message)
       }
     })
   }
 
   const handleUpdateQuickAction = (id: number) => {
     if (!editingQuickActionName.trim()) {
-      alert('Please enter a name for the Quick Action.')
+      toast.error('Please enter a name for the Quick Action.')
       return
     }
 
@@ -489,29 +489,33 @@ export function Settings() {
       name: editingQuickActionName.trim(),
     }, {
       onSuccess: () => {
-        alert('Quick Action updated successfully!')
+        toast.success('Quick Action updated successfully!')
         setEditingQuickActionId(null)
         setEditingQuickActionName('')
       },
       onError: (error: unknown) => {
         const message = error instanceof Error ? error.message : 'Could not update Quick Action.'
-        alert(message)
+        toast.error(message)
       }
     })
   }
 
-  const handleDeleteQuickAction = (id: number, name: string) => {
-    if (!confirm(`Are you sure you want to delete the Quick Action "${name}"?`)) {
-      return
-    }
+  const handleDeleteQuickAction = async (id: number, name: string) => {
+    const confirmed = await confirm({
+      title: 'Delete Quick Action',
+      description: `Are you sure you want to delete the Quick Action "${name}"?`,
+      confirmText: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
 
     deleteQuickAction.mutate(id, {
       onSuccess: () => {
-        alert('Quick Action deleted successfully!')
+        toast.success('Quick Action deleted successfully!')
       },
       onError: (error: unknown) => {
         const message = error instanceof Error ? error.message : 'Could not delete Quick Action.'
-        alert(message)
+        toast.error(message)
       }
     })
   }
@@ -537,7 +541,7 @@ export function Settings() {
       },
       onError: (error: unknown) => {
         const message = error instanceof Error ? error.message : 'Could not reorder Quick Actions.'
-        alert(message)
+        toast.error(message)
       }
     })
   }
@@ -896,7 +900,7 @@ export function Settings() {
                 variant="outline"
                 onClick={() => {
                   if (!userEmail.trim()) {
-                    alert('Set a User Profile email first.')
+                    toast.error('Set a User Profile email first.')
                     return
                   }
                   setAuthUserEmail(userEmail.trim())
