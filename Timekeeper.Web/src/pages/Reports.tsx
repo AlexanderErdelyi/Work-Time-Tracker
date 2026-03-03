@@ -3,16 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import { Download, Calendar, TrendingUp } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTimeEntries } from '../hooks/useTimeEntries'
-import { useCustomers } from '../hooks/useCustomers'
-import { useProjects } from '../hooks/useProjects'
-import { useTasks } from '../hooks/useTasks'
 import { exportApi } from '../api'
 import { formatDate } from '../lib/dateUtils'
-import { startOfWeek, parseISO, format } from 'date-fns'
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, subDays, eachDayOfInterval, parseISO, differenceInCalendarDays } from 'date-fns'
 
 const ReportsCharts = lazy(() => import('../components/Reports/ReportsCharts').then(module => ({ default: module.ReportsCharts })))
 
@@ -20,26 +16,10 @@ export function Reports() {
   const navigate = useNavigate()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [customerId, setCustomerId] = useState<number | undefined>(undefined)
-  const [projectId, setProjectId] = useState<number | undefined>(undefined)
-  const [taskId, setTaskId] = useState<number | undefined>(undefined)
-
-  const { data: customers = [] } = useCustomers({ isActive: true })
-  const { data: projects = [] } = useProjects({ 
-    isActive: true,
-    customerId: customerId || undefined
-  })
-  const { data: tasks = [] } = useTasks({ 
-    isActive: true,
-    projectId: projectId || undefined
-  })
 
   const { data: entries = [] } = useTimeEntries({
     startDate: startDate || undefined,
     endDate: endDate || undefined,
-    customerId: customerId || undefined,
-    projectId: projectId || undefined,
-    taskId: taskId || undefined,
   })
 
   // Calculate total hours per customer
@@ -124,23 +104,56 @@ export function Reports() {
 
   // Calculate daily hours
   const dailyData = useMemo(() => {
+    // Determine the date range
+    let rangeStart: Date
+    let rangeEnd: Date
+    
+    if (startDate && endDate) {
+      // Use selected range
+      rangeStart = startOfDay(parseISO(startDate))
+      rangeEnd = endOfDay(parseISO(endDate))
+    } else if (startDate) {
+      // Start date only - go to today
+      rangeStart = startOfDay(parseISO(startDate))
+      rangeEnd = endOfDay(new Date())
+    } else if (endDate) {
+      // End date only - show 30 days before end date
+      rangeEnd = endOfDay(parseISO(endDate))
+      rangeStart = startOfDay(subDays(rangeEnd, 29))
+    } else if (entries.length > 0) {
+      // No date filters - use last 30 calendar days from the most recent entry
+      const latestEntryDate = new Date(Math.max(...entries.map(e => new Date(e.startTime).getTime())))
+      rangeEnd = endOfDay(latestEntryDate)
+      rangeStart = startOfDay(subDays(rangeEnd, 29))
+    } else {
+      // No entries at all
+      rangeEnd = endOfDay(new Date())
+      rangeStart = startOfDay(subDays(rangeEnd, 29))
+    }
+    
+    // Group entries by date
     const grouped = entries.reduce((acc, entry) => {
-      const date = formatDate(entry.startTime, 'MMM d')
-      if (!acc[date]) {
-        acc[date] = 0
+      const dateKey = formatDate(entry.startTime, 'yyyy-MM-dd')
+      if (!acc[dateKey]) {
+        acc[dateKey] = 0
       }
       const hours = (entry.durationMinutes || 0) / 60
-      acc[date] += hours
+      acc[dateKey] += hours
       return acc
     }, {} as Record<string, number>)
-
-    return Object.entries(grouped)
-      .map(([date, hours]) => ({
-        date,
-        hours: parseFloat(hours.toFixed(2)),
-      }))
-      .slice(-30) // Last 30 days
-  }, [entries])
+    
+    // Fill in all days in the range
+    const allDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
+    
+    return allDays.map(day => {
+      const dateKey = format(day, 'yyyy-MM-dd')
+      const displayDate = format(day, 'MMM d')
+      return {
+        date: displayDate,
+        hours: parseFloat((grouped[dateKey] || 0).toFixed(2)),
+      }
+    })
+  }, [entries, startDate, endDate])
 
   // Calculate weekly hours
   const weeklyData = useMemo(() => {
@@ -175,9 +188,24 @@ export function Reports() {
     }, 0)
 
     const totalHours = totalMinutes / 60
-    const avgHoursPerDay = dailyData.length > 0 
-      ? totalHours / dailyData.length 
-      : 0
+    
+    // Calculate average using total calendar days in range (not just days with entries)
+    let totalDaysInRange = 1 // Default to 1 to avoid division by zero
+    if (startDate && endDate) {
+      const start = parseISO(startDate)
+      const end = parseISO(endDate)
+      totalDaysInRange = Math.max(1, differenceInCalendarDays(end, start) + 1)
+    } else if (startDate) {
+      const start = parseISO(startDate)
+      const today = new Date()
+      totalDaysInRange = Math.max(1, differenceInCalendarDays(today, start) + 1)
+    } else if (endDate) {
+      totalDaysInRange = 30 // Show 30 days before end date
+    } else {
+      totalDaysInRange = dailyData.length // Use the actual range calculated in dailyData
+    }
+    
+    const avgHoursPerDay = totalHours / totalDaysInRange
 
     return {
       totalHours: parseFloat(totalHours.toFixed(2)),
@@ -186,20 +214,49 @@ export function Reports() {
       uniqueCustomers: new Set(entries.map(e => e.customerName)).size,
       uniqueProjects: new Set(entries.map(e => e.projectName)).size,
     }
-  }, [entries, dailyData])
+  }, [entries, dailyData, startDate, endDate])
 
   const handleExport = async () => {
     try {
       await exportApi.exportExcel({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        customerId: customerId || undefined,
-        projectId: projectId || undefined,
-        taskId: taskId || undefined,
       })
     } catch (error) {
       console.error('Export failed:', error)
+      alert('Failed to export data. Please try again.')
     }
+  }
+
+  const setDateRange = (start: Date, end: Date) => {
+    setStartDate(format(start, 'yyyy-MM-dd'))
+    setEndDate(format(end, 'yyyy-MM-dd'))
+  }
+
+  const handleToday = () => {
+    const today = new Date()
+    setDateRange(startOfDay(today), endOfDay(today))
+  }
+
+  const handleThisWeek = () => {
+    const today = new Date()
+    setDateRange(startOfWeek(today, { weekStartsOn: 1 }), endOfWeek(today, { weekStartsOn: 1 }))
+  }
+
+  const handleThisMonth = () => {
+    const today = new Date()
+    setDateRange(startOfMonth(today), endOfMonth(today))
+  }
+
+  const handleLastMonth = () => {
+    const lastMonth = subMonths(new Date(), 1)
+    setDateRange(startOfMonth(lastMonth), endOfMonth(lastMonth))
+  }
+
+  const handleLast30Days = () => {
+    const today = new Date()
+    const startDate = subDays(today, 29) // Start of 30-day range: 29 days ago through today
+    setDateRange(startOfDay(startDate), endOfDay(today))
   }
 
   return (
@@ -224,105 +281,77 @@ export function Reports() {
           <CardDescription>Filter reports by date range and project details</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="endDate">End Date</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="customer">Customer</Label>
-              <Select
-                value={customerId?.toString() || ''}
-                onValueChange={(value) => {
-                  setCustomerId(value ? parseInt(value) : undefined)
-                  setProjectId(undefined)
-                  setTaskId(undefined)
-                }}
-              >
-                <SelectTrigger id="customer">
-                  <SelectValue placeholder="All Customers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Customers</SelectItem>
-                  {customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id.toString()}>
-                      {customer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="project">Project</Label>
-              <Select
-                value={projectId?.toString() || ''}
-                onValueChange={(value) => {
-                  setProjectId(value ? parseInt(value) : undefined)
-                  setTaskId(undefined)
-                }}
-                disabled={!customerId}
-              >
-                <SelectTrigger id="project" disabled={!customerId}>
-                  <SelectValue placeholder="All Projects" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Projects</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="task">Task</Label>
-              <Select
-                value={taskId?.toString() || ''}
-                onValueChange={(value) => setTaskId(value ? parseInt(value) : undefined)}
-                disabled={!projectId}
-              >
-                <SelectTrigger id="task" disabled={!projectId}>
-                  <SelectValue placeholder="All Tasks" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Tasks</SelectItem>
-                  {tasks.map((task) => (
-                    <SelectItem key={task.id} value={task.id.toString()}>
-                      {task.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
+          <div className="space-y-4">
+            {/* Quick Date Shortcuts */}
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setStartDate('')
-                  setEndDate('')
-                  setCustomerId(undefined)
-                  setProjectId(undefined)
-                  setTaskId(undefined)
-                }}
+                size="sm"
+                onClick={handleToday}
               >
-                Clear Filters
+                Today
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleThisWeek}
+              >
+                This Week
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleThisMonth}
+              >
+                This Month
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLastMonth}
+              >
+                Last Month
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLast30Days}
+              >
+                Last 30 Days
+              </Button>
+            </div>
+            
+            {/* Date Range Inputs */}
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStartDate('')
+                    setEndDate('')
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
