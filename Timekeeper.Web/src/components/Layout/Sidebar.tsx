@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Wifi,
   WifiOff,
-  Bot
+  Bot,
+  Sparkles
 } from 'lucide-react'
 import { useConnectionStatus } from '../../hooks/useConnectionStatus'
 import { cn } from '../../lib/utils'
@@ -26,6 +27,8 @@ import { Badge } from '../ui/Badge'
 import { useState } from 'react'
 import { useWorkspaceContext } from '../../hooks/useWorkspaceContext'
 import { supportApi, aiApi } from '../../api'
+import { useChangelog } from '../../hooks/useChangelog'
+import { ChangelogDrawer } from './ChangelogDrawer'
 
 const baseNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -45,8 +48,10 @@ const baseNavigation = [
 export function Sidebar() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
+  const [changelogOpen, setChangelogOpen] = useState(false)
   const { data: workspaceContext } = useWorkspaceContext()
   const isAdminUser = workspaceContext?.currentUser.role === 'Admin'
+  const { newReleaseCount } = useChangelog()
 
   const { data: aiStatus } = useQuery({
     queryKey: ['ai', 'status'],
@@ -131,6 +136,33 @@ export function Sidebar() {
             </Link>
           )
         })}
+        {/* What's New button */}
+        <button
+          onClick={() => setChangelogOpen(true)}
+          className={cn(
+            'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+            'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            collapsed && 'justify-center'
+          )}
+          title={collapsed ? "What's New" : undefined}
+        >
+          <span className="relative flex-shrink-0">
+            <Sparkles className="h-5 w-5" />
+            {collapsed && newReleaseCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-pink-500" />
+            )}
+          </span>
+          {!collapsed && (
+            <div className="flex items-center justify-between w-full gap-2">
+              <span>What's New</span>
+              {newReleaseCount > 0 && (
+                <Badge className="min-w-5 justify-center px-1.5 py-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0">
+                  {newReleaseCount}
+                </Badge>
+              )}
+            </div>
+          )}
+        </button>
       </nav>
 
       {/* Footer */}
@@ -150,6 +182,7 @@ export function Sidebar() {
           </div>
         </div>
       )}
+      <ChangelogDrawer open={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </div>
   )
 }
