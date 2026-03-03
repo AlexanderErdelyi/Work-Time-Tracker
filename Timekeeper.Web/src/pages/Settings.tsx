@@ -9,6 +9,8 @@ import SoundSelectionModal from '../components/SoundSelectionModal'
 import { useTasks } from '../hooks/useTasks'
 import { usePWA } from '../hooks/usePWA'
 import { useWorkspaceContext, workspaceKeys } from '../hooks/useWorkspaceContext'
+import { useQuickActions, useCreateQuickAction, useUpdateQuickAction, useDeleteQuickAction, useReorderQuickActions } from '../hooks/useQuickActions'
+import type { QuickAction } from '../api/quickActions'
 import { SystemIdleDetectionService } from '../services/systemIdleDetection'
 import { activityDetectionService } from '../services/activityDetection'
 import { workspacesApi } from '../api'
@@ -31,6 +33,11 @@ import {
   AlertCircle,
   Smartphone,
   LifeBuoy,
+  Plus,
+  Edit,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react'
 
 export function Settings() {
@@ -175,9 +182,18 @@ export function Settings() {
   // User Settings
   const [userName, setUserName] = useState(localStorage.getItem('timekeeper_userName') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('timekeeper_userEmail') || '')
-  const [authUserEmail, setAuthUserEmail] = useState(localStorage.getItem('timekeeper_authUserEmail') || '')
-  const [authRole, setAuthRole] = useState(localStorage.getItem('timekeeper_authRole') || 'Member')
-  const [authWorkspaceId, setAuthWorkspaceId] = useState(localStorage.getItem('timekeeper_authWorkspaceId') || '1')
+  
+  // Development Identity - Only available in development builds
+  // This allows testing multi-user scenarios without a full authentication backend
+  const [authUserEmail, setAuthUserEmail] = useState(
+    import.meta.env.DEV ? (localStorage.getItem('timekeeper_authUserEmail') || '') : ''
+  )
+  const [authRole, setAuthRole] = useState(
+    import.meta.env.DEV ? (localStorage.getItem('timekeeper_authRole') || 'Member') : 'Member'
+  )
+  const [authWorkspaceId, setAuthWorkspaceId] = useState(
+    import.meta.env.DEV ? (localStorage.getItem('timekeeper_authWorkspaceId') || '1') : '1'
+  )
 
   // Time Tracking Settings
   const [defaultBreakDuration, setDefaultBreakDuration] = useState(
@@ -288,28 +304,46 @@ export function Settings() {
   const { data: allTasks = [] } = useTasks({ isActive: true })
   const [selectedTaskForQuick, setSelectedTaskForQuick] = useState<string>('')
 
+  // Quick Actions Management (Database-stored)
+  const isManagerOrAdmin = workspaceContext?.currentUser.role === 'Admin' || workspaceContext?.currentUser.role === 'Manager'
+  const { data: quickActions = [] } = useQuickActions()
+  const createQuickAction = useCreateQuickAction()
+  const updateQuickAction = useUpdateQuickAction()
+  const deleteQuickAction = useDeleteQuickAction()
+  const reorderQuickActions = useReorderQuickActions()
+  
+  const [newQuickActionName, setNewQuickActionName] = useState('')
+  const [newQuickActionType, setNewQuickActionType] = useState<QuickAction['actionType']>('StartTimer')
+  const [newQuickActionTaskId, setNewQuickActionTaskId] = useState<string>('')
+  const [editingQuickActionId, setEditingQuickActionId] = useState<number | null>(null)
+  const [editingQuickActionName, setEditingQuickActionName] = useState('')
+
   const handleSaveUserSettings = () => {
     localStorage.setItem('timekeeper_userName', userName)
     localStorage.setItem('timekeeper_userEmail', userEmail)
     alert('User settings saved!')
   }
 
-  const handleSaveDevelopmentIdentity = () => {
-    const normalizedEmail = authUserEmail.trim() || userEmail.trim() || 'admin@local.timekeeper'
-    const parsedWorkspaceId = parseInt(authWorkspaceId, 10)
-    const normalizedWorkspaceId = Number.isFinite(parsedWorkspaceId) && parsedWorkspaceId > 0
-      ? String(parsedWorkspaceId)
-      : '1'
+  // Development-only handler for testing multi-user scenarios
+  // This function is only included in development builds and tree-shaken in production
+  const handleSaveDevelopmentIdentity = import.meta.env.DEV
+    ? () => {
+        const normalizedEmail = authUserEmail.trim() || userEmail.trim() || 'admin@local.timekeeper'
+        const parsedWorkspaceId = parseInt(authWorkspaceId, 10)
+        const normalizedWorkspaceId = Number.isFinite(parsedWorkspaceId) && parsedWorkspaceId > 0
+          ? String(parsedWorkspaceId)
+          : '1'
 
-    localStorage.setItem('timekeeper_authUserEmail', normalizedEmail)
-    localStorage.setItem('timekeeper_authRole', authRole)
-    localStorage.setItem('timekeeper_authWorkspaceId', normalizedWorkspaceId)
+        localStorage.setItem('timekeeper_authUserEmail', normalizedEmail)
+        localStorage.setItem('timekeeper_authRole', authRole)
+        localStorage.setItem('timekeeper_authWorkspaceId', normalizedWorkspaceId)
 
-    setAuthUserEmail(normalizedEmail)
-    setAuthWorkspaceId(normalizedWorkspaceId)
+        setAuthUserEmail(normalizedEmail)
+        setAuthWorkspaceId(normalizedWorkspaceId)
 
-    alert('Development identity saved! Refresh pages to apply across open tabs.')
-  }
+        alert('Development identity saved! Refresh pages to apply across open tabs.')
+      }
+    : undefined
 
   const handleSaveTrackingSettings = () => {
     localStorage.setItem('timekeeper_breakDuration', defaultBreakDuration)
@@ -406,6 +440,100 @@ export function Settings() {
     setQuickTaskIds(newQuickTaskIds)
     localStorage.setItem('timekeeper_quickTasks', JSON.stringify(newQuickTaskIds))
   }
+
+  // Quick Actions Handlers
+  const handleCreateQuickAction = () => {
+    if (!newQuickActionName.trim()) {
+      alert('Please enter a name for the Quick Action.')
+      return
+    }
+
+    const maxSortOrder = quickActions.length > 0 ? Math.max(...quickActions.map(qa => qa.sortOrder)) : -1
+    const taskId = newQuickActionTaskId ? parseInt(newQuickActionTaskId) : undefined
+
+    createQuickAction.mutate({
+      name: newQuickActionName.trim(),
+      actionType: newQuickActionType,
+      taskId,
+      sortOrder: maxSortOrder + 1,
+    }, {
+      onSuccess: () => {
+        alert('Quick Action created successfully!')
+        setNewQuickActionName('')
+        setNewQuickActionType('StartTimer')
+        setNewQuickActionTaskId('')
+      },
+      onError: (error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not create Quick Action.'
+        alert(message)
+      }
+    })
+  }
+
+  const handleUpdateQuickAction = (id: number) => {
+    if (!editingQuickActionName.trim()) {
+      alert('Please enter a name for the Quick Action.')
+      return
+    }
+
+    updateQuickAction.mutate({
+      id,
+      name: editingQuickActionName.trim(),
+    }, {
+      onSuccess: () => {
+        alert('Quick Action updated successfully!')
+        setEditingQuickActionId(null)
+        setEditingQuickActionName('')
+      },
+      onError: (error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not update Quick Action.'
+        alert(message)
+      }
+    })
+  }
+
+  const handleDeleteQuickAction = (id: number, name: string) => {
+    if (!confirm(`Are you sure you want to delete the Quick Action "${name}"?`)) {
+      return
+    }
+
+    deleteQuickAction.mutate(id, {
+      onSuccess: () => {
+        alert('Quick Action deleted successfully!')
+      },
+      onError: (error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not delete Quick Action.'
+        alert(message)
+      }
+    })
+  }
+
+  const handleMoveQuickAction = (id: number, direction: 'up' | 'down') => {
+    const sortedActions = [...quickActions].sort((a, b) => a.sortOrder - b.sortOrder)
+    const currentIndex = sortedActions.findIndex(qa => qa.id === id)
+    
+    if (currentIndex === -1) return
+    if (direction === 'up' && currentIndex === 0) return
+    if (direction === 'down' && currentIndex === sortedActions.length - 1) return
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const newOrder = [...sortedActions]
+    const [removed] = newOrder.splice(currentIndex, 1)
+    newOrder.splice(newIndex, 0, removed)
+
+    const reorderedIds = newOrder.map(qa => qa.id)
+
+    reorderQuickActions.mutate(reorderedIds, {
+      onSuccess: () => {
+        // Success - no alert needed for reordering
+      },
+      onError: (error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not reorder Quick Actions.'
+        alert(message)
+      }
+    })
+  }
+
   const handleExportData = async () => {
     try {
       const response = await fetch('/api/export/csv')
@@ -690,73 +818,79 @@ export function Settings() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Monitor className="h-5 w-5" />
-            <CardTitle>Development Identity</CardTitle>
-          </div>
-          <CardDescription>
-            Used for multi-user development testing via request headers
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="authUserEmail">Auth Email</Label>
-              <Input
-                id="authUserEmail"
-                type="email"
-                value={authUserEmail}
-                onChange={(e) => setAuthUserEmail(e.target.value)}
-                placeholder="colleague@company.com"
-              />
+      {/* Development Identity - Only rendered in development builds
+          This panel allows developers to test multi-user scenarios by overriding 
+          authentication headers without requiring a full auth backend.
+          WARNING: This section is completely removed from production builds via tree-shaking. */}
+      {import.meta.env.DEV && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Monitor className="h-5 w-5" />
+              <CardTitle>Development Identity</CardTitle>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="authRole">Role</Label>
-              <Select value={authRole} onValueChange={setAuthRole}>
-                <SelectTrigger id="authRole">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                  <SelectItem value="Manager">Manager</SelectItem>
-                  <SelectItem value="Member">Member</SelectItem>
-                </SelectContent>
-              </Select>
+            <CardDescription>
+              Used for multi-user development testing via request headers
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="authUserEmail">Auth Email</Label>
+                <Input
+                  id="authUserEmail"
+                  type="email"
+                  value={authUserEmail}
+                  onChange={(e) => setAuthUserEmail(e.target.value)}
+                  placeholder="colleague@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="authRole">Role</Label>
+                <Select value={authRole} onValueChange={setAuthRole}>
+                  <SelectTrigger id="authRole">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Admin">Admin</SelectItem>
+                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="Member">Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="authWorkspaceId">Workspace ID</Label>
+                <Input
+                  id="authWorkspaceId"
+                  type="number"
+                  min="1"
+                  value={authWorkspaceId}
+                  onChange={(e) => setAuthWorkspaceId(e.target.value)}
+                  placeholder="1"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="authWorkspaceId">Workspace ID</Label>
-              <Input
-                id="authWorkspaceId"
-                type="number"
-                min="1"
-                value={authWorkspaceId}
-                onChange={(e) => setAuthWorkspaceId(e.target.value)}
-                placeholder="1"
-              />
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleSaveDevelopmentIdentity} className="gap-2">
+                <Save className="h-4 w-4" />
+                Save Development Identity
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!userEmail.trim()) {
+                    alert('Set a User Profile email first.')
+                    return
+                  }
+                  setAuthUserEmail(userEmail.trim())
+                }}
+              >
+                Use Profile Email
+              </Button>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSaveDevelopmentIdentity} className="gap-2">
-              <Save className="h-4 w-4" />
-              Save Development Identity
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!userEmail.trim()) {
-                  alert('Set a User Profile email first.')
-                  return
-                }
-                setAuthUserEmail(userEmail.trim())
-              }}
-            >
-              Use Profile Email
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Time Tracking Settings */}
       <Card>
@@ -883,6 +1017,191 @@ export function Settings() {
             {quickTaskIds.length === 0 && (
               <div className="text-sm text-muted-foreground p-4 border rounded-lg bg-muted/30">
                 No quick tasks configured. Add tasks above to enable one-click timer start from the Quick Actions menu in the top bar.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions Management (Database-stored) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5" />
+            <CardTitle>Quick Actions Management</CardTitle>
+          </div>
+          <CardDescription>
+            Manage database-stored Quick Actions (Manager/Admin only). These appear in the Command Palette for all users.
+            {!isManagerOrAdmin && (
+              <span className="block mt-2 text-yellow-600 dark:text-yellow-500 font-medium">
+                ⚠️ You need Manager or Admin role to manage Quick Actions.
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Create New Quick Action */}
+          {isManagerOrAdmin && (
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+              <h3 className="font-medium flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Add New Quick Action
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newQuickActionName">Name</Label>
+                  <Input
+                    id="newQuickActionName"
+                    value={newQuickActionName}
+                    onChange={(e) => setNewQuickActionName(e.target.value)}
+                    placeholder="e.g., Start Daily Standup"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newQuickActionType">Action Type</Label>
+                  <Select value={newQuickActionType} onValueChange={(value) => setNewQuickActionType(value as QuickAction['actionType'])}>
+                    <SelectTrigger id="newQuickActionType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="StartTimer">Start Timer</SelectItem>
+                      <SelectItem value="StartTimerWithTask">Start Timer with Task</SelectItem>
+                      <SelectItem value="CheckIn">Check In</SelectItem>
+                      <SelectItem value="StartBreak">Start Break</SelectItem>
+                      <SelectItem value="ExportToday">Export Today</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newQuickActionTaskId">Task (optional)</Label>
+                  <Select value={newQuickActionTaskId} onValueChange={setNewQuickActionTaskId}>
+                    <SelectTrigger id="newQuickActionTaskId">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {allTasks.map(task => (
+                        <SelectItem key={task.id} value={task.id.toString()}>
+                          {task.name} ({task.customerName} / {task.projectName})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button onClick={handleCreateQuickAction} disabled={createQuickAction.isPending} className="gap-2">
+                <Plus className="h-4 w-4" />
+                {createQuickAction.isPending ? 'Creating...' : 'Create Quick Action'}
+              </Button>
+            </div>
+          )}
+
+          {/* List of Quick Actions */}
+          <div className="space-y-2">
+            <Label>Existing Quick Actions ({quickActions.length})</Label>
+            {quickActions.length === 0 && (
+              <div className="text-sm text-muted-foreground p-4 border rounded-lg bg-muted/30">
+                No Quick Actions configured yet. {isManagerOrAdmin ? 'Create one above to get started.' : 'Contact your manager or admin to create Quick Actions.'}
+              </div>
+            )}
+            {quickActions.length > 0 && (
+              <div className="space-y-2">
+                {(() => {
+                  const sortedActions = [...quickActions].sort((a, b) => a.sortOrder - b.sortOrder)
+                  return sortedActions.map((action, index) => (
+                  <div
+                    key={action.id}
+                    className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50"
+                  >
+                    {/* Reorder Buttons */}
+                    {isManagerOrAdmin && (
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveQuickAction(action.id, 'up')}
+                          disabled={index === 0 || reorderQuickActions.isPending}
+                          className="h-6 w-6 p-0"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMoveQuickAction(action.id, 'down')}
+                          disabled={index === sortedActions.length - 1 || reorderQuickActions.isPending}
+                          className="h-6 w-6 p-0"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Action Details */}
+                    <div className="flex-1">
+                      {editingQuickActionId === action.id ? (
+                        <div className="flex gap-2">
+                          <Input
+                            value={editingQuickActionName}
+                            onChange={(e) => setEditingQuickActionName(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateQuickAction(action.id)}
+                            disabled={updateQuickAction.isPending}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingQuickActionId(null)
+                              setEditingQuickActionName('')
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium">{action.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Type: {action.actionType}
+                            {action.task && (
+                              <> • Task: {action.task.customerName} - {action.task.projectName} - {action.task.name}</>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Edit/Delete Buttons */}
+                    {isManagerOrAdmin && editingQuickActionId !== action.id && (
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingQuickActionId(action.id)
+                            setEditingQuickActionName(action.name)
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteQuickAction(action.id, action.name)}
+                          disabled={deleteQuickAction.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))})()}
               </div>
             )}
           </div>
