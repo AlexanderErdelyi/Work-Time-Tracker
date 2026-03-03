@@ -14,6 +14,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDurationHours } from '../lib/durationUtils'
 import { formatDate } from '../lib/dateUtils'
 import { parseApiDateTime } from '../lib/timeUtils'
+import { getErrorMessage } from '../lib/utils'
 import { BreaksList } from '../components/Dashboard/BreaksList'
 import { IdleResumeDialog } from '../components/IdleResumeDialog'
 import { useIdleDetection } from '../hooks/useIdleDetection'
@@ -185,7 +186,7 @@ export function Dashboard() {
   const [recentEntriesMode, setRecentEntriesMode] = useState<RecentEntriesMode>(() => loadRecentEntriesMode())
   const [recentEntriesPage, setRecentEntriesPage] = useState(1)
 
-  // Ref to track if user is currently editing notes (avoids stale closure in useEffect)
+  // Ref to track editing state - prevents race conditions with async state updates
   const isEditingNotesRef = useRef(false)
 
   // Idle detection
@@ -241,22 +242,22 @@ export function Dashboard() {
     [displayedRecentEntries.length, recentEntriesMode, totalRecentEntriesPages]
   )
 
-  // Sync ref with editing state to avoid stale closures
+  // Sync notes from server only when the timer ID or server-side notes change.
+  // Deliberately does NOT depend on the full runningTimer object so the 1-second
+  // refetch (which changes serverNowUtc every poll) never resets what the user typed.
+  // Uses isEditingNotesRef instead of editingNotes state to prevent race conditions
+  // with async state updates during rapid refetches.
   useEffect(() => {
-    isEditingNotesRef.current = editingNotes
-  }, [editingNotes])
+    if (isEditingNotesRef.current) return
+    setRunningNotes(runningTimer?.notes || '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningTimer?.id, runningTimer?.notes])
 
+  // Elapsed timer — depends on the full object so serverNowUtc baseline is fresh.
   useEffect(() => {
     if (!runningTimer) {
       setElapsed('00:00:00')
-      setRunningNotes('')
       return
-    }
-
-    // Only update running notes if the user is not currently editing them
-    // Use ref to avoid stale closure and dependency issues
-    if (!isEditingNotesRef.current) {
-      setRunningNotes(runningTimer.notes || '')
     }
 
     const baselineClientNowMs = Date.now()
@@ -328,7 +329,10 @@ export function Dashboard() {
     setDashboardLayouts(prev => normalizeRecentEntriesLayouts(prev, recentEntriesWidgetHeight))
   }, [recentEntriesWidgetHeight, isLayoutEditMode])
 
-  // Populate dialog when opening for running timer
+  // Populate dialog when opening for running timer.
+  // Depends on runningTimer?.id (not the full object) so the 1-second refetch
+  // (which changes serverNowUtc every poll) never resets user-typed notes or
+  // task selection while the dialog is open.
   useEffect(() => {
     if (dialogOpen && runningTimer) {
       if (runningTimer.taskId) {
@@ -336,7 +340,7 @@ export function Dashboard() {
       }
       setNotes(runningTimer.notes || '')
     }
-  }, [dialogOpen, runningTimer])
+  }, [dialogOpen, runningTimer?.id])
 
   const filteredTasks = useMemo(() => {
     if (!searchTerm) return tasks
@@ -409,6 +413,9 @@ export function Dashboard() {
           setSelectedTaskId(undefined)
           setSearchTerm('')
           setNotes('')
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to start timer.'))
         }
       }
     )
@@ -426,7 +433,8 @@ export function Dashboard() {
         await workDaysApi.checkIn('Auto check-in from Quick Start')
       }
     } catch (error) {
-      console.error('Error checking in:', error)
+      alert(getErrorMessage(error, 'Failed to check in during quick start.'))
+      return
     }
     
     // Then start the timer
@@ -439,6 +447,9 @@ export function Dashboard() {
           setSelectedTaskId(undefined)
           setSearchTerm('')
           setNotes('')
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to start timer.'))
         }
       }
     )
@@ -462,6 +473,9 @@ export function Dashboard() {
           setSelectedTaskId(undefined)
           setSearchTerm('')
           setNotes('')
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to assign task to timer.'))
         }
       }
     )
@@ -470,15 +484,25 @@ export function Dashboard() {
   const handleUpdateRunningNotes = () => {
     if (!runningTimer) return
     
-    updateTimer.mutate({
-      id: runningTimer.id,
-      data: {
-        taskId: runningTimer.taskId,
-        notes: runningNotes,
-        startTime: runningTimer.startTime,
+    updateTimer.mutate(
+      {
+        id: runningTimer.id,
+        data: {
+          taskId: runningTimer.taskId,
+          notes: runningNotes,
+          startTime: runningTimer.startTime,
+        }
+      },
+      {
+        onSuccess: () => {
+          isEditingNotesRef.current = false
+          setEditingNotes(false)
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to update notes.'))
+        }
       }
-    })
-    setEditingNotes(false)
+    )
   }
 
   const handleRestartTimer = (entryId: number) => {
@@ -488,17 +512,32 @@ export function Dashboard() {
       }
       stopTimer.mutate(runningTimer.id, {
         onSuccess: () => {
-          resumeTimer.mutate(entryId)
+          resumeTimer.mutate(entryId, {
+            onError: (error: unknown) => {
+              alert(getErrorMessage(error, 'Failed to resume timer.'))
+            }
+          })
+        },
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to stop running timer.'))
         }
       })
     } else {
-      resumeTimer.mutate(entryId)
+      resumeTimer.mutate(entryId, {
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to resume timer.'))
+        }
+      })
     }
   }
 
   const handleStopTimer = () => {
     if (runningTimer) {
-      stopTimer.mutate(runningTimer.id)
+      stopTimer.mutate(runningTimer.id, {
+        onError: (error: unknown) => {
+          alert(getErrorMessage(error, 'Failed to stop timer.'))
+        }
+      })
     }
   }
 
@@ -990,7 +1029,10 @@ export function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingNotes(true)}
+                        onClick={() => {
+                          isEditingNotesRef.current = true
+                          setEditingNotes(true)
+                        }}
                         className="gap-2"
                       >
                         <Edit className="h-4 w-4" />
@@ -1017,6 +1059,7 @@ export function Dashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            isEditingNotesRef.current = false
                             setEditingNotes(false)
                             setRunningNotes(runningTimer.notes || '')
                           }}
@@ -1039,7 +1082,11 @@ export function Dashboard() {
                   {runningTimer.isPaused ? (
                     <Button
                       size="lg"
-                      onClick={() => resumeFromPause.mutate(runningTimer.id)}
+                      onClick={() => resumeFromPause.mutate(runningTimer.id, {
+                        onError: (error: unknown) => {
+                          alert(getErrorMessage(error, 'Failed to resume timer.'))
+                        }
+                      })}
                       disabled={resumeFromPause.isPending}
                       className="h-12 w-full gap-2 whitespace-nowrap"
                     >
@@ -1050,7 +1097,11 @@ export function Dashboard() {
                     <Button
                       size="lg"
                       variant="outline"
-                      onClick={() => pauseTimer.mutate(runningTimer.id)}
+                      onClick={() => pauseTimer.mutate(runningTimer.id, {
+                        onError: (error: unknown) => {
+                          alert(getErrorMessage(error, 'Failed to pause timer.'))
+                        }
+                      })}
                       disabled={pauseTimer.isPending}
                       className="h-12 w-full gap-2 whitespace-nowrap"
                     >

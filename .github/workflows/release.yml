@@ -7,13 +7,19 @@ name: Create Release
   workflow_dispatch:  # Allows manual triggering
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
-        required: true
+        description: 'Tag to release (e.g., v1.0.0). Leave blank to auto-increment patch from the latest tag.'
+        required: false
+        default: ''
         type: string
       auto_deploy:
         description: 'Automatically deploy to shared host after release build'
         required: true
         default: true
+        type: boolean
+      build_installer:
+        description: 'Build Windows installer (.exe) package (slow — skip if distributing via shared host)'
+        required: false
+        default: false
         type: boolean
 
 jobs:
@@ -59,6 +65,7 @@ jobs:
           }
       
       - name: Setup Inno Setup
+        if: inputs.build_installer == true
         shell: pwsh
         run: |
           Write-Host "Installing Inno Setup..."
@@ -82,7 +89,26 @@ jobs:
         run: |
           # Get tag name from either push event or manual input
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $tagName = "${{ inputs.tag }}"
+            $tagName = "${{ inputs.tag }}".Trim()
+            if ([string]::IsNullOrWhiteSpace($tagName)) {
+              # Auto-increment: find the latest semver tag and bump the patch
+              git fetch --tags
+              $latestTag = git tag --list 'v*.*.*' |
+                Where-Object { $_ -match '^v(\d+)\.(\d+)\.(\d+)' } |
+                Sort-Object { [version]($_ -replace '^v','') } |
+                Select-Object -Last 1
+              if ([string]::IsNullOrWhiteSpace($latestTag)) {
+                $tagName = 'v1.0.0'
+                Write-Host "No existing tags found. Starting at $tagName"
+              } else {
+                $parts = ($latestTag -replace '^v','').Split('.')
+                $major = [int]$parts[0]
+                $minor = [int]$parts[1]
+                $patch = [int]$parts[2] + 1
+                $tagName = "v$major.$minor.$patch"
+                Write-Host "Auto-incremented patch from $latestTag to $tagName"
+              }
+            }
           } else {
             $tagName = "${{ github.ref_name }}"
           }
@@ -193,6 +219,18 @@ jobs:
           }
           
           Write-Host ""
+      
+      - name: Build frontend
+        shell: pwsh
+        env:
+          VITE_APP_VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          Push-Location "${{ github.workspace }}\Timekeeper.Web"
+          try {
+            npm run build
+          } finally {
+            Pop-Location
+          }
       
       - name: Build self-contained application
         shell: pwsh
@@ -381,6 +419,7 @@ jobs:
           Compress-Archive -Path $distFolder -DestinationPath $zipPath -Force
       
       - name: Build Windows Installer
+        if: inputs.build_installer == true
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
@@ -448,6 +487,8 @@ jobs:
 
       - name: Build shared host package
         shell: pwsh
+        env:
+          VITE_APP_VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
           .\package-shared-host.ps1 -Version $version
@@ -546,6 +587,7 @@ jobs:
             Release/Timekeeper-Shared-Host-v${{ steps.get_version.outputs.VERSION }}.sha256.txt
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -586,6 +628,7 @@ jobs:
           SHARED_HOST_HTTPS_PORT: ${{ vars.SHARED_HOST_HTTPS_PORT }}
           SHARED_HOST_USE_HTTPS: ${{ vars.SHARED_HOST_USE_HTTPS }}
           SHARED_HOST_CERT_PATH: ${{ vars.SHARED_HOST_CERT_PATH }}
+          SHARED_HOST_CERT_DIRECTORY: ${{ vars.SHARED_HOST_CERT_DIRECTORY }}
           SHARED_HOST_KEEP_BACKUPS: ${{ vars.SHARED_HOST_KEEP_BACKUPS }}
         run: |
           $version = "${{ needs.build-and-release.outputs.version }}"
@@ -595,7 +638,7 @@ jobs:
             throw "Package not found: $packagePath"
           }
 
-          $deployRoot = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_DEPLOY_ROOT)) { 'C:\Timekeeper-Shared-Host-v3.0.0-rc1' } else { $env:SHARED_HOST_DEPLOY_ROOT }
+          $deployRoot = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_DEPLOY_ROOT)) { 'C:\Timekeeper-Shared-Host' } else { $env:SHARED_HOST_DEPLOY_ROOT }
           $port = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_HTTP_PORT)) { 5001 } else { [int]$env:SHARED_HOST_HTTP_PORT }
           $httpsPort = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_HTTPS_PORT)) { 5443 } else { [int]$env:SHARED_HOST_HTTPS_PORT }
           $keepBackups = if ([string]::IsNullOrWhiteSpace($env:SHARED_HOST_KEEP_BACKUPS)) { 3 } else { [int]$env:SHARED_HOST_KEEP_BACKUPS }
@@ -619,6 +662,10 @@ jobs:
 
           if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PATH)) {
             $params.CertificatePath = $env:SHARED_HOST_CERT_PATH
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_DIRECTORY)) {
+            $params.CertDirectory = $env:SHARED_HOST_CERT_DIRECTORY
           }
 
           if (-not [string]::IsNullOrWhiteSpace($env:SHARED_HOST_CERT_PASSWORD)) {
