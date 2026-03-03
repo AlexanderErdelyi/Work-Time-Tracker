@@ -1132,12 +1132,12 @@ export function Settings() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="newQuickActionTaskId">Task (optional)</Label>
-                  <Select value={newQuickActionTaskId} onValueChange={setNewQuickActionTaskId}>
+                  <Select value={newQuickActionTaskId || 'none'} onValueChange={(v) => setNewQuickActionTaskId(v === 'none' ? '' : v)}>
                     <SelectTrigger id="newQuickActionTaskId">
                       <SelectValue placeholder="None" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {allTasks.map(task => (
                         <SelectItem key={task.id} value={task.id.toString()}>
                           {task.name} ({task.customerName} / {task.projectName})

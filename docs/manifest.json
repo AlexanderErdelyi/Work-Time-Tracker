@@ -61,6 +61,12 @@
       "title": "FAQ",
       "summary": "Common questions and quick answers.",
       "file": "/docs/faq.md"
+    },
+    {
+      "slug": "ai-assistant",
+      "title": "AI Assistant",
+      "summary": "Natural language time tracking — start timers, log entries, and query your work history by just describing what you want.",
+      "file": "/docs/ai-assistant.md"
     }
   ]
 }
