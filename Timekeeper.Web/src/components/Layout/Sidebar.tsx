@@ -14,8 +14,11 @@ import {
   LifeBuoy,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Wifi,
+  WifiOff
 } from 'lucide-react'
+import { useConnectionStatus } from '../../hooks/useConnectionStatus'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
@@ -50,6 +53,7 @@ export function Sidebar() {
   })
 
   const unreadCount = unreadQuery.data?.unreadCount ?? 0
+  const connectionStatus = useConnectionStatus()
 
   const navigationItems = isAdminUser
     ? [...navigation, { name: 'Users', href: '/users', icon: User }]
@@ -119,9 +123,18 @@ export function Sidebar() {
       {/* Footer */}
       {!collapsed && (
         <div className="border-t p-4">
-          <p className="text-xs text-muted-foreground">
-            Timekeeper v{import.meta.env.VITE_APP_VERSION ?? '2.0'}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Timekeeper v{import.meta.env.VITE_APP_VERSION ?? '2.0'}
+            </p>
+            <div title={connectionStatus.isConnected ? 'Connected to server' : 'Connection lost'}>
+              {connectionStatus.isConnected ? (
+                <Wifi className="h-3 w-3 text-green-500" />
+              ) : (
+                <WifiOff className="h-3 w-3 text-red-500 animate-pulse" />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

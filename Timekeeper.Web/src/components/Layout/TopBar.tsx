@@ -1,4 +1,4 @@
-import { BookOpenText, Coffee, LifeBuoy, LogOut, Moon, Sun, Wifi, WifiOff } from 'lucide-react'
+import { BookOpenText, Coffee, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useState, useEffect } from 'react'
@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import { useRunningTimer } from '../../hooks/useTimeEntries'
 import { useWorkDayStatus, useCheckIn, useCheckOut } from '../../hooks/useWorkDays'
 import { useBreakStatus, useStartBreak, useEndBreak } from '../../hooks/useBreaks'
-import { useConnectionStatus } from '../../hooks/useConnectionStatus'
 import { QuickActionsDropdown } from '../QuickActionsDropdown'
 import { parseApiDateTime } from '../../lib/timeUtils'
 
@@ -16,7 +15,6 @@ export function TopBar() {
   const { data: runningTimer } = useRunningTimer()
   const { data: workDayStatus } = useWorkDayStatus()
   const { data: breakStatus } = useBreakStatus()
-  const connectionStatus = useConnectionStatus()
   const checkIn = useCheckIn()
   const checkOut = useCheckOut()
   const startBreak = useStartBreak()
@@ -202,18 +200,6 @@ export function TopBar() {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Connection Status Indicator */}
-        <div
-          className="flex items-center gap-2 px-2 py-1"
-          title={connectionStatus.isConnected ? 'Connected to server' : 'Connection lost'}
-        >
-          {connectionStatus.isConnected ? (
-            <Wifi className="h-4 w-4 text-green-500" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-500 animate-pulse" />
-          )}
-        </div>
-
         <div className="hidden lg:flex items-center gap-3 border-r pr-4 mr-2">
           <div className="flex items-center gap-2">
             <div
