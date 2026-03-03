@@ -5,9 +5,9 @@ interface ConnectionStatus {
   lastChecked: Date | null
 }
 
-const CHECK_INTERVAL_CONNECTED = 10000 // 10 seconds when connected
+const CHECK_INTERVAL_CONNECTED = 5000 // 5 seconds when connected
 const CHECK_INTERVAL_DISCONNECTED = 3000 // 3 seconds when disconnected (faster recovery)
-const TIMEOUT_MS = 5000 // 5 seconds timeout for health check
+const TIMEOUT_MS = 3000 // 3 seconds timeout for health check
 
 /**
  * Hook to monitor connection status with the API server
@@ -40,6 +40,8 @@ export function useConnectionStatus() {
 
         const response = await fetch('/api/health', {
           signal: controller.signal,
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
         })
 
         newIsConnected = response.ok
