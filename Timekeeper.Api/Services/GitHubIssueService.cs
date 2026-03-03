@@ -599,6 +599,16 @@ public class GitHubIssueService : IGitHubIssueService
         return result.Trim();
     }
 
+    /// <summary>
+    /// Cleans the GitHub issue body HTML by removing metadata sections that should not be shown to users.
+    /// This is specifically designed for the initial issue body structure created by BuildIssueBody():
+    /// - ## Support Ticket (with metadata like Category, Severity, etc.)
+    /// - ### Description
+    /// - ### Steps To Reproduce
+    /// - ### Expected Behavior
+    /// - ### Actual Behavior
+    /// - ### Environment (with browser, OS, etc.)
+    /// </summary>
     private static string CleanIssueHtmlForApp(string html)
     {
         if (string.IsNullOrWhiteSpace(html))
@@ -606,15 +616,20 @@ public class GitHubIssueService : IGitHubIssueService
             return string.Empty;
         }
 
+        // Remove "Support Ticket" section: from <h2>Support Ticket</h2> until the next heading (h2 or h3)
+        // The lookahead (?=<h[23][^>]*>) stops before the next h2/h3 (which is "### Description")
+        // This preserves all user-visible sections (Description, Steps, Expected, Actual)
         var cleaned = Regex.Replace(
             html,
-            "<h2[^>]*>\\s*Support Ticket\\s*</h2>\\s*<ul>.*?</ul>",
+            "<h2[^>]*>\\s*Support Ticket\\s*</h2>.*?(?=<h[23][^>]*>|$)",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
+        // Remove "Environment" section: from <h3>Environment</h3> to the end
+        // Environment is always the last section in BuildIssueBody(), so we can safely remove to end
         cleaned = Regex.Replace(
             cleaned,
-            "<h3[^>]*>\\s*Environment\\s*</h3>\\s*<ul>.*?</ul>",
+            "<h3[^>]*>\\s*Environment\\s*</h3>.*",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
