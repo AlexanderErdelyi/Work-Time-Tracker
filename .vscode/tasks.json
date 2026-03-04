@@ -11,6 +11,13 @@
         "-File",
         "${workspaceFolder}/package-shared-host.ps1"
       ],
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "echo Skipping package-shared-host on Linux/Codespaces - Windows packaging task."
+        ]
+      },
       "windows": {
         "command": "powershell",
         "args": [
@@ -34,6 +41,9 @@
       "label": "stop-all-servers",
       "type": "shell",
       "command": "$port5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5000) { Stop-Process -Id $port5000 -Force -ErrorAction SilentlyContinue }; $port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5173) { Stop-Process -Id $port5173 -Force -ErrorAction SilentlyContinue }; $port5176 = Get-NetTCPConnection -LocalPort 5176 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5176) { Stop-Process -Id $port5176 -Force -ErrorAction SilentlyContinue }; Get-Process -Name 'Timekeeper.Api','node' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Write-Host 'All servers stopped (ports 5000, 5173, 5176)'",
+      "linux": {
+        "command": "for port in 5000 5173 5176; do if command -v fuser >/dev/null 2>&1; then fuser -k ${port}/tcp >/dev/null 2>&1 || true; else lsof -ti tcp:${port} 2>/dev/null | xargs -r kill -9; fi; done; echo 'All servers stopped (ports 5000, 5173, 5176)'"
+      },
       "windows": {
         "command": "$port5000 = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5000) { Stop-Process -Id $port5000 -Force -ErrorAction SilentlyContinue }; $port5173 = Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5173) { Stop-Process -Id $port5173 -Force -ErrorAction SilentlyContinue }; $port5176 = Get-NetTCPConnection -LocalPort 5176 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($port5176) { Stop-Process -Id $port5176 -Force -ErrorAction SilentlyContinue }; Get-Process -Name 'Timekeeper.Api','node' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; Write-Host 'All servers stopped (ports 5000, 5173, 5176)'"
       },
@@ -67,6 +77,9 @@
       "label": "run-api",
       "type": "shell",
       "command": "cd ${workspaceFolder}/Timekeeper.Api; $env:ASPNETCORE_ENVIRONMENT='Development'; dotnet bin/Debug/net8.0/Timekeeper.Api.dll",
+      "linux": {
+        "command": "cd ${workspaceFolder}/Timekeeper.Api; ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://0.0.0.0:5000 dotnet bin/Debug/net8.0/Timekeeper.Api.dll"
+      },
       "windows": {
         "command": "cd ${workspaceFolder}/Timekeeper.Api; $env:ASPNETCORE_ENVIRONMENT='Development'; dotnet bin/Debug/net8.0/Timekeeper.Api.dll"
       },
@@ -98,6 +111,9 @@
       "type": "shell",
       "command": "npm",
       "args": ["run", "dev"],
+      "linux": {
+        "args": ["run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+      },
       "options": {
         "cwd": "${workspaceFolder}/Timekeeper.Web"
       },
@@ -166,6 +182,9 @@
       "label": "open-browser",
       "type": "shell",
       "command": "Start-Sleep -Seconds 5; Start-Process 'http://localhost:5173'",
+      "linux": {
+        "command": "sleep 5; if [ -n \"$BROWSER\" ]; then \"$BROWSER\" http://localhost:5173; else echo 'Open forwarded port 5173 to access the app.'; fi"
+      },
       "windows": {
         "command": "Start-Sleep -Seconds 5; Start-Process 'http://localhost:5173'"
       },
@@ -177,6 +196,125 @@
         "showReuseMessage": false
       },
       "problemMatcher": []
+    },
+    {
+      "label": "stop-all-servers-codespaces",
+      "type": "shell",
+      "command": "for port in 5000 5173 5176; do if command -v fuser >/dev/null 2>&1; then fuser -k ${port}/tcp >/dev/null 2>&1 || true; else lsof -ti tcp:${port} 2>/dev/null | xargs -r kill -9; fi; done; echo 'All servers stopped (ports 5000, 5173, 5176)'",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "install-frontend-deps-codespaces",
+      "type": "shell",
+      "command": "if [ -d ${workspaceFolder}/Timekeeper.Web/node_modules ]; then echo 'Frontend dependencies already installed'; else npm install --prefix ${workspaceFolder}/Timekeeper.Web; fi",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "start-app-codespaces",
+      "dependsOn": ["stop-all-servers-codespaces", "install-frontend-deps-codespaces", "build-api"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "run-api-codespaces",
+      "type": "shell",
+      "command": "ASPNETCORE_ENVIRONMENT=Development dotnet run --project ${workspaceFolder}/Timekeeper.Api/Timekeeper.Api.csproj --urls http://0.0.0.0:5000",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Building.*$",
+          "endsPattern": "^.*Now listening on:.*5000.*$"
+        }
+      }
+    },
+    {
+      "label": "run-frontend-codespaces",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"],
+      "options": {
+        "cwd": "${workspaceFolder}/Timekeeper.Web"
+      },
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*VITE.*$",
+          "endsPattern": "^.*Local:.*http://localhost:[0-9]+.*$"
+        }
+      }
+    },
+    {
+      "label": "open-codespaces-ports",
+      "type": "shell",
+      "command": "sleep 3; echo 'Open forwarded port 5173 to use the app. Port 5000 is available for /swagger.'",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "launch-app-codespaces",
+      "dependsOn": ["start-app-codespaces", "run-api-codespaces", "run-frontend-codespaces", "open-codespaces-ports"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false
+      }
     }
   ]
 }
