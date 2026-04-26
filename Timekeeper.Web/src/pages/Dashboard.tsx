@@ -2,12 +2,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Dialog, DialogTrigger } from '../components/ui/Dialog'
 import { Badge } from '../components/ui/Badge'
-import { Clock, Monitor, Activity, PlusCircle } from 'lucide-react'
+import { Clock, Monitor, Activity, PlusCircle, Check, X } from 'lucide-react'
 import { useRunningTimer, useStartTimer, useStopTimer, useResumeTimer, usePauseTimer, useResumeFromPause, useUpdateTimeEntry, useTimeEntries, useCreateTimeEntry, useDeleteTimeEntry } from '../hooks/useTimeEntries'
 import { useWorkDayStatus, useWorkDays } from '../hooks/useWorkDays'
 import { useTasks } from '../hooks/useTasks'
 import { workDaysApi } from '../api/workDays'
 import { useState, useEffect, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseApiDateTime } from '../lib/timeUtils'
 import type { TimeEntry } from '../types'
 import { getErrorMessage } from '../lib/utils'
@@ -23,6 +24,7 @@ import { Responsive, WidthProvider, type ResponsiveLayouts } from 'react-grid-la
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import { StatsPanel, TimerControls, ManualEntryDialog, EditEntryDialog, RecentEntriesList } from '../components/Dashboard'
+import { activityApi } from '../api/activity'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
 const DASHBOARD_LAYOUTS_KEY = 'timekeeper_dashboard_layouts_v1'
@@ -39,30 +41,35 @@ const DEFAULT_DASHBOARD_LAYOUTS: ResponsiveLayouts = {
     { i: 'recentEntries', x: 6, y: 0, w: 6, h: 13, minW: 4, minH: RECENT_ENTRIES_MIN_H },
     { i: 'stats', x: 0, y: 13, w: 12, h: 6, minW: 6, minH: 4 },
     { i: 'breaksList', x: 0, y: 19, w: 12, h: 8, minW: 6, minH: 6 },
+    { i: 'activitySuggestions', x: 0, y: 27, w: 12, h: 10, minW: 6, minH: 6 },
   ],
   md: [
     { i: 'quickTimer', x: 0, y: 0, w: 10, h: 13, minW: 6, minH: 10 },
     { i: 'recentEntries', x: 0, y: 13, w: 10, h: 13, minW: 6, minH: RECENT_ENTRIES_MIN_H },
     { i: 'stats', x: 0, y: 26, w: 10, h: 7, minW: 6, minH: 4 },
     { i: 'breaksList', x: 0, y: 33, w: 10, h: 8, minW: 6, minH: 6 },
+    { i: 'activitySuggestions', x: 0, y: 41, w: 10, h: 10, minW: 6, minH: 6 },
   ],
   sm: [
     { i: 'quickTimer', x: 0, y: 0, w: 6, h: 13, minW: 4, minH: 10 },
     { i: 'recentEntries', x: 0, y: 13, w: 6, h: 13, minW: 4, minH: RECENT_ENTRIES_MIN_H },
     { i: 'stats', x: 0, y: 26, w: 6, h: 8, minW: 4, minH: 4 },
     { i: 'breaksList', x: 0, y: 34, w: 6, h: 8, minW: 4, minH: 6 },
+    { i: 'activitySuggestions', x: 0, y: 42, w: 6, h: 10, minW: 4, minH: 6 },
   ],
   xs: [
     { i: 'quickTimer', x: 0, y: 0, w: 4, h: 14, minW: 2, minH: 10 },
     { i: 'recentEntries', x: 0, y: 14, w: 4, h: 14, minW: 2, minH: RECENT_ENTRIES_MIN_H },
     { i: 'stats', x: 0, y: 28, w: 4, h: 10, minW: 2, minH: 4 },
     { i: 'breaksList', x: 0, y: 38, w: 4, h: 8, minW: 2, minH: 6 },
+    { i: 'activitySuggestions', x: 0, y: 46, w: 4, h: 10, minW: 2, minH: 6 },
   ],
   xxs: [
     { i: 'quickTimer', x: 0, y: 0, w: 2, h: 16, minW: 2, minH: 10 },
     { i: 'recentEntries', x: 0, y: 16, w: 2, h: 16, minW: 2, minH: RECENT_ENTRIES_MIN_H },
     { i: 'stats', x: 0, y: 32, w: 2, h: 12, minW: 2, minH: 4 },
     { i: 'breaksList', x: 0, y: 44, w: 2, h: 10, minW: 2, minH: 6 },
+    { i: 'activitySuggestions', x: 0, y: 54, w: 2, h: 10, minW: 2, minH: 6 },
   ],
 }
 
@@ -146,6 +153,28 @@ export function Dashboard() {
   }, [])
   const { data: weekWorkDays = [] } = useWorkDays(weekStart, todayKey)
   const { data: breakStatus } = useBreakStatus()
+  const queryClient = useQueryClient()
+  const { data: activitySummary } = useQuery({
+    queryKey: ['activity', 'summary'],
+    queryFn: activityApi.getSummary,
+    refetchInterval: 60_000,
+  })
+  const acceptSuggestionMutation = useMutation({
+    mutationFn: (id: number) => activityApi.accept(id, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity'] })
+      toast.success('Activity accepted and time entry created')
+    },
+    onError: (err) => toast.error(getErrorMessage(err, 'Failed to accept activity')),
+  })
+  const dismissSuggestionMutation = useMutation({
+    mutationFn: (id: number) => activityApi.dismiss(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity'] })
+      toast.success('Activity dismissed')
+    },
+    onError: (err) => toast.error(getErrorMessage(err, 'Failed to dismiss activity')),
+  })
   const startTimer = useStartTimer()
   const stopTimer = useStopTimer()
   const resumeTimer = useResumeTimer()
@@ -684,6 +713,87 @@ export function Dashboard() {
           isSaving={updateTimer.isPending}
           isBillingEnabled={isBillingEnabled}
         />
+      </div>
+
+      <div key="activitySuggestions" className="flex h-full min-h-0 flex-col">
+        {isLayoutEditMode && (
+          <div className="dashboard-drag-handle mb-2 cursor-move rounded-md border border-dashed px-3 py-1 text-xs font-medium text-muted-foreground">
+            Drag / resize: Activity Suggestions
+          </div>
+        )}
+        <Card className="flex flex-col h-full overflow-hidden">
+          <CardHeader className="pb-2 shrink-0">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Activity className="h-4 w-4" /> Activity Suggestions
+              </CardTitle>
+              {activitySummary && activitySummary.pendingCount > 0 && (
+                <Badge variant="secondary">{activitySummary.pendingCount} pending</Badge>
+              )}
+            </div>
+            <CardDescription className="text-xs">
+              Suggested time entries from connected integrations
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-auto pt-0">
+            {!activitySummary || activitySummary.recentSuggestions.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                No pending activity suggestions.{' '}
+                <a href="/settings" className="text-primary hover:underline">Connect integrations</a> to get started.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {activitySummary.recentSuggestions.map(evt => (
+                  <div key={evt.id} className="rounded-md border p-2 text-xs">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{evt.title}</p>
+                        <div className="flex items-center gap-2 text-muted-foreground mt-0.5">
+                          {evt.suggestedProjectName && (
+                            <span className="truncate">{evt.suggestedProjectName}</span>
+                          )}
+                          {evt.estimatedMinutes != null && (
+                            <span className="shrink-0">{evt.estimatedMinutes}m</span>
+                          )}
+
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                          disabled={acceptSuggestionMutation.isPending}
+                          onClick={() => acceptSuggestionMutation.mutate(evt.id)}
+                          title="Accept"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          disabled={dismissSuggestionMutation.isPending}
+                          onClick={() => dismissSuggestionMutation.mutate(evt.id)}
+                          title="Dismiss"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {activitySummary.pendingCount > activitySummary.recentSuggestions.length && (
+                  <div className="pt-1">
+                    <a href="/activity" className="text-xs text-primary hover:underline">
+                      View all {activitySummary.pendingCount} suggestions →
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
       </ResponsiveGridLayout>
 

@@ -8,11 +8,13 @@ public class SoundsController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<SoundsController> _logger;
+    private readonly IWebHostEnvironment _env;
 
-    public SoundsController(IConfiguration configuration, ILogger<SoundsController> logger)
+    public SoundsController(IConfiguration configuration, ILogger<SoundsController> logger, IWebHostEnvironment env)
     {
         _configuration = configuration;
         _logger = logger;
+        _env = env;
     }
 
     [HttpGet]
@@ -20,20 +22,28 @@ public class SoundsController : ControllerBase
     {
         try
         {
-            // Get the sounds directory path from configuration or use default
-            var webProjectPath = _configuration["SoundsPath"] 
-                ?? Path.Combine(Directory.GetCurrentDirectory(), "..", "Timekeeper.Web", "public", "sounds");
-            
-            _logger.LogInformation("Looking for sounds in: {Path}", webProjectPath);
+            // 1. Explicit config override
+            // 2. wwwroot/sounds — used in production (hosted server)
+            // 3. Timekeeper.Web/public/sounds — used in dev (Vite serves from there)
+            var soundsPath = _configuration["SoundsPath"];
 
-            if (!Directory.Exists(webProjectPath))
+            if (string.IsNullOrWhiteSpace(soundsPath))
             {
-                _logger.LogWarning("Sounds directory does not exist: {Path}", webProjectPath);
+                var wwwrootSounds = Path.Combine(_env.WebRootPath ?? string.Empty, "sounds");
+                var devSounds = Path.Combine(Directory.GetCurrentDirectory(), "..", "Timekeeper.Web", "public", "sounds");
+                soundsPath = Directory.Exists(wwwrootSounds) ? wwwrootSounds : devSounds;
+            }
+
+            _logger.LogInformation("Looking for sounds in: {Path}", soundsPath);
+
+            if (!Directory.Exists(soundsPath))
+            {
+                _logger.LogWarning("Sounds directory does not exist: {Path}", soundsPath);
                 return Ok(new List<SoundFileDto>());
             }
 
             var supportedExtensions = new[] { ".mp3", ".wav", ".ogg" };
-            var soundFiles = Directory.GetFiles(webProjectPath)
+            var soundFiles = Directory.GetFiles(soundsPath)
                 .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                 .Select(filePath =>
                 {

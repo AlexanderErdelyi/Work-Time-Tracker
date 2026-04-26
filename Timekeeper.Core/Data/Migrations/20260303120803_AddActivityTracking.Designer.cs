@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Timekeeper.Core.Data;
 
@@ -10,9 +11,11 @@ using Timekeeper.Core.Data;
 namespace Timekeeper.Core.Data.Migrations
 {
     [DbContext(typeof(TimekeeperContext))]
-    partial class TimekeeperContextModelSnapshot : ModelSnapshot
+    [Migration("20260303120803_AddActivityTracking")]
+    partial class AddActivityTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.0");
@@ -247,7 +250,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             DisplayName = "Local Admin",
                             Email = "admin@local.timekeeper",
                             IsActive = true,
@@ -336,7 +339,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             Description = "Sample customer",
                             IsActive = true,
                             Name = "Acme Corp",
@@ -345,7 +348,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             Description = "Technology startup",
                             IsActive = true,
                             Name = "TechStart Inc",
@@ -403,7 +406,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             CustomerId = 1,
                             Description = "Redesign company website",
                             IsActive = true,
@@ -413,7 +416,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             CustomerId = 1,
                             Description = "Develop mobile application",
                             IsActive = true,
@@ -423,7 +426,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 3,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             CustomerId = 2,
                             Description = "Build REST API",
                             IsActive = true,
@@ -613,7 +616,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             Description = "Develop frontend UI",
                             IsActive = true,
                             Name = "Frontend Development",
@@ -623,7 +626,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 2,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             Description = "Develop backend services",
                             IsActive = true,
                             Name = "Backend Development",
@@ -633,7 +636,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 3,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             Description = "Design user interface",
                             IsActive = true,
                             Name = "UI Design",
@@ -643,7 +646,7 @@ namespace Timekeeper.Core.Data.Migrations
                         new
                         {
                             Id = 4,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             Description = "Implement REST endpoints",
                             IsActive = true,
                             Name = "API Endpoints",
@@ -815,10 +818,6 @@ namespace Timekeeper.Core.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("EnabledSourcesJson")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -859,7 +858,8 @@ namespace Timekeeper.Core.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("WorkspaceId", "UserId", "Provider");
+                    b.HasIndex("WorkspaceId", "UserId", "Provider")
+                        .IsUnique();
 
                     b.ToTable("UserIntegrations");
                 });
@@ -959,7 +959,7 @@ namespace Timekeeper.Core.Data.Migrations
                         {
                             Id = 1,
                             CopilotEnabled = false,
-                            CreatedAt = new DateTime(2026, 4, 26, 13, 56, 57, 201, DateTimeKind.Utc).AddTicks(1703),
+                            CreatedAt = new DateTime(2026, 3, 3, 12, 8, 2, 706, DateTimeKind.Utc).AddTicks(1936),
                             IsActive = true,
                             Name = "Default Workspace"
                         });

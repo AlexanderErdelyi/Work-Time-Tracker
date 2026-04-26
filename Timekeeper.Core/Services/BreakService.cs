@@ -83,7 +83,7 @@ public class BreakService : IBreakService
 
         var breakEntity = new Break
         {
-            StartTime = DateTime.Now,
+            StartTime = DateTime.UtcNow,
             Notes = notes,
             WorkDayId = workDay.Id
         };
@@ -102,7 +102,7 @@ public class BreakService : IBreakService
             throw new InvalidOperationException("No active break found.");
         }
 
-        activeBreak.EndTime = DateTime.Now;
+        activeBreak.EndTime = DateTime.UtcNow;
         
         // Append notes if provided
         if (!string.IsNullOrWhiteSpace(notes))
