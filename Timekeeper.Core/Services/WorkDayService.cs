@@ -73,8 +73,8 @@ public class WorkDayService : IWorkDayService
 
     public async Task<WorkDay> CheckInAsync(DateTime? time = null, string? notes = null)
     {
-        var checkInTime = time ?? DateTime.Now;
-        var today = DateTime.Today;
+        var checkInTime = time ?? DateTime.UtcNow;
+        var today = DateTime.UtcNow.Date;
 
         var workDay = await GetTodayWorkDayAsync();
 
@@ -105,7 +105,7 @@ public class WorkDayService : IWorkDayService
 
     public async Task<WorkDay> CheckOutAsync(DateTime? time = null, string? notes = null)
     {
-        var checkOutTime = time ?? DateTime.Now;
+        var checkOutTime = time ?? DateTime.UtcNow;
         var workDay = await GetTodayWorkDayAsync();
 
         if (workDay == null)
