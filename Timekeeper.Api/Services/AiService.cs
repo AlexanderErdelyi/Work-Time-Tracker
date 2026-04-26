@@ -207,11 +207,12 @@ public class AiService : IAiService
         // Tool-call loop (max 5 rounds to avoid infinite loops)
         for (int round = 0; round < 5; round++)
         {
-            // Build messages array: [system] + history
+            // Build messages array: [system] + history (capped to last 30 to avoid 413)
             // Re-parse system each round — JsonNode instances can't have multiple parents
             var messages = new JsonArray();
             messages.Add(JsonNode.Parse(system.ToJsonString()));
-            foreach (var m in history)
+            var historySlice = history.Count > 30 ? history.Skip(history.Count - 30).ToList() : history;
+            foreach (var m in historySlice)
                 messages.Add(JsonNode.Parse(m.ToJsonString()));
 
             var requestBody = new JsonObject
