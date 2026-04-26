@@ -6,6 +6,7 @@ public class UserIntegrationDto
 {
     public int Id { get; set; }
     public string Provider { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
     public bool IsConnected { get; set; }
     public List<string> EnabledSources { get; set; } = [];
     public DateTime? LastSyncedAt { get; set; }
@@ -19,6 +20,8 @@ public class ConnectIntegrationRequestDto
     public string RedirectUri { get; set; } = string.Empty;
     /// <summary>Optional comma-separated org names. If provided, skips auto-discovery.</summary>
     public string? Organizations { get; set; }
+    /// <summary>User-defined label for this connector, e.g. "Cosmo Azure".</summary>
+    public string? DisplayName { get; set; }
 }
 
 public class UpdateAdoOrganizationsDto

@@ -5,6 +5,7 @@ import { fetchApi } from './client';
 export interface UserIntegration {
   id?: number;
   provider: string;
+  displayName?: string;
   isConnected: boolean;
   enabledSources: string[];
   lastSyncedAt?: string;
@@ -147,10 +148,10 @@ export const integrationsApi = {
       body: JSON.stringify({ code, codeVerifier, redirectUri }),
     }),
 
-  connectAzureDevOps: (pat: string, organizations?: string) =>
+  connectAzureDevOps: (pat: string, organizations?: string, displayName?: string) =>
     fetchApi<UserIntegration>('/integrations/connect/azure-devops', {
       method: 'POST',
-      body: JSON.stringify({ provider: 'AzureDevOps', code: pat, redirectUri: '', organizations: organizations || undefined }),
+      body: JSON.stringify({ provider: 'AzureDevOps', code: pat, redirectUri: '', organizations: organizations || undefined, displayName: displayName || undefined }),
     }),
 
   updateAdoOrganizations: (id: number, organizations: string) =>

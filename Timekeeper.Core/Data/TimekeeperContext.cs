@@ -256,10 +256,11 @@ public class TimekeeperContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.WorkspaceId).HasDefaultValue(DefaultWorkspaceId);
             entity.Property(e => e.Provider).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.DisplayName).HasMaxLength(100);
             entity.Property(e => e.AccessToken).HasMaxLength(4000);
             entity.Property(e => e.RefreshToken).HasMaxLength(4000);
             entity.Property(e => e.EnabledSourcesJson).HasMaxLength(500).HasDefaultValue("[]");
-            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.Provider }).IsUnique();
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId, e.Provider });
             entity.HasQueryFilter(e => e.WorkspaceId == CurrentWorkspaceId);
 
             entity.HasOne<Workspace>()

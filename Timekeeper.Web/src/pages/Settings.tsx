@@ -98,15 +98,17 @@ export function Settings() {
   const [adoPatInput, setAdoPatInput] = useState('')
   const [adoPatVisible, setAdoPatVisible] = useState(false)
   const [adoOrgInput, setAdoOrgInput] = useState('')
-  const [adoShowOrgUpdate, setAdoShowOrgUpdate] = useState(false)
+  const [adoLabelInput, setAdoLabelInput] = useState('')
+  const [adoShowOrgUpdate, setAdoShowOrgUpdate] = useState<number | null>(null)
   const [adoOrgUpdateInput, setAdoOrgUpdateInput] = useState('')
   const connectAdoMutation = useMutation({
-    mutationFn: ({ pat, orgs }: { pat: string; orgs: string }) =>
-      integrationsApi.connectAzureDevOps(pat, orgs || undefined),
+    mutationFn: ({ pat, orgs, label }: { pat: string; orgs: string; label: string }) =>
+      integrationsApi.connectAzureDevOps(pat, orgs || undefined, label || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations'] })
       setAdoPatInput('')
       setAdoOrgInput('')
+      setAdoLabelInput('')
       toast.success('Azure DevOps connected')
     },
     onError: () => toast.error('Failed to connect Azure DevOps'),
@@ -134,7 +136,7 @@ export function Settings() {
   })
 
   const graphIntegration = integrations.find(i => i.provider === 'MicrosoftGraph')
-  const adoIntegration = integrations.find(i => i.provider === 'AzureDevOps')
+  const adoIntegrations = integrations.filter(i => i.provider === 'AzureDevOps')
 
   // ---- PKCE state & flow ----
   const [isPkceConnecting, setIsPkceConnecting] = useState(false)
@@ -2407,26 +2409,26 @@ export function Settings() {
                 )}
               </div>
 
-              {/* Azure DevOps */}
-              <div className="flex items-start justify-between p-3 rounded-lg border gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-sm">ADO</div>
-                  <div>
-                    <p className="font-medium text-sm">Azure DevOps</p>
-                    <p className="text-xs text-muted-foreground">
-                      {adoIntegration?.isConnected
-                        ? `Connected${adoIntegration.lastSyncedAt ? ` · Last sync: ${new Date(adoIntegration.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
-                        : 'Work Items, Commits, Pull Requests'}
-                    </p>
+              {/* Azure DevOps — list of existing connectors */}
+              {adoIntegrations.map(ado => (
+                <div key={ado.id} className="flex items-start justify-between p-3 rounded-lg border gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-sm">ADO</div>
+                    <div>
+                      <p className="font-medium text-sm">{ado.displayName ?? 'Azure DevOps'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ado.lastSyncedAt
+                          ? `Connected · Last sync: ${new Date(ado.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                          : 'Connected · not synced yet'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                {adoIntegration?.isConnected ? (
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-red-600 hover:text-red-700"
-                      onClick={() => adoIntegration.id && disconnectIntegrationMutation.mutate(adoIntegration.id)}
+                      onClick={() => ado.id && disconnectIntegrationMutation.mutate(ado.id)}
                       disabled={disconnectIntegrationMutation.isPending}
                     >
                       <Unplug className="h-4 w-4 mr-1" />Disconnect
@@ -2434,11 +2436,11 @@ export function Settings() {
                     <button
                       type="button"
                       className="text-xs text-primary underline"
-                      onClick={() => setAdoShowOrgUpdate(v => !v)}
+                      onClick={() => setAdoShowOrgUpdate(v => v === ado.id ? null : (ado.id ?? null))}
                     >
                       Set organizations manually
                     </button>
-                    {adoShowOrgUpdate && (
+                    {adoShowOrgUpdate === ado.id && (
                       <div className="flex items-center gap-2">
                         <Input
                           placeholder="org1, org2"
@@ -2450,50 +2452,66 @@ export function Settings() {
                           size="sm"
                           className="h-8"
                           disabled={updateAdoOrgsMutation.isPending || !adoOrgUpdateInput.trim()}
-                          onClick={() => adoIntegration.id && updateAdoOrgsMutation.mutate({ id: adoIntegration.id, orgs: adoOrgUpdateInput.trim() })}
+                          onClick={() => ado.id && updateAdoOrgsMutation.mutate({ id: ado.id, orgs: adoOrgUpdateInput.trim() })}
                         >
                           Save
                         </Button>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <Input
-                          type={adoPatVisible ? 'text' : 'password'}
-                          placeholder="Personal Access Token"
-                          value={adoPatInput}
-                          onChange={e => setAdoPatInput(e.target.value)}
-                          className="w-56 pr-8 text-sm h-8"
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          onClick={() => setAdoPatVisible(!adoPatVisible)}
-                        >
-                          {adoPatVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </button>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => adoPatInput.trim() && connectAdoMutation.mutate({ pat: adoPatInput.trim(), orgs: adoOrgInput.trim() })}
-                        disabled={connectAdoMutation.isPending || !adoPatInput.trim()}
-                        className="h-8 shrink-0"
-                      >
-                        {connectAdoMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4 mr-1" />}
-                        Connect
-                      </Button>
-                    </div>
-                    <Input
-                      placeholder="Organizations (optional, e.g. mycompany, otherorg)"
-                      value={adoOrgInput}
-                      onChange={e => setAdoOrgInput(e.target.value)}
-                      className="w-full text-sm h-8 text-muted-foreground"
-                    />
+                </div>
+              ))}
+
+              {/* Azure DevOps — "Add connector" form */}
+              <div className="flex items-start justify-between p-3 rounded-lg border border-dashed gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-sm">ADO</div>
+                  <div>
+                    <p className="font-medium text-sm">Azure DevOps</p>
+                    <p className="text-xs text-muted-foreground">Add a connector for a tenant / organization</p>
                   </div>
-                )}
+                </div>
+                <div className="flex flex-col gap-2 shrink-0">
+                  <Input
+                    placeholder="Label (e.g. Cosmo Azure)"
+                    value={adoLabelInput}
+                    onChange={e => setAdoLabelInput(e.target.value)}
+                    className="w-56 text-sm h-8"
+                  />
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Input
+                        type={adoPatVisible ? 'text' : 'password'}
+                        placeholder="Personal Access Token"
+                        value={adoPatInput}
+                        onChange={e => setAdoPatInput(e.target.value)}
+                        className="w-56 pr-8 text-sm h-8"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        onClick={() => setAdoPatVisible(!adoPatVisible)}
+                      >
+                        {adoPatVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => adoPatInput.trim() && connectAdoMutation.mutate({ pat: adoPatInput.trim(), orgs: adoOrgInput.trim(), label: adoLabelInput.trim() })}
+                      disabled={connectAdoMutation.isPending || !adoPatInput.trim()}
+                      className="h-8 shrink-0"
+                    >
+                      {connectAdoMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4 mr-1" />}
+                      Connect
+                    </Button>
+                  </div>
+                  <Input
+                    placeholder="Organizations (optional, e.g. mycompany, otherorg)"
+                    value={adoOrgInput}
+                    onChange={e => setAdoOrgInput(e.target.value)}
+                    className="w-full text-sm h-8 text-muted-foreground"
+                  />
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 For Azure DevOps, create a PAT at <code className="bg-muted px-1 rounded">User Settings → Personal Access Tokens</code> with <strong>Work Items</strong> and <strong>Code</strong> read scopes. Add <strong>User Profile (Read)</strong> for automatic org discovery, or enter org names manually in the field below.

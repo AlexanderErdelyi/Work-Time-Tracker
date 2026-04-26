@@ -47,33 +47,45 @@ public class IntegrationsController : ControllerBase
 
         var integrations = await _context.UserIntegrations
             .Where(i => i.UserId == userId.Value)
+            .OrderBy(i => i.CreatedAt)
             .ToListAsync();
 
-        // Ensure all providers are represented in the response
-        var providers = Enum.GetValues<IntegrationProvider>();
-        var result = providers.Select(p =>
+        var result = new List<UserIntegrationDto>();
+
+        // For single-instance providers (MicrosoftGraph, GitHub) ensure a stub exists if not connected.
+        // AzureDevOps supports multiple connectors — only return real rows, no stub.
+        var singleProviders = new[] { IntegrationProvider.MicrosoftGraph, IntegrationProvider.GitHub };
+        foreach (var p in singleProviders)
         {
             var existing = integrations.FirstOrDefault(i => i.Provider == p);
-            if (existing is null)
-            {
-                return new UserIntegrationDto
+            result.Add(existing is null
+                ? new UserIntegrationDto { Provider = p.ToString(), IsConnected = false, EnabledSources = [] }
+                : new UserIntegrationDto
                 {
-                    Provider = p.ToString(),
-                    IsConnected = false,
-                    EnabledSources = [],
-                };
-            }
+                    Id = existing.Id,
+                    Provider = existing.Provider.ToString(),
+                    DisplayName = existing.DisplayName,
+                    IsConnected = existing.IsActive,
+                    EnabledSources = ParseEnabledSources(existing.EnabledSourcesJson),
+                    LastSyncedAt = existing.LastSyncedAt,
+                    ExpiresAt = existing.ExpiresAt,
+                });
+        }
 
-            return new UserIntegrationDto
+        // All AzureDevOps connectors (0..N rows)
+        foreach (var ado in integrations.Where(i => i.Provider == IntegrationProvider.AzureDevOps))
+        {
+            result.Add(new UserIntegrationDto
             {
-                Id = existing.Id,
-                Provider = existing.Provider.ToString(),
-                IsConnected = existing.IsActive,
-                EnabledSources = ParseEnabledSources(existing.EnabledSourcesJson),
-                LastSyncedAt = existing.LastSyncedAt,
-                ExpiresAt = existing.ExpiresAt,
-            };
-        });
+                Id = ado.Id,
+                Provider = ado.Provider.ToString(),
+                DisplayName = ado.DisplayName,
+                IsConnected = ado.IsActive,
+                EnabledSources = ParseEnabledSources(ado.EnabledSourcesJson),
+                LastSyncedAt = ado.LastSyncedAt,
+                ExpiresAt = ado.ExpiresAt,
+            });
+        }
 
         return Ok(result);
     }
@@ -322,14 +334,9 @@ public class IntegrationsController : ControllerBase
         if (string.IsNullOrWhiteSpace(pat))
             return BadRequest(new { message = "Personal Access Token is required." });
 
-        var existing = await _context.UserIntegrations
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(i => i.UserId == userId.Value && i.Provider == IntegrationProvider.AzureDevOps);
-
         var workspaceId = GetCurrentWorkspaceId();
 
-        // Auto-discover all ADO organizations this PAT has access to
-        // If caller supplied org names directly, use those instead (avoids needing vso.profile scope)
+        // Resolve org names — use provided ones, or auto-discover
         string storedOrg;
         if (!string.IsNullOrWhiteSpace(dto.Organizations))
         {
@@ -346,38 +353,30 @@ public class IntegrationsController : ControllerBase
             _logger.LogInformation("ADO connect for user {UserId}: discovered {Count} org(s): {Orgs}", userId, discoveredOrgs.Count, storedOrg);
         }
 
-        if (existing != null)
+        // Always create a new row — multiple connectors are allowed
+        var integration = new UserIntegration
         {
-            existing.AccessToken = _tokenProtector.Protect(pat);
-            existing.RefreshToken = storedOrg;
-            existing.IsActive = true;
-            existing.UpdatedAt = DateTime.UtcNow;
-        }
-        else
-        {
-            existing = new UserIntegration
-            {
-                WorkspaceId = workspaceId ?? 1,
-                UserId = userId.Value,
-                Provider = IntegrationProvider.AzureDevOps,
-                AccessToken = _tokenProtector.Protect(pat),
-                RefreshToken = storedOrg,
-                EnabledSourcesJson = JsonSerializer.Serialize(new[] { "AzureDevOpsWorkItem", "AzureDevOpsCommit" }),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            _context.UserIntegrations.Add(existing);
-        }
-
+            WorkspaceId = workspaceId ?? 1,
+            UserId = userId.Value,
+            Provider = IntegrationProvider.AzureDevOps,
+            DisplayName = string.IsNullOrWhiteSpace(dto.DisplayName) ? null : dto.DisplayName.Trim(),
+            AccessToken = _tokenProtector.Protect(pat),
+            RefreshToken = storedOrg,
+            EnabledSourcesJson = JsonSerializer.Serialize(new[] { "AzureDevOpsWorkItem", "AzureDevOpsCommit" }),
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.UserIntegrations.Add(integration);
         await _context.SaveChangesAsync();
 
         return Ok(new UserIntegrationDto
         {
-            Id = existing.Id,
+            Id = integration.Id,
             Provider = "AzureDevOps",
+            DisplayName = integration.DisplayName,
             IsConnected = true,
-            EnabledSources = ParseEnabledSources(existing.EnabledSourcesJson)
+            EnabledSources = ParseEnabledSources(integration.EnabledSourcesJson)
         });
     }
 

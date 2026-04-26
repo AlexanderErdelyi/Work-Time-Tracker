@@ -23,6 +23,9 @@ public class UserIntegration : IWorkspaceOwned
 
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>User-defined label for this connector, e.g. "Cosmo Azure", "Nobilis"</summary>
+    public string? DisplayName { get; set; }
+
     /// <summary>JSON array of enabled source names e.g. ["Calendar","Teams","Email"]</summary>
     public string EnabledSourcesJson { get; set; } = "[]";
 
