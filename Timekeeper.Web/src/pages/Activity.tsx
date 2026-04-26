@@ -31,6 +31,8 @@ import {
 } from 'lucide-react'
 import { activityApi, integrationsApi } from '../api/activity'
 import type { ActivityEvent } from '../api/activity'
+import { aiApi } from '../api/ai'
+import type { ResolveTaskResult } from '../api/ai'
 import { toast } from 'sonner'
 
 const sourceIcons: Record<string, React.ReactNode> = {
@@ -59,8 +61,16 @@ const sourceLabels: Record<string, string> = {
 
 const confidenceBadge = (confidence?: string) => {
   if (!confidence) return null
-  if (confidence === 'rule-based') return <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Rule match</Badge>
-  if (confidence === 'ai') return <Badge variant="outline" className="text-xs text-purple-600 border-purple-200"><Zap className="h-3 w-3 mr-1" />AI</Badge>
+  if (confidence === 'exact')
+    return <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30">Exact match</Badge>
+  if (confidence === 'rule-based')
+    return <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Rule match</Badge>
+  if (confidence === 'likely')
+    return <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30">Likely</Badge>
+  if (confidence === 'uncertain')
+    return <Badge variant="outline" className="text-xs text-orange-500 border-orange-300 bg-orange-50 dark:bg-orange-950/30">Uncertain</Badge>
+  if (confidence === 'ai')
+    return <Badge variant="outline" className="text-xs text-purple-600 border-purple-200"><Zap className="h-3 w-3 mr-1" />AI</Badge>
   return null
 }
 
@@ -94,9 +104,10 @@ interface ActivityEventCardProps {
   onDismiss: (id: number) => void
   acceptingId: number | null
   dismissingId: number | null
+  aiEnabled?: boolean
 }
 
-function ActivityEventCard({ event, tasks, onAccept, onDismiss, acceptingId, dismissingId }: ActivityEventCardProps) {
+function ActivityEventCard({ event, tasks, onAccept, onDismiss, acceptingId, dismissingId, aiEnabled }: ActivityEventCardProps) {
   const navigate = useNavigate()
   const hasSuggestion = !!(event.suggestedProjectName || event.suggestedTaskName || event.suggestedCustomerName)
   const isAccepting = acceptingId === event.id
@@ -106,6 +117,11 @@ function ActivityEventCard({ event, tasks, onAccept, onDismiss, acceptingId, dis
   const [editMinutes, setEditMinutes] = useState<number>(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>()
+  const [editTab, setEditTab] = useState<'search' | 'ai'>('search')
+  const [aiQuery, setAiQuery] = useState('')
+  const [isAiResolving, setIsAiResolving] = useState(false)
+  const [aiResult, setAiResult] = useState<ResolveTaskResult | null>(null)
+  const [isPolishing, setIsPolishing] = useState(false)
 
   const filteredTasks = tasks.filter(t => {
     if (!searchTerm) return true
@@ -116,6 +132,42 @@ function ActivityEventCard({ event, tasks, onAccept, onDismiss, acceptingId, dis
       t.projectName?.toLowerCase().includes(q)
     )
   })
+
+  async function handleAiResolve() {
+    if (!aiQuery.trim()) return
+    setIsAiResolving(true)
+    setAiResult(null)
+    try {
+      const result = await aiApi.resolveTask(aiQuery.trim())
+      setAiResult(result)
+      if (result?.found && result.taskId) {
+        setSelectedTaskId(result.taskId)
+      }
+    } catch {
+      toast.error('AI search failed')
+    } finally {
+      setIsAiResolving(false)
+    }
+  }
+
+  async function handlePolish() {
+    if (!editNotes.trim()) return
+    const task = selectedTaskId ? tasks.find(t => t.id === selectedTaskId) : null
+    setIsPolishing(true)
+    try {
+      const result = await aiApi.polishNote({
+        rawNote: editNotes,
+        taskName: task?.name,
+        projectName: task?.projectName,
+        customerName: task?.customerName,
+      })
+      if (result?.note) setEditNotes(result.note)
+    } catch {
+      toast.error('Could not polish note')
+    } finally {
+      setIsPolishing(false)
+    }
+  }
 
   function openEdit() {
     setEditNotes(event.suggestedNotes ?? '')
@@ -253,49 +305,150 @@ function ActivityEventCard({ event, tasks, onAccept, onDismiss, acceptingId, dis
         )}
 
         {isEditing && (
-          <div className="mt-2 border-t pt-2 space-y-2">
-            {/* Task search */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search tasks, customers, projects…"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="pl-8 h-8 text-xs"
-              />
-            </div>
-            <div className="max-h-40 overflow-y-auto space-y-0.5 rounded-md border bg-popover p-1">
-              {filteredTasks.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  {searchTerm ? 'No tasks found' : 'No active tasks'}
-                </p>
-              ) : (
-                filteredTasks.slice(0, 25).map(task => (
-                  <button
-                    key={task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    className={`w-full text-left px-2 py-1.5 rounded-sm text-xs transition-colors ${
-                      selectedTaskId === task.id
-                        ? 'bg-primary/15 text-primary font-medium'
-                        : 'hover:bg-accent'
-                    }`}
-                  >
-                    <div className="font-medium">{task.name}</div>
-                    <div className="text-muted-foreground">
-                      {task.customerName}{task.projectName ? ` / ${task.projectName}` : ''}
-                    </div>
-                  </button>
-                ))
+          <div className="mt-2 border-t pt-2.5 space-y-2.5">
+            {/* Tab switcher: Search | AI */}
+            <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+              <button
+                onClick={() => setEditTab('search')}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-all ${
+                  editTab === 'search'
+                    ? 'bg-background shadow-sm text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Search className="h-3 w-3" /> Search
+              </button>
+              {aiEnabled && (
+                <button
+                  onClick={() => setEditTab('ai')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-all ${
+                    editTab === 'ai'
+                      ? 'bg-background shadow-sm text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Zap className="h-3 w-3" /> AI
+                </button>
               )}
             </div>
+
+            {/* Regular search panel */}
+            {editTab === 'search' && (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tasks, customers, projects…"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="pl-8 h-8 text-xs"
+                  />
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-0.5 rounded-md border bg-popover p-1">
+                  {filteredTasks.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      {searchTerm ? 'No tasks found' : 'No active tasks'}
+                    </p>
+                  ) : (
+                    filteredTasks.slice(0, 25).map(task => (
+                      <button
+                        key={task.id}
+                        onClick={() => setSelectedTaskId(task.id)}
+                        className={`w-full text-left px-2 py-1.5 rounded-sm text-xs transition-colors ${
+                          selectedTaskId === task.id
+                            ? 'bg-primary/15 text-primary font-medium'
+                            : 'hover:bg-accent'
+                        }`}
+                      >
+                        <div className="font-medium">{task.name}</div>
+                        <div className="text-muted-foreground">
+                          {task.customerName}{task.projectName ? ` / ${task.projectName}` : ''}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* AI search panel */}
+            {editTab === 'ai' && aiEnabled && (
+              <>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Describe the work (e.g. 'Nobilis DMS bug fix')…"
+                    value={aiQuery}
+                    onChange={e => setAiQuery(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAiResolve() }}
+                    className="flex-1 h-8 text-xs"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleAiResolve}
+                    disabled={!aiQuery.trim() || isAiResolving}
+                    className="h-8 shrink-0 gap-1.5"
+                    title="Find task with AI"
+                  >
+                    {isAiResolving
+                      ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      : <Zap className="h-3.5 w-3.5" />}
+                    Find
+                  </Button>
+                </div>
+                {aiResult && (
+                  <div className={`rounded-lg border p-2.5 text-xs ${
+                    aiResult.found
+                      ? 'border-primary/30 bg-primary/5'
+                      : 'border-destructive/30 bg-destructive/5'
+                  }`}>
+                    {aiResult.found ? (
+                      <>
+                        <div className="font-medium">{aiResult.taskName}</div>
+                        <div className="text-muted-foreground">
+                          {aiResult.customerName}{aiResult.projectName ? ` / ${aiResult.projectName}` : ''}
+                        </div>
+                        {aiResult.reasoning && (
+                          <div className="text-muted-foreground mt-0.5 italic">{aiResult.reasoning}</div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-destructive">
+                        No matching task found.{aiResult.reasoning ? ` ${aiResult.reasoning}` : ''}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Notes */}
-            <textarea
-              className="w-full rounded border bg-background px-2 py-1 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-              rows={2}
-              value={editNotes}
-              onChange={e => setEditNotes(e.target.value)}
-              placeholder="Notes for time entry…"
-            />
+            <div className="space-y-1.5">
+              <textarea
+                className="w-full rounded-md border bg-background px-2.5 py-2 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={3}
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                placeholder="Notes for time entry…"
+              />
+              {aiEnabled && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handlePolish}
+                    disabled={isPolishing || !editNotes.trim()}
+                    className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 disabled:opacity-40 disabled:cursor-not-allowed bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 border border-purple-200 dark:border-purple-800 rounded-md px-2.5 py-1 transition-colors"
+                    title="Rewrite note for invoice"
+                  >
+                    {isPolishing
+                      ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      : <Zap className="h-3.5 w-3.5" />}
+                    Polish for invoice
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Duration */}
             <div className="flex items-center gap-2">
               <label className="text-xs text-muted-foreground shrink-0">Duration:</label>
@@ -349,6 +502,13 @@ export function Activity() {
   })
 
   const { data: tasks = [] } = useTasks({ isActive: true })
+
+  const { data: aiStatus } = useQuery({
+    queryKey: ['ai', 'status'],
+    queryFn: aiApi.getStatus,
+    staleTime: 60_000,
+  })
+  const aiEnabled = aiStatus?.enabled ?? false
 
   const acceptMutation = useMutation({
     mutationFn: ({ id, overrides }: { id: number; overrides?: { taskId?: number; notes?: string; minutes?: number } }) =>
@@ -562,6 +722,7 @@ export function Activity() {
                 onDismiss={(id) => dismissMutation.mutate({ id })}
                 acceptingId={acceptingId}
                 dismissingId={dismissingId}
+                aiEnabled={aiEnabled}
               />
             ))
           )}
