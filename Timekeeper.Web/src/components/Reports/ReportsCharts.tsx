@@ -64,8 +64,8 @@ export function ReportsCharts({ customerData, projectData, dailyData, weeklyData
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) =>
-                      `${name}: ${((percent || 0) * 100).toFixed(0)}%`
+                    label={({ name, percent, value }) =>
+                      `${name}: ${((percent || 0) * 100).toFixed(0)}% (${Number(value).toFixed(1)}h)`
                     }
                     outerRadius={80}
                     fill="#8884d8"
@@ -97,7 +97,7 @@ export function ReportsCharts({ customerData, projectData, dailyData, weeklyData
                 <BarChart data={projectData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={100} />
+                  <YAxis dataKey="name" type="category" width={160} tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 22) + '…' : v} />
                   <Tooltip />
                   <Bar dataKey="hours" fill="#667eea" />
                 </BarChart>
@@ -158,7 +158,7 @@ export function ReportsCharts({ customerData, projectData, dailyData, weeklyData
                 <BarChart data={taskData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={100} />
+                  <YAxis dataKey="name" type="category" width={160} tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 22) + '…' : v} />
                   <Tooltip />
                   <Bar dataKey="hours" fill="#764ba2" />
                 </BarChart>
