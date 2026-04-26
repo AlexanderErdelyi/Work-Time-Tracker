@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Bot, Send, Trash2, Loader2, AlertTriangle, WifiOff } from 'lucide-react'
+import { Bot, Send, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { aiApi } from '../api/ai'

@@ -119,7 +119,7 @@ export function Settings() {
       integrationsApi.updateAdoOrganizations(id, orgs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      setAdoShowOrgUpdate(false)
+      setAdoShowOrgUpdate(null)
       setAdoOrgUpdateInput('')
       toast.success('Organizations updated')
     },
