@@ -121,7 +121,7 @@ public class ActivitySyncService : BackgroundService, IActivitySyncTrigger
         foreach (var userId in userIds)
         {
             if (ct.IsCancellationRequested) break;
-            await SyncUserAsync(db, graphClient, adoClient, suggestionService, userId, ct);
+            await SyncUserAsync(db, graphClient, adoClient, suggestionService, userId, DateTime.UtcNow.AddHours(-24), ct);
         }
     }
 
@@ -135,7 +135,8 @@ public class ActivitySyncService : BackgroundService, IActivitySyncTrigger
         var suggestionService = scope.ServiceProvider.GetRequiredService<IActivitySuggestionService>();
 
         _logger.LogInformation("Manual sync triggered for user {UserId}.", userId);
-        await SyncUserAsync(db, graphClient, adoClient, suggestionService, userId, ct);
+        // Use 7-day lookback for manual syncs so recently-connected tenants get a backfill
+        await SyncUserAsync(db, graphClient, adoClient, suggestionService, userId, DateTime.UtcNow.AddDays(-7), ct);
     }
 
     private static async Task SyncUserAsync(
@@ -144,6 +145,7 @@ public class ActivitySyncService : BackgroundService, IActivitySyncTrigger
         IAzureDevOpsApiClient adoClient,
         IActivitySuggestionService suggestionService,
         int userId,
+        DateTime from,
         CancellationToken ct)
     {
         // Determine workspace for this user (needed for WorkspaceId on new events)
@@ -151,8 +153,6 @@ public class ActivitySyncService : BackgroundService, IActivitySyncTrigger
             .FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (user is null) return;
 
-        // last 24h window
-        var from = DateTime.UtcNow.AddHours(-24);
         var to = DateTime.UtcNow;
 
         // --- Microsoft Graph (Calendar) ---
@@ -311,11 +311,12 @@ public class ActivitySyncService : BackgroundService, IActivitySyncTrigger
                 }
             }
 
-            // Update last sync time
-            var adoIntegration = await db.UserIntegrations
+            // Update last sync time on ALL ADO connectors
+            var adoIntegrations = await db.UserIntegrations
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(i => i.UserId == userId && i.Provider == IntegrationProvider.AzureDevOps, ct);
-            if (adoIntegration != null)
+                .Where(i => i.UserId == userId && i.Provider == IntegrationProvider.AzureDevOps)
+                .ToListAsync(ct);
+            foreach (var adoIntegration in adoIntegrations)
             {
                 adoIntegration.LastSyncedAt = DateTime.UtcNow;
                 adoIntegration.UpdatedAt = DateTime.UtcNow;

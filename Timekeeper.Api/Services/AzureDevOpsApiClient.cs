@@ -67,14 +67,15 @@ public class AzureDevOpsApiClient : IAzureDevOpsApiClient
 
     public async Task<List<AdoWorkItem>> GetRecentWorkItemsAsync(int userId, DateTime from, CancellationToken ct = default)
     {
-        var (client, organizations) = await BuildClientAsync(userId, ct);
-        if (client is null || organizations.Count == 0)
+        var connectors = await BuildClientsAsync(userId, ct);
+        if (connectors.Count == 0)
         {
-            _logger.LogWarning("ADO: No organizations configured for user {UserId}. Reconnect to auto-discover.", userId);
+            _logger.LogWarning("ADO: No active connectors for user {UserId}.", userId);
             return [];
         }
 
         var allItems = new List<AdoWorkItem>();
+        foreach (var (client, organizations) in connectors)
         foreach (var organization in organizations)
         {
 
@@ -132,10 +133,12 @@ public class AzureDevOpsApiClient : IAzureDevOpsApiClient
 
     public async Task<List<AdoCommit>> GetRecentCommitsAsync(int userId, DateTime from, CancellationToken ct = default)
     {
-        var (client, organizations) = await BuildClientAsync(userId, ct);
-        if (client is null || organizations.Count == 0) return [];
+        var connectors = await BuildClientsAsync(userId, ct);
+        if (connectors.Count == 0) return [];
 
         var allCommits = new List<AdoCommit>();
+        foreach (var (client, organizations) in connectors)
+        {
         var authorDisplayName = await GetAuthorDisplayNameAsync(client, ct);
         foreach (var organization in organizations)
         {
@@ -189,51 +192,57 @@ public class AzureDevOpsApiClient : IAzureDevOpsApiClient
                 _logger.LogError(ex, "Error fetching ADO commits for user {UserId} org {Org}.", userId, organization);
             }
         }
+        } // end foreach connector
 
         return allCommits;
     }
 
-    private async Task<(HttpClient? client, List<string> organizations)> BuildClientAsync(int userId, CancellationToken ct)
+    /// <summary>Builds one HTTP client per active ADO connector for the given user.</summary>
+    private async Task<List<(HttpClient Client, List<string> Organizations)>> BuildClientsAsync(int userId, CancellationToken ct)
     {
-        var integration = await _db.UserIntegrations
+        var integrations = await _db.UserIntegrations
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(i => i.UserId == userId && i.Provider == IntegrationProvider.AzureDevOps && i.IsActive, ct);
+            .Where(i => i.UserId == userId && i.Provider == IntegrationProvider.AzureDevOps && i.IsActive)
+            .ToListAsync(ct);
 
-        if (integration is null) return (null, []);
-
-        var pat = _tokenProtector.TryUnprotect(integration.AccessToken);
-        if (string.IsNullOrWhiteSpace(pat)) return (null, []);
-
-        // Orgs stored as comma-separated in RefreshToken; fall back to appsettings
-        var storedOrgs = !string.IsNullOrWhiteSpace(integration.RefreshToken)
-            ? integration.RefreshToken.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
-            : new List<string>();
-        if (storedOrgs.Count == 0)
+        var results = new List<(HttpClient, List<string>)>();
+        foreach (var integration in integrations)
         {
-            var cfgOrg = _config["ActivitySync:AzureDevOps:Organization"];
-            if (!string.IsNullOrWhiteSpace(cfgOrg)) storedOrgs.Add(cfgOrg);
-        }
+            var pat = _tokenProtector.TryUnprotect(integration.AccessToken);
+            if (string.IsNullOrWhiteSpace(pat)) continue;
 
-        var client = _httpClientFactory.CreateClient("ado");
-        var encoded = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", encoded);
-
-        // If still no orgs, auto-discover from VSS API and persist so future syncs don't repeat this
-        if (storedOrgs.Count == 0)
-        {
-            _logger.LogInformation("ADO: No orgs stored for user {UserId}, attempting live discovery via VSS API.", userId);
-            storedOrgs = await DiscoverOrgsAsync(client, userId, ct);
-            if (storedOrgs.Count > 0)
+            var storedOrgs = !string.IsNullOrWhiteSpace(integration.RefreshToken)
+                ? integration.RefreshToken.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+                : new List<string>();
+            if (storedOrgs.Count == 0)
             {
-                integration.RefreshToken = string.Join(",", storedOrgs);
-                integration.UpdatedAt = DateTime.UtcNow;
-                await _db.SaveChangesAsync(ct);
-                _logger.LogInformation("ADO: Persisted {Count} discovered org(s) for user {UserId}: {Orgs}",
-                    storedOrgs.Count, userId, integration.RefreshToken);
+                var cfgOrg = _config["ActivitySync:AzureDevOps:Organization"];
+                if (!string.IsNullOrWhiteSpace(cfgOrg)) storedOrgs.Add(cfgOrg);
             }
-        }
 
-        return (client, storedOrgs);
+            var client = _httpClientFactory.CreateClient("ado");
+            var encoded = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", encoded);
+
+            // Auto-discover orgs if still none stored
+            if (storedOrgs.Count == 0)
+            {
+                _logger.LogInformation("ADO: No orgs for integration {Id} (user {UserId}), attempting live discovery.", integration.Id, userId);
+                storedOrgs = await DiscoverOrgsAsync(client, userId, ct);
+                if (storedOrgs.Count > 0)
+                {
+                    integration.RefreshToken = string.Join(",", storedOrgs);
+                    integration.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+                    _logger.LogInformation("ADO: Persisted {Count} org(s) for integration {Id}: {Orgs}",
+                        storedOrgs.Count, integration.Id, integration.RefreshToken);
+                }
+            }
+
+            if (storedOrgs.Count > 0)
+                results.Add((client, storedOrgs));
+        }
+        return results;
     }
 
     private static async Task<string?> GetAuthorDisplayNameAsync(HttpClient client, CancellationToken ct)
