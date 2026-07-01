@@ -186,13 +186,35 @@ export function WorkDays() {
 
   const handleSaveEdit = async () => {
     if (!editingWorkDay) return;
-    
+
+    // The datetime-local inputs provide local wall-clock values without a
+    // timezone offset. Convert them to UTC ISO strings (matching the Time
+    // Entries edit flow) so the backend stores UTC and the read path renders
+    // the correct local time instead of shifting by the browser's offset.
+    const checkIn = editForm.checkInTime ? new Date(editForm.checkInTime) : null;
+    const checkOut = editForm.checkOutTime ? new Date(editForm.checkOutTime) : null;
+
+    if (checkIn && Number.isNaN(checkIn.getTime())) {
+      toast.error('Check in time is invalid.');
+      return;
+    }
+
+    if (checkOut && Number.isNaN(checkOut.getTime())) {
+      toast.error('Check out time is invalid.');
+      return;
+    }
+
+    if (checkIn && checkOut && checkOut <= checkIn) {
+      toast.error('Check out time must be after check in time.');
+      return;
+    }
+
     try {
       await updateWorkDay.mutateAsync({
         id: editingWorkDay.id,
         data: {
-          checkInTime: editForm.checkInTime || undefined,
-          checkOutTime: editForm.checkOutTime || undefined,
+          checkInTime: checkIn ? checkIn.toISOString() : undefined,
+          checkOutTime: checkOut ? checkOut.toISOString() : undefined,
           notes: editForm.notes || undefined
         }
       });
